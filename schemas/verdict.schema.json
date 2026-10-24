@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schemas/verdict.schema.json",
+  "title": "Вердикт независимой проверки",
+  "description": "Результат проверки, привязанный к снимку кандидата. Не текст «ок», а объект с доказательствами.",
+  "type": "object",
+  "required": ["verdict_id", "task_id", "attempt", "snapshot_id", "verdict", "reviewer_id", "reviewer_role"],
+  "additionalProperties": true,
+  "properties": {
+    "verdict_id": { "type": "string", "minLength": 1 },
+    "task_id": { "type": "string", "minLength": 1 },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "snapshot_id": { "type": "string", "minLength": 1 },
+    "verdict": {
+      "enum": ["PASS", "FAIL", "INCONCLUSIVE", "ERROR", "TIMEOUT", "CANCELLED"]
+    },
+    "reviewer_id": { "type": "string", "minLength": 1 },
+    "reviewer_role": { "enum": ["verifier", "adversarial", "human"] },
+    "policy_version": { "type": "string" },
+    "created_at": { "type": "string" },
+    "criteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "result"],
+        "properties": {
+          "id": { "type": "string" },
+          "result": { "enum": ["pass", "fail", "skip"] },
+          "evidence": { "type": "string" },
+          "command": { "type": "string" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "result": { "const": "pass" } }, "required": ["result"] },
+            "then": { "required": ["evidence"], "properties": { "evidence": { "minLength": 1 } } }
+          }
+        ]
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["finding_id", "severity", "statement"],
+        "properties": {
+          "finding_id": { "type": "string", "minLength": 1 },
+          "severity": { "enum": ["blocker", "major", "minor", "cosmetic"] },
+          "statement": { "type": "string", "minLength": 1 },
+          "evidence": { "type": "string" },
+          "reproduction": { "type": "string" },
+          "owner": { "type": "string" },
+          "track": { "enum": ["own_diff", "foreign_code"] },
+          "status": { "enum": ["open", "confirmed", "assigned", "in_progress", "fixed", "closed", "accepted_risk", "disputed"] }
+        }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "description": "Обязателен для адверсального PASS: сценарий описан ≠ сценарий выполнен.",
+      "required": ["description", "expected_invariant", "observed_result", "mode"],
+      "properties": {
+        "description": { "type": "string", "minLength": 1 },
+        "expected_invariant": { "type": "string", "minLength": 1 },
+        "observed_result": { "type": "string", "minLength": 1 },
+        "mode": { "enum": ["executed", "not_verified"] }
+      }
+    }
+  }
+}

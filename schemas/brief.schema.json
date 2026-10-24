@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/schemas/brief.schema.json",
+  "title": "Бриф задачи",
+  "description": "Самодостаточный пакет задачи: воркер получает всё в промпте и не ищет по репозиторию.",
+  "type": "object",
+  "required": [
+    "task_id",
+    "brief_version",
+    "base_commit",
+    "spec_version",
+    "goal",
+    "expected_behavior",
+    "allowed_files",
+    "acceptance",
+    "control"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "task_id": { "type": "string", "pattern": "^[A-Za-z0-9._:-]+$" },
+    "brief_version": { "type": "integer", "minimum": 1 },
+    "base_commit": { "type": "string", "minLength": 1 },
+    "spec_version": { "type": "string", "minLength": 1 },
+    "goal": { "type": "string", "minLength": 1 },
+    "expected_behavior": { "type": "string", "minLength": 1 },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "in_scope": { "type": "array", "items": { "type": "string" } },
+        "out_of_scope": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "allowed_read": { "type": "array", "items": { "type": "string" } },
+    "allowed_files": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1, "not": { "pattern": "(\\.\\.|^/)" } }
+    },
+    "contract": {
+      "type": "object",
+      "description": "Не только имена: типы, обязательные поля, коды ошибок, единицы, границы.",
+      "properties": {
+        "names": { "type": "array", "items": { "type": "string" } },
+        "types": { "type": "object" },
+        "required_fields": { "type": "array", "items": { "type": "string" } },
+        "error_codes": { "type": "array", "items": { "type": "string" } },
+        "units": { "type": "string" },
+        "boundary_rules": { "type": "string" }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "required": ["criteria"],
+      "properties": {
+        "criteria": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "statement"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "statement": { "type": "string", "minLength": 1 },
+              "mandatory": { "type": "boolean", "default": true },
+              "check": { "type": "string" }
+            }
+          },
+          "uniqueItems": false
+        },
+        "check_commands": { "type": "array", "items": { "type": "string" } },
+        "required_scenarios": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "control": {
+      "type": "object",
+      "properties": {
+        "attempt_limit": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "timeout_seconds": { "type": "integer", "minimum": 1 },
+        "open_questions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "question"],
+            "properties": {
+              "id": { "type": "string" },
+              "question": { "type": "string", "minLength": 1 },
+              "blocking": { "type": "boolean", "default": true },
+              "resolved": { "type": "boolean", "default": false },
+              "answer": { "type": "string" }
+            }
+          }
+        },
+        "escalation_route": { "type": "string" }
+      }
+    }
+  }
+}

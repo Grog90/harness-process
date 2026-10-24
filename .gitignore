@@ -1,0 +1,14 @@
+# локальное состояние управляющего процесса
+.harness/
+*.db
+*.db-wal
+*.db-shm
+
+# учебные артефакты прогонов
+evidence/
+pipeline-log/
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/

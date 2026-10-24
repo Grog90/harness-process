@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# Обёртка для POSIX: запускает CLI управляющего процесса.
+set -eu
+exec python3 -m harness "$@"

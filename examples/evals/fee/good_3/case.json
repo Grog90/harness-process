@@ -1,0 +1,7 @@
+{
+  "case_id": "good_3",
+  "expected": "PASS",
+  "candidate_dir": "candidate",
+  "brief_file": "../../fee-brief.json",
+  "note": "корректная реализация, текст ошибки расширен"
+}

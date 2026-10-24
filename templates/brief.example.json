@@ -1,0 +1,60 @@
+{
+  "task_id": "FEE-101",
+  "brief_version": 1,
+  "base_commit": "9f3c1de",
+  "spec_version": "spec-fee-3",
+  "goal": "Реализовать calculate_fee: комиссия 2.5% в минорных единицах",
+  "expected_behavior": "amount_minor=20000 -> 500; отрицательная сумма -> ValueError с кодом FEE_NEGATIVE",
+  "scope": {
+    "in_scope": ["src/fee.py"],
+    "out_of_scope": ["src/billing.py", "src/payments/**"]
+  },
+  "allowed_read": ["src/**", "tests/**", "docs/specs/fee.md"],
+  "allowed_files": ["src/fee.py"],
+  "contract": {
+    "names": ["calculate_fee"],
+    "types": { "calculate_fee": "(amount_minor: int) -> int" },
+    "required_fields": ["amount_minor"],
+    "error_codes": ["FEE_NEGATIVE"],
+    "units": "minor currency units",
+    "boundary_rules": "amount_minor < 0 -> ValueError('FEE_NEGATIVE'); amount_minor == 0 -> 0"
+  },
+  "acceptance": {
+    "criteria": [
+      {
+        "id": "AC-1",
+        "statement": "комиссия 2.5% от суммы, результат — целое",
+        "mandatory": true,
+        "check": "pytest -k fee"
+      },
+      {
+        "id": "AC-2",
+        "statement": "отрицательная сумма отвергается кодом FEE_NEGATIVE",
+        "mandatory": true,
+        "check": "pytest -k negative"
+      },
+      {
+        "id": "AC-3",
+        "statement": "нулевая сумма даёт нулевую комиссию",
+        "mandatory": false,
+        "check": "pytest -k zero"
+      }
+    ],
+    "check_commands": ["pytest -q", "python -m mypy src/fee.py"],
+    "required_scenarios": ["повторный вызов с теми же аргументами не меняет результат"]
+  },
+  "control": {
+    "attempt_limit": 3,
+    "timeout_seconds": 3600,
+    "open_questions": [
+      {
+        "id": "Q-1",
+        "question": "Округление математическое или в пользу пользователя?",
+        "blocking": true,
+        "resolved": true,
+        "answer": "математическое (round half up), зафиксировано в спеке spec-fee-3"
+      }
+    ],
+    "escalation_route": "человек-владелец платежей"
+  }
+}

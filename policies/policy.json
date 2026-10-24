@@ -1,0 +1,102 @@
+{
+  "version": "1.0.0",
+  "comment": "Политика полномочий. Изменять этот файл рабочим ролям запрещено (R-PROT-1). Владелец политики — человек.",
+  "product_globs": [
+    "src/**",
+    "lib/**",
+    "app/**",
+    "packages/**",
+    "tests/**",
+    "*.py",
+    "*.ts",
+    "*.tsx",
+    "*.js",
+    "*.go",
+    "*.rs"
+  ],
+  "protected_globs": [
+    "policies/**",
+    "schemas/**",
+    ".harness/**",
+    "evidence/**",
+    "harness/**"
+  ],
+  "roles": {
+    "human": {
+      "description": "Человек-владелец: единственный, кто может менять политику и состояние.",
+      "can_read": ["**"],
+      "can_write": ["**"],
+      "can_write_product": true,
+      "may_dispatch": true,
+      "may_commit": true,
+      "may_verify": false,
+      "tools": ["*"]
+    },
+    "orchestrator": {
+      "description": "Координатор: формулирует задачи, запускает исполнителей, собирает вердикты, коммитит. Код не пишет.",
+      "can_read": ["**"],
+      "can_write": ["docs/**", "pipeline-log/**", "briefs/**", "briefs", "evidence/**"],
+      "can_write_product": false,
+      "may_dispatch": true,
+      "may_commit": true,
+      "may_verify": false,
+      "tools": ["read_file", "write_file", "dispatch", "commit", "harness", "git_read", "bash_readonly"]
+    },
+    "briefer": {
+      "description": "Готовит самодостаточный пакет задачи. Пишет только брифы.",
+      "can_read": ["**"],
+      "can_write": ["briefs/**", "briefs"],
+      "can_write_product": false,
+      "may_dispatch": false,
+      "may_commit": false,
+      "may_verify": false,
+      "tools": ["read_file", "write_file", "harness"]
+    },
+    "worker": {
+      "description": "Исполнитель. Пишет только в allowed_files из брифа, не трогает git и не диспетчит.",
+      "can_read": ["**"],
+      "can_write": [],
+      "write_scope_from_brief": true,
+      "can_write_product": true,
+      "may_dispatch": false,
+      "may_commit": false,
+      "may_verify": false,
+      "tools": ["read_file", "write_file", "bash", "harness"]
+    },
+    "verifier": {
+      "description": "Независимый проверяющий. Читает продукт, пишет только вердикт в evidence/.",
+      "can_read": ["**"],
+      "can_write": ["evidence/**"],
+      "can_write_product": false,
+      "may_dispatch": false,
+      "may_commit": false,
+      "may_verify": true,
+      "tools": ["read_file", "write_file", "bash_readonly", "harness"]
+    },
+    "adversarial": {
+      "description": "Адверсальный проверяющий. Обязан предъявить конкретный сценарий поломки.",
+      "can_read": ["**"],
+      "can_write": ["evidence/**"],
+      "can_write_product": false,
+      "may_dispatch": false,
+      "may_commit": false,
+      "may_verify": true,
+      "tools": ["read_file", "write_file", "bash_readonly", "harness"]
+    },
+    "system": {
+      "description": "Управляющий процесс. Пишет состояние, политики и журналы.",
+      "can_read": ["**"],
+      "can_write": ["**"],
+      "can_write_product": false,
+      "may_dispatch": false,
+      "may_commit": false,
+      "may_verify": false,
+      "tools": ["*"]
+    }
+  },
+  "limits": {
+    "max_attempts": 3,
+    "dispatch_timeout_seconds": 3600,
+    "max_same_read": 2
+  }
+}
