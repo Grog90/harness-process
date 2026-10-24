@@ -74,6 +74,7 @@ examples/         учебные верификаторы и размеченн�
 tests/            30 unittest-проверок свойств
 docs/             ANALYSIS (разбор книги), ARCHITECTURE, ROADMAP, RULES_MATRIX
 bin/              обёртки harness / harness.cmd
+tools/            вспомогательное: экстрактор текста PDF (для сверки с источником)
 ```
 
 ## Подключение к живому агенту
