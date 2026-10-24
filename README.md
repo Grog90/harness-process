@@ -10,8 +10,8 @@
 ## Быстрый старт
 
 ```powershell
-python -m harness selftest        # 36 исполняемых проверок правил
-python -m harness demo            # сквозной цикл, 35 проверок: включая шлюз, проверки и коммит
+python -m harness selftest        # 39 исполняемых проверок правил
+python -m harness demo            # сквозной цикл, 43 проверки: шлюз, проверки, коммит, лейн
 python -m harness coverage        # матрица правил и пробелы покрытия
 python -m unittest discover -s tests -v
 ```
@@ -63,9 +63,12 @@ python -m harness task status --task FEE-101
 | Обход шлюза виден до коммита | write-set финализатора | R-WRITESET-1 |
 | Коммит делает финализатор, журнал едет в нём же | `harness finalize` | R-FINAL-1 |
 | «Тесты прошли» подтверждается артефактом | `checks run` в копии дерева | R-CHECK-1 |
+| Просроченный диспетч отзывает отдельный процесс | `harness watchdog sweep/serve` | R-TIMEOUT-1 |
+| Проверки изолируются, если это возможно | docker без сети, иначе копия с явной пометкой | R-SANDBOX-1 |
+| Параллельные задачи не смешивают write-set | `harness lane create/merge` + мьютекс | R-WAVE-1 |
 
-Полный список — `docs/RULES_MATRIX.md` (генерируется, 28 из 32 правил покрыто,
-4 пробела названы явно).
+Полный список — `docs/RULES_MATRIX.md` (генерируется, 30 из 32 правил покрыто,
+2 пробела названы явно).
 
 ## Структура
 
@@ -135,6 +138,22 @@ python -m harness checks run --task FEE-101 --verdict-out verdict.json
 python -m harness finalize --task FEE-101 --message "fee: 2.5%"
 # проверяет снимок, write-set ⊆ allowed_files, пишет pipeline-log в тот же коммит,
 # записывает связь «снимок → коммит»
+```
+
+Параллельные задачи работают в отдельных worktree:
+
+```powershell
+python -m harness lane create --task FEE-101     # ветка harness/FEE-101
+python -m harness lane merge  --task FEE-101     # только COMMITTED, под мьютексом
+python -m harness lane list
+```
+
+Просроченные диспетчи отзывает отдельный процесс, а не сам агент:
+
+```powershell
+python -m harness watchdog sweep                 # один проход (cron/CI)
+python -m harness watchdog serve --interval 15   # отдельный цикл
+python -m harness sandbox probe                  # что доступно: docker/copy-only
 ```
 
 При ошибке внутри хука решение — `deny` (`R-HOOK-ERR`): неопределённость закрывает

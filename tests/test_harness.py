@@ -462,12 +462,179 @@ class SnapshotScopeTests(unittest.TestCase):
             shutil.rmtree(root, ignore_errors=True)
 
 
-def subprocess_git(root: str, *args: str) -> None:
+def subprocess_git(root: str, *args: str) -> str:
     import subprocess
 
     proc = subprocess.run(["git", *args], capture_output=True, text=True)
     if proc.returncode != 0:
         raise AssertionError(f"git {args}: {proc.stderr.strip()[:200]}")
+    return proc.stdout
+
+
+class WatchdogTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.root = make_root()
+        self.store = Store(os.path.join(self.root, ".harness", "state.db"))
+        self.eng = Engine(self.store, Policy.load(self.root), self.root)
+
+    def tearDown(self) -> None:
+        self.store.close()
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def _expired(self, task_id: str = "T1") -> None:
+        self.store.create_task(task_id, policy_version="1.0.0")
+        self.eng.apply(task_id, "attach_brief", {"brief": sample_brief(task_id)})
+        self.eng.apply(task_id, "dispatch", {"worker_id": "w", "timeout_seconds": -5})
+
+    def test_sweep_revokes_only_expired(self) -> None:
+        from harness.watchdog import Watchdog
+
+        self._expired("T-OLD")
+        self.store.create_task("T-NEW", policy_version="1.0.0")
+        self.eng.apply("T-NEW", "attach_brief", {"brief": sample_brief("T-NEW")})
+        self.eng.apply("T-NEW", "dispatch", {"worker_id": "w", "timeout_seconds": 3600})
+
+        revoked = Watchdog(self.store, self.eng).sweep()
+        self.assertEqual([r.task_id for r in revoked], ["T-OLD"])
+        self.assertEqual(self.store.get_task("T-OLD")["state"], "TIMED_OUT")
+        self.assertEqual(self.store.get_task("T-NEW")["state"], "RUNNING")
+
+    def test_sweep_is_idempotent(self) -> None:
+        from harness.watchdog import Watchdog
+
+        self._expired()
+        dog = Watchdog(self.store, self.eng)
+        self.assertEqual(len(dog.sweep()), 1)
+        self.assertEqual(dog.sweep(), [])
+        deaths = [e for e in self.store.events_for("T1") if e["type"] == "dispatch_death"]
+        self.assertEqual(len(deaths), 1)
+
+    def test_serve_emits_cycles(self) -> None:
+        from harness.watchdog import Watchdog
+
+        events: list[dict] = []
+        cycles = Watchdog(self.store, self.eng).serve(interval=1, cycles=2, emit=events.append)
+        self.assertEqual(cycles, 2)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0]["cycle"], 1)
+
+
+class SandboxTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.root = make_root()
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def test_detect_reports_mode_and_note(self) -> None:
+        from harness.checks import detect_sandbox
+
+        info = detect_sandbox()
+        self.assertIn(info["mode"], ("docker", "copy-only"))
+        self.assertTrue(info["note"])
+
+    def test_forced_copy_mode(self) -> None:
+        from harness import checks
+
+        brief = {"acceptance": {"check_commands": ["python -V"],
+                                "criteria": [{"id": "A", "check": "python -V"}]}}
+        report = checks.run(self.root, brief, sandbox="none", timeout=60)
+        self.assertEqual(report["isolation"]["mode"], "copy-only")
+
+    def test_docker_requested_without_daemon_raises(self) -> None:
+        from harness import checks
+
+        info = checks.detect_sandbox()
+        if info["docker_ready"]:
+            self.skipTest("docker доступен: негативный случай неприменим")
+        brief = {"acceptance": {"check_commands": ["python -V"],
+                                "criteria": [{"id": "A", "check": "python -V"}]}}
+        with self.assertRaises(checks.CheckError):
+            checks.run(self.root, brief, sandbox="docker", timeout=60)
+
+
+class LaneTests(unittest.TestCase):
+    """Лейны: изоляция работы и мьютекс слияния без правки конфликтов координатором."""
+
+    def setUp(self) -> None:
+        self.root = make_root()
+        subprocess_git(self.root, "init", "-q", self.root)
+        os.makedirs(os.path.join(self.root, "src"), exist_ok=True)
+        with open(os.path.join(self.root, "src", "fee.py"), "w", encoding="utf-8") as fh:
+            fh.write("def calculate_fee(amount):\n    return 0\n")
+        subprocess_git(self.root, "-C", self.root, "add", "-A")
+        subprocess_git(self.root, "-C", self.root, "-c", "user.name=t", "-c", "user.email=t@t",
+                       "commit", "-q", "-m", "base")
+        self.base = subprocess_git(self.root, "-C", self.root, "rev-parse", "HEAD").strip()
+        self.store = Store(os.path.join(self.root, ".harness", "state.db"))
+
+    def tearDown(self) -> None:
+        self.store.close()
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def _lane_with_change(self, task_id: str, text: str) -> str:
+        from harness import lanes
+
+        self.store.create_task(task_id, policy_version="1.0.0")
+        lane = lanes.create(self.root, self.store, task_id, base=self.base)
+        path = lane["path"]
+        with open(os.path.join(path, "src", "fee.py"), "w", encoding="utf-8") as fh:
+            fh.write(text)
+        subprocess_git(path, "-C", path, "add", "-A")
+        subprocess_git(path, "-C", path, "-c", "user.name=t", "-c", "user.email=t@t",
+                       "commit", "-q", "-m", f"{task_id} change")
+        sha = subprocess_git(path, "-C", path, "rev-parse", "HEAD").strip()
+        self.store.update_task(task_id, state="COMMITTED", commit_sha=sha)
+        return sha
+
+    def test_merge_requires_committed_state(self) -> None:
+        from harness import lanes
+
+        self.store.create_task("T1", policy_version="1.0.0")
+        with self.assertRaises(lanes.LaneError) as ctx:
+            lanes.merge(self.root, self.store, "T1")
+        self.assertEqual(ctx.exception.rule, "R-FINAL-1")
+
+    def test_merge_brings_change_into_main_tree(self) -> None:
+        from harness import lanes
+
+        self._lane_with_change("T1", "def calculate_fee(amount):\n    return int(amount * 0.025)\n")
+        out = lanes.merge(self.root, self.store, "T1")
+        self.assertTrue(out["ok"])
+        with open(os.path.join(self.root, "src", "fee.py"), encoding="utf-8") as fh:
+            self.assertIn("0.025", fh.read())
+
+    def test_conflict_aborts_and_keeps_main_intact(self) -> None:
+        from harness import lanes
+
+        self._lane_with_change("T1", "def calculate_fee(amount):\n    return 1\n")
+        lanes.merge(self.root, self.store, "T1")
+        self._lane_with_change("T2", "def calculate_fee(amount):\n    return 2\n")
+        with self.assertRaises(lanes.LaneError) as ctx:
+            lanes.merge(self.root, self.store, "T2")
+        self.assertEqual(ctx.exception.rule, "R-WAVE-1")
+        self.assertTrue(ctx.exception.details.get("aborted"))
+        with open(os.path.join(self.root, "src", "fee.py"), encoding="utf-8") as fh:
+            self.assertIn("return 1", fh.read(), "конфликт изменил главное дерево")
+
+    def test_dirty_main_tree_blocks_merge(self) -> None:
+        from harness import lanes
+
+        self._lane_with_change("T1", "def calculate_fee(amount):\n    return 3\n")
+        with open(os.path.join(self.root, "src", "other.py"), "w", encoding="utf-8") as fh:
+            fh.write("x = 1\n")
+        with self.assertRaises(lanes.LaneError) as ctx:
+            lanes.merge(self.root, self.store, "T1")
+        self.assertEqual(ctx.exception.rule, "R-WAVE-1")
+        self.assertIn("грязное", str(ctx.exception))
+
+    def test_merge_lock_is_exclusive(self) -> None:
+        from harness import lanes
+
+        with lanes.merge_lock(self.root, timeout=5):
+            with self.assertRaises(lanes.LaneError):
+                with lanes.merge_lock(self.root, timeout=0.2):
+                    pass
 
 
 if __name__ == "__main__":

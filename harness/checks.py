@@ -38,8 +38,76 @@ def _env() -> dict[str, str]:
     return env
 
 
+SANDBOX_IMAGE = os.environ.get("HARNESS_SANDBOX_IMAGE", "python:3.12-slim")
+
+
+def detect_sandbox() -> dict[str, Any]:
+    """Что из изоляции доступно в этой среде.
+
+    Контейнер — не «безопасность по умолчанию»: он есть далеко не везде, а без него
+    остаётся копия дерева и урезанное окружение. Честнее показать это, чем
+    называть прогон изолированным.
+    """
+    docker = shutil.which("docker")
+    available = False
+    note = "docker не найден: остаётся копия дерева и урезанное окружение"
+    if docker:
+        try:
+            probe = subprocess.run(
+                [docker, "info", "--format", "{{.ServerVersion}}"],
+                capture_output=True, text=True, timeout=10,
+            )
+            available = probe.returncode == 0
+            note = (
+                f"docker доступен ({probe.stdout.strip()}), прогон без сети"
+                if available
+                else "docker установлен, но демон недоступен"
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            note = "docker не отвечает"
+    return {
+        "platform": os.name,
+        "docker": bool(docker),
+        "docker_ready": available,
+        "image": SANDBOX_IMAGE,
+        "mode": "docker" if available else "copy-only",
+        "note": note,
+    }
+
+
 class CheckError(RuntimeError):
     pass
+
+
+def _execute(command: str, tree: str, timeout: int, use_docker: bool,
+             isolation: dict[str, Any]) -> subprocess.CompletedProcess:
+    """Запускает команду в контейнере без сети либо в копии дерева."""
+    if use_docker:
+        docker = shutil.which("docker") or "docker"
+        return subprocess.run(
+            [
+                docker, "run", "--rm", "--network", "none",
+                "-v", f"{tree}:/work", "-w", "/work",
+                "-e", "PYTHONUNBUFFERED=1",
+                isolation["image"], "sh", "-lc", command,
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
+    return subprocess.run(
+        command,
+        shell=True,
+        cwd=tree,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        env=_env(),
+    )
 
 
 def collect_commands(brief_data: dict[str, Any], override: list[str] | None = None) -> list[str]:
@@ -68,11 +136,19 @@ def run(
     timeout: int = 300,
     evidence_dir: str | None = None,
     keep_workdir: bool = False,
+    sandbox: str = "auto",
 ) -> dict[str, Any]:
     root = os.path.abspath(root)
     cmds = collect_commands(brief_data, commands)
     if not cmds:
         raise CheckError("в брифе нет команд проверки: критерии нечем подтвердить")
+
+    isolation = detect_sandbox()
+    use_docker = sandbox == "docker" or (sandbox == "auto" and isolation["docker_ready"])
+    if sandbox == "docker" and not isolation["docker_ready"]:
+        raise CheckError(f"изоляция через контейнер запрошена, но недоступна: {isolation['note']}")
+    if not use_docker:
+        isolation["mode"] = "copy-only"
 
     workdir = tempfile.mkdtemp(prefix=f"harness-checks-{task_id}-")
     tree = os.path.join(workdir, "tree")
@@ -88,17 +164,7 @@ def run(
         started = time.time()
         entry: dict[str, Any] = {"index": index, "command": command}
         try:
-            proc = subprocess.run(
-                command,
-                shell=True,
-                cwd=tree,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-                env=_env(),
-            )
+            proc = _execute(command, tree, timeout, use_docker, isolation)
             entry.update(exit_code=proc.returncode, timed_out=False)
             stdout, stderr = proc.stdout, proc.stderr
         except subprocess.TimeoutExpired as exc:
@@ -107,6 +173,7 @@ def run(
             stderr = f"превышен лимит {timeout}с"
         entry["duration_s"] = round(time.time() - started, 3)
         entry["ok"] = entry.get("exit_code") == 0
+        entry["isolation"] = isolation["mode"]
 
         art_dir = os.path.join(art_root, f"{index:02d}")
         os.makedirs(art_dir, exist_ok=True)
@@ -128,6 +195,7 @@ def run(
         "results": results,
         "all_ok": all(r["ok"] for r in results),
         "any_timeout": any(r["timed_out"] for r in results),
+        "isolation": isolation,
         "workdir": workdir if keep_workdir else None,
         "artifacts": art_root,
     }
@@ -220,7 +288,11 @@ def _prefix_hit(check: str, by_command: dict[str, dict[str, Any]]) -> dict[str, 
 
 
 def render_text(report: dict[str, Any]) -> str:
-    lines = [f"проверки для {report['task_id']}: команд {len(report['results'])}"]
+    iso = report.get("isolation") or {}
+    lines = [
+        f"проверки для {report['task_id']}: команд {len(report['results'])}",
+        f"изоляция: {iso.get('mode', '?')} — {iso.get('note', '')}",
+    ]
     for r in report["results"]:
         mark = "ok  " if r["ok"] else ("TIME" if r.get("timed_out") else "FAIL")
         lines.append(f"  [{mark}] {r['command']}  ({r.get('duration_s')}с, код {r.get('exit_code')})")
@@ -234,3 +306,8 @@ CONTROL_POINTS = {
     "checks.run": run,
     "checks.build_verdict": build_verdict,
 }
+
+# Точки контроля, которые реально существуют в коде (для отчёта о покрытии матрицы).
+checks_sandbox = detect_sandbox  # отдельная ссылка, чтобы отчёт видел механизм
+
+CONTROL_POINTS["checks.sandbox"] = detect_sandbox

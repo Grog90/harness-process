@@ -213,15 +213,15 @@
     },
     {
       "id": "R-TIMEOUT-1",
-      "statement": "Watchdog: диспетч дольше лимита переводится в TIMED_OUT с отзывом полномочий; событие смерти доставляется отдельно.",
+      "statement": "Watchdog живёт вне процесса исполнителя: просроченный диспетч переводится в TIMED_OUT, смерть доставляется отдельным событием.",
       "event": "watchdog",
       "enforcement": "blocking",
       "implemented": true,
-      "hook": "fsm.watchdog",
-      "positive_test": "диспетч в пределах лимита — задача остаётся RUNNING",
-      "negative_test": "просроченный диспетч — TIMED_OUT, повторный результат не переводит в PASS",
+      "hook": "watchdog.sweep",
+      "positive_test": "цикл сторожа не находит просрочек — состояние не меняется",
+      "negative_test": "просроченный диспетч отозван, событие dispatch_death записано, повторный результат не принимается",
       "owner": "control",
-      "residual_risk": "Таймер работает в управляющем процессе; при его остановке watchdog не сработает."
+      "residual_risk": "Если сторож не запущен, отзыв не произойдёт; состояние при этом сохраняется и разбирается позже."
     },
     {
       "id": "R-TRACE-1",
@@ -286,16 +286,16 @@
     },
     {
       "id": "R-SANDBOX-1",
-      "statement": "Изоляция сети и файловой системы на уровне ОС для исполнителей.",
-      "event": "pretooluse",
-      "enforcement": "n/a",
-      "implemented": false,
-      "gap_kind": "external_dependency",
-      "hook": null,
-      "positive_test": "—",
-      "negative_test": "—",
+      "statement": "Проверки из брифа выполняются в изоляции: контейнер без сети, если доступен, иначе копия дерева с урезанным окружением.",
+      "event": "postverdict",
+      "enforcement": "soft",
+      "implemented": true,
+      "gap_kind": null,
+      "hook": "checks.sandbox",
+      "positive_test": "docker доступен — команда уходит в контейнер с --network none",
+      "negative_test": "docker недоступен — режим копии помечен явно, а не выдаётся за изоляцию",
       "owner": "environment",
-      "residual_risk": "Пока изоляция опирается на полномочия инструментов; ОС-песочница не настроена."
+      "residual_risk": "При отсутствии docker остаётся только копия дерева: права процесса и сеть не ограничены."
     },
     {
       "id": "R-HOOK-1",
@@ -312,16 +312,16 @@
     },
     {
       "id": "R-WAVE-1",
-      "statement": "Мутирующие диспетчи изолируются по worktree; волна закрывается одним коммитом.",
-      "event": "predispatch",
-      "enforcement": "n/a",
-      "implemented": false,
-      "gap_kind": "not_implemented",
-      "hook": null,
-      "positive_test": "—",
-      "negative_test": "—",
-      "owner": "unassigned",
-      "residual_risk": "Параллельная запись не поддерживается в v0; общий ресурс — одно дерево."
+      "statement": "Мутирующие задачи изолируются по git worktree; слияние в главное дерево идёт под мьютексом, конфликт не правит координатор.",
+      "event": "precommit",
+      "enforcement": "blocking",
+      "implemented": true,
+      "gap_kind": null,
+      "hook": "lanes.merge",
+      "positive_test": "закоммиченный лейн сливается в чистое главное дерево",
+      "negative_test": "конфликт или грязное главное дерево — слияние откатывается, задача уходит человеку",
+      "owner": "control",
+      "residual_risk": "Лейны разделяют дерево, но не тестовые БД, порты и внешние ресурсы: это настраивается в проекте."
     },
     {
       "id": "R-EVAL-1",

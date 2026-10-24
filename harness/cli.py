@@ -203,12 +203,80 @@ def _apply(eng: Engine, args: argparse.Namespace, event: str, payload: dict[str,
 
 
 def cmd_watchdog(args: argparse.Namespace) -> int:
+    from .watchdog import Watchdog
+
     eng = _engine(args)
-    out = check_watchdog(eng, args.task)
-    if out is None:
-        _print({"ok": True, "state": eng.store.get_task(args.task)["state"], "message": "не просрочен"}, args.json)
+    dog = Watchdog(eng.store, eng)
+
+    if args.action == "check":
+        if not args.task:
+            print("нужен --task", file=sys.stderr)
+            return EXIT_ERROR
+        out = check_watchdog(eng, args.task)
+        if out is None:
+            _print({"ok": True, "state": eng.store.get_task(args.task)["state"], "message": "не просрочен"},
+                   args.json)
+            return EXIT_OK
+        _print(out.to_dict(), args.json)
         return EXIT_OK
-    _print(out.to_dict(), args.json)
+
+    if args.action == "sweep":
+        revoked = dog.sweep()
+        _print({"revoked": [r.to_dict() for r in revoked], "count": len(revoked)}, args.json)
+        return EXIT_OK
+
+    if args.action == "serve":
+        def emit(payload: dict[str, Any]) -> None:
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, flush=True))
+            else:
+                if payload["revoked"]:
+                    for r in payload["revoked"]:
+                        print(f"отозвано: {r['task_id']} (попытка {r['attempt']}, просрочка {r['overdue_s']}с)")
+                else:
+                    print(f"цикл {payload['cycle']}: просрочек нет", flush=True)
+
+        cycles = dog.serve(interval=args.interval, cycles=args.cycles, emit=emit)
+        _print({"cycles": cycles}, args.json) if args.json else None
+        return EXIT_OK
+
+    print(f"неизвестное действие: {args.action}", file=sys.stderr)
+    return EXIT_ERROR
+
+
+def cmd_sandbox(args: argparse.Namespace) -> int:
+    from .checks import detect_sandbox
+
+    info = detect_sandbox()
+    _print(info, args.json)
+    return EXIT_OK if args.action == "probe" else EXIT_ERROR
+
+
+def cmd_lane(args: argparse.Namespace) -> int:
+    """Параллельные лейны: worktree на задачу, слияние под мьютексом."""
+    from . import lanes as lanes_mod
+
+    root = _root(args)
+    store = _store(args)
+    try:
+        if args.action == "list":
+            _print(lanes_mod.list_lanes(root), args.json)
+            return EXIT_OK
+        if args.action == "create":
+            out = lanes_mod.create(root, store, args.task, base=args.base)
+        elif args.action == "merge":
+            out = lanes_mod.merge(root, store, args.task, message=args.message)
+        elif args.action == "remove":
+            out = lanes_mod.remove(root, args.task, force=not args.keep_branch)
+        else:
+            print(f"неизвестное действие: {args.action}", file=sys.stderr)
+            return EXIT_ERROR
+    except lanes_mod.LaneError as exc:
+        _print(exc.to_dict(), args.json) if args.json else _deny_text(exc)
+        return EXIT_DENIED
+    finally:
+        store.close()
+    _print(out, args.json)
     return EXIT_OK
 
 
@@ -419,6 +487,7 @@ def cmd_checks_run(args: argparse.Namespace) -> int:
             commands=args.command,
             timeout=args.timeout,
             keep_workdir=args.keep,
+            sandbox=args.sandbox,
         )
     except checks_mod.CheckError as exc:
         print(f"ОШИБКА: {exc}", file=sys.stderr)
@@ -527,9 +596,24 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("--event-id", default=None)
     ev.set_defaults(func=cmd_event)
 
-    w = sub.add_parser("watchdog", help="проверить и отозвать просроченные полномочия")
-    w.add_argument("--task", required=True)
+    w = sub.add_parser("watchdog", help="сторожевой таймер: отзыв просроченных полномочий")
+    w.add_argument("action", nargs="?", default="check", choices=["check", "sweep", "serve"])
+    w.add_argument("--task", default=None)
+    w.add_argument("--interval", type=float, default=15.0)
+    w.add_argument("--cycles", type=int, default=None, help="ограничить число проходов")
     w.set_defaults(func=cmd_watchdog)
+
+    sb = sub.add_parser("sandbox", help="проба доступной изоляции прогона проверок")
+    sb.add_argument("action", nargs="?", default="probe", choices=["probe"])
+    sb.set_defaults(func=cmd_sandbox)
+
+    ln = sub.add_parser("lane", help="параллельные лейны в git worktree")
+    ln.add_argument("action", choices=["create", "list", "merge", "remove"])
+    ln.add_argument("--task", default=None)
+    ln.add_argument("--base", default="HEAD")
+    ln.add_argument("--message", default=None)
+    ln.add_argument("--keep-branch", action="store_true")
+    ln.set_defaults(func=cmd_lane)
 
     h = sub.add_parser("hook", help="событие инструмента (для обвязки рантайма)")
     h.add_argument("event", default="pretooluse", nargs="?")
@@ -603,6 +687,8 @@ def build_parser() -> argparse.ArgumentParser:
     ckr.add_argument("--snapshot-id", default=None)
     ckr.add_argument("--verdict-out", default=None)
     ckr.add_argument("--keep", action="store_true", help="не удалять копию дерева (для разбора)")
+    ckr.add_argument("--sandbox", default="auto", choices=["auto", "none", "docker"],
+                     help="изоляция прогона: контейнер без сети, если доступен")
     ckr.set_defaults(func=cmd_checks_run)
 
     return p

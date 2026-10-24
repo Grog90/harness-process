@@ -247,12 +247,20 @@ class Demo:
                          lambda: eng.apply("DEMO-2", "dispatch", {"worker_id": "worker-4"}))
 
         self.step("10. Watchdog: просроченный диспетч")
+        from .watchdog import Watchdog
+
         store.create_task("DEMO-3", policy_version=policy.version)
         eng.apply("DEMO-3", "attach_brief", {"brief": dict(BRIEF, task_id="DEMO-3")})
         eng.apply("DEMO-3", "dispatch", {"worker_id": "worker-x", "timeout_seconds": -5})
-        out = check_watchdog(eng, "DEMO-3")
-        self.check("watchdog отозвал полномочия", bool(out and out.state == "TIMED_OUT"),
-                   out.state if out else "нет события")
+        revoked = Watchdog(store, eng).sweep()
+        self.check("отдельный проход сторожа отозвал полномочия",
+                   len(revoked) == 1 and store.get_task("DEMO-3")["state"] == "TIMED_OUT",
+                   f"{len(revoked)} отозвано")
+        deaths = [e for e in store.events_for("DEMO-3") if e["type"] == "dispatch_death"]
+        self.check("смерть диспетча доставлена отдельным событием", len(deaths) == 1,
+                   f"событий dispatch_death: {len(deaths)}")
+        self.check("повторный проход ничего не отзывает", Watchdog(store, eng).sweep() == [],
+                   "идемпотентно")
         self.expect_deny("запоздалый submit не принимается", "R-TRACE-1",
                          lambda: eng.apply("DEMO-3", "submit", {"attempt": 1, "snapshot_id": "snap_late"}))
 
@@ -288,6 +296,9 @@ class Demo:
 
         self.step("15. Доверенный финализатор")
         self._finalize_steps(store, policy)
+
+        self.step("16. Параллельный лейн: worktree → коммит → слияние")
+        self._lane_steps(store, policy)
 
         ok = all(c["ok"] for c in self.checks)
         self.say("")
@@ -343,6 +354,9 @@ class Demo:
         report = checks_mod.run(self.root, brief, task_id="DEMO-CHECKS", timeout=60)
         self.check("команды проверки выполнены в копии", report["all_ok"],
                    f"{len(report['results'])} команд, артефакт {os.path.basename(report['artifacts'])}")
+        self.say(f"  изоляция: {report['isolation']['mode']} — {report['isolation']['note']}")
+        self.check("режим изоляции назван явно", report["isolation"]["mode"] in ("docker", "copy-only"),
+                   report["isolation"]["mode"])
         verdict = checks_mod.build_verdict(brief, report, task_id="DEMO-CHECKS", attempt=1, snapshot_id="snap_x")
         self.check("критерий без запуска даёт skip и INCONCLUSIVE", verdict["verdict"] == "INCONCLUSIVE",
                    verdict["verdict"])
@@ -396,6 +410,42 @@ class Demo:
                    "pipeline-log/DEMO-F.jsonl")
         self.check("связь «снимок → коммит» записана",
                    store.commit_for_task("DEMO-F")["commit_sha"] == out["commit_sha"], out["commit_sha"][:10])
+
+    def _lane_steps(self, store: Store, policy: Policy) -> None:
+        from . import lanes as lanes_mod
+        from .finalize import finalize
+
+        store.create_task("DEMO-L", policy_version=policy.version)
+        eng = Engine(store, policy, self.root)
+        eng.apply("DEMO-L", "attach_brief", {"brief": dict(BRIEF, task_id="DEMO-L")})
+        eng.apply("DEMO-L", "dispatch", {"worker_id": "lane-worker"})
+
+        lane = lanes_mod.create(self.root, store, "DEMO-L")
+        lane_root = lane["path"]
+        self.check("worktree создан вне главного дерева",
+                   os.path.isdir(lane_root) and lane_root != self.root, lane["lane"])
+
+        with open(os.path.join(lane_root, "src", "fee.py"), "w", encoding="utf-8") as fh:
+            fh.write(TOY_CODE + "\n# правка в лейне\n")
+
+        snapshot = compute_for_scope(lane_root, "")
+        eng.apply("DEMO-L", "submit", {"attempt": 1, "snapshot_id": snapshot})
+        eng.apply("DEMO-L", "verdict", {"verdict": _verdict("DEMO-L", 1, snapshot, "PASS")})
+
+        lane_engine = Engine(store, policy, lane_root)
+        committed = finalize(store, lane_engine, lane_root, "DEMO-L", message="fee lane")
+        self.check("финализатор закоммитил в лейне", committed["ok"], committed["commit_sha"][:10])
+
+        try:
+            lanes_mod.merge(self.root, store, "DEMO-1")
+        except lanes_mod.LaneError as exc:
+            self.check("в главное дерево сливается только COMMITTED", exc.rule == "R-FINAL-1", exc.rule)
+
+        merged = lanes_mod.merge(self.root, store, "DEMO-L")
+        self.check("лейн слит под мьютексом", merged["ok"], merged["merge_commit"][:10])
+        with open(os.path.join(self.root, "src", "fee.py"), encoding="utf-8") as fh:
+            self.check("изменение лейна видно в главном дереве", "# правка в лейне" in fh.read(),
+                       "src/fee.py")
 
 
 def _hook_checks(demo: Demo, policy: Policy) -> None:

@@ -540,6 +540,89 @@ def c_checks_isolated(root: str) -> None:
     assert states["AC-1"] == "pass" and states["AC-2"] == "skip", states
 
 
+def c_watchdog_loop(root: str) -> None:
+    """Сторож как отдельный проход: отзывает просрочку и не дублирует событие."""
+    from .watchdog import Watchdog
+
+    eng = _engine(root)
+    eng.store.create_task("T-SELF", policy_version="1.0.0")
+    eng.apply("T-SELF", "attach_brief", {"brief": brief_data()})
+    eng.apply("T-SELF", "dispatch", {"worker_id": "w1", "timeout_seconds": -5})
+
+    dog = Watchdog(eng.store, eng)
+    revoked = dog.sweep()
+    assert len(revoked) == 1, revoked
+    assert eng.store.get_task("T-SELF")["state"] == "TIMED_OUT"
+    deaths = [e for e in eng.store.events_for("T-SELF") if e["type"] == "dispatch_death"]
+    assert len(deaths) == 1, deaths
+    assert deaths[0]["payload"].get("synthetic") is True
+
+    again = dog.sweep()
+    assert again == [], "повторный проход отозвал ту же попытку дважды"
+    assert len([e for e in eng.store.events_for("T-SELF") if e["type"] == "dispatch_death"]) == 1
+
+
+def c_sandbox_degrades_honestly(root: str) -> None:
+    """Изоляция либо есть, либо честно помечена как отсутствующая."""
+    from . import checks as checks_mod
+
+    info = checks_mod.detect_sandbox()
+    assert info["mode"] in ("docker", "copy-only"), info
+    assert info["note"], "отсутствие изоляции должно быть объяснено"
+
+    os.makedirs(os.path.join(root, "src"), exist_ok=True)
+    with open(os.path.join(root, "src", "fee.py"), "w", encoding="utf-8") as fh:
+        fh.write("x = 1\n")
+    brief = brief_data()
+    brief["acceptance"] = {
+        "criteria": [{"id": "AC-1", "statement": "s", "mandatory": True, "check": "python -V"}],
+        "check_commands": ["python -V"],
+    }
+    report = checks_mod.run(root, brief, task_id="T-SELF", timeout=60)
+    assert report["isolation"]["mode"] == info["mode"], report["isolation"]
+    assert report["results"][0]["isolation"] == info["mode"]
+
+
+def c_lane_merge(root: str) -> None:
+    """Полный цикл в лейне: worktree → коммит финализатором → слияние."""
+    from . import lanes as lanes_mod
+    from .finalize import finalize
+
+    _git_setup(root)
+    store = Store(os.path.join(root, ".harness", "state.db"))
+    try:
+        eng = Engine(store, Policy.load(root), root)
+        store.create_task("T-SELF", policy_version="1.0.0")
+        eng.apply("T-SELF", "attach_brief", {"brief": brief_data()})
+        eng.apply("T-SELF", "dispatch", {"worker_id": "w"})
+
+        lane = lanes_mod.create(root, store, "T-SELF")
+        lane_root = lane["path"]
+        assert os.path.isdir(lane_root), lane_root
+
+        # исполнитель работает только внутри своего worktree
+        target = os.path.join(lane_root, "src", "fee.py")
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "w", encoding="utf-8") as fh:
+            fh.write("def calculate_fee(amount):\n    return int(amount * 0.025)\n")
+
+        snapshot = compute_for_scope(lane_root, "")
+        eng.apply("T-SELF", "submit", {"attempt": 1, "snapshot_id": snapshot})
+        eng.apply("T-SELF", "verdict", {"verdict": verdict_data("T-SELF", snapshot=snapshot)})
+
+        lane_engine = Engine(store, Policy.load(root), lane_root)
+        out = finalize(store, lane_engine, lane_root, "T-SELF")
+        assert out["ok"], out
+
+        merged = lanes_mod.merge(root, store, "T-SELF")
+        assert merged["ok"], merged
+        with open(os.path.join(root, "src", "fee.py"), encoding="utf-8") as fh:
+            assert "0.025" in fh.read(), "слияние не принесло изменение в главное дерево"
+        assert lanes_mod.list_lanes(root), "список лейнов пуст"
+    finally:
+        store.close()
+
+
 CHECKS: list[Check] = [
     Check("R-ORCH-1", "оркестратор пишет документацию", c_orch_positive),
     Check("R-ORCH-1", "оркестратор не пишет продукт", c_orch_negative),
@@ -577,6 +660,9 @@ CHECKS: list[Check] = [
     Check("R-WRITESET-1", "посторонний файл блокирует коммит", c_writeset_negative),
     Check("R-FINAL-1", "финализатор коммитит проверенный снимок", c_finalize_ok),
     Check("R-CHECK-1", "проверки идут в копии и дают артефакт", c_checks_isolated),
+    Check("R-TIMEOUT-1", "сторож отзывает просрочку отдельным проходом", c_watchdog_loop),
+    Check("R-SANDBOX-1", "изоляция честно помечена", c_sandbox_degrades_honestly),
+    Check("R-WAVE-1", "лейн: worktree, коммит, слияние", c_lane_merge),
 ]
 
 
