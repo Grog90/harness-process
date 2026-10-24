@@ -191,6 +191,7 @@ class Engine:
         if payload.get("_snapshot"):
             fields["verifying_snapshot"] = payload["_snapshot"]
             fields["candidate_snapshot"] = payload["_snapshot"]
+            fields["snapshot_scope"] = payload.get("_scope", "")
         if new_state == "ACCEPTED":
             fields["accepted_snapshot"] = task.get("verifying_snapshot") or payload.get("_snapshot")
             v = payload.get("verdict") or {}
@@ -306,6 +307,7 @@ def _guard_submit(engine: Engine, task: dict[str, Any], payload: dict[str, Any])
     engine.store.mark_verdicts_stale(task["task_id"], keep_snapshot=snapshot)
     engine.store.finish_attempt(task["task_id"], attempt, status="submitted", snapshot_id=snapshot)
     payload["_snapshot"] = snapshot
+    payload["_scope"] = str(payload.get("snapshot_scope") or "")
 
 
 def _guard_verdict(engine: Engine, task: dict[str, Any], payload: dict[str, Any]) -> None:

@@ -16,7 +16,7 @@ import uuid
 from contextlib import contextmanager
 from typing import Any, Iterable, Iterator
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -101,6 +101,28 @@ CREATE TABLE IF NOT EXISTS pipeline_log (
     snapshot_id TEXT,
     created_at REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS commits (
+    commit_sha   TEXT PRIMARY KEY,
+    task_id      TEXT NOT NULL,
+    snapshot_id  TEXT NOT NULL,
+    verdict_id   TEXT,
+    message      TEXT,
+    finalizer    TEXT,
+    created_at   REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tools_audit (
+    audit_id   TEXT PRIMARY KEY,
+    task_id    TEXT,
+    role       TEXT,
+    tool       TEXT NOT NULL,
+    decision   TEXT NOT NULL,
+    rule       TEXT,
+    path       TEXT,
+    summary    TEXT,
+    created_at REAL NOT NULL
+);
 """
 
 
@@ -125,9 +147,18 @@ class Store:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.execute(
             "INSERT OR REPLACE INTO meta(key, value) VALUES('schema_version', ?)", (str(SCHEMA_VERSION),)
         )
+
+    def _migrate(self) -> None:
+        """Догоняющие изменения схемы: старые файлы состояния должны открываться."""
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(tasks)")}
+        if "snapshot_scope" not in cols:
+            self.conn.execute("ALTER TABLE tasks ADD COLUMN snapshot_scope TEXT NOT NULL DEFAULT ''")
+        if "commit_sha" not in cols:
+            self.conn.execute("ALTER TABLE tasks ADD COLUMN commit_sha TEXT")
 
     # ------------------------------------------------------------------ транзакции
     @contextmanager
@@ -393,3 +424,54 @@ class Store:
             "SELECT * FROM pipeline_log WHERE task_id = ? ORDER BY created_at, rowid", (task_id,)
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------ коммиты
+    def record_commit(self, *, commit_sha: str, task_id: str, snapshot_id: str,
+                      verdict_id: str | None = None, message: str = "",
+                      finalizer: str = "harness") -> dict[str, Any]:
+        """Отображение «проверенный снимок → итоговый коммит».
+
+        Вызывается доверенным финализатором после успешного git commit; хеш коммита
+        нельзя записать внутрь самого коммита, поэтому связь хранится отдельно.
+        """
+        with self.transaction() as c:
+            c.execute(
+                """INSERT OR REPLACE INTO commits(commit_sha, task_id, snapshot_id, verdict_id, message,
+                                                   finalizer, created_at)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (commit_sha, task_id, snapshot_id, verdict_id, message, finalizer, now()),
+            )
+            c.execute("UPDATE tasks SET commit_sha = ? WHERE task_id = ?", (commit_sha, task_id))
+        return self.get_commit(commit_sha)
+
+    def get_commit(self, commit_sha: str) -> dict[str, Any]:
+        row = self.conn.execute("SELECT * FROM commits WHERE commit_sha = ?", (commit_sha,)).fetchone()
+        if row is None:
+            raise StoreError(f"коммит не найден: {commit_sha}")
+        return dict(row)
+
+    def commit_for_task(self, task_id: str) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT * FROM commits WHERE task_id = ? ORDER BY created_at DESC LIMIT 1", (task_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    # ------------------------------------------------------------------ аудит инструментов
+    def audit_tool(self, *, role: str, tool: str, decision: str, rule: str = "",
+                   task_id: str | None = None, path: str | None = None,
+                   summary: str = "") -> str:
+        aid = new_id("audit")
+        with self.transaction() as c:
+            c.execute(
+                """INSERT INTO tools_audit(audit_id, task_id, role, tool, decision, rule, path, summary, created_at)
+                   VALUES(?,?,?,?,?,?,?,?,?)""",
+                (aid, task_id, role, tool, decision, rule, path, summary[:400], now()),
+            )
+        return aid
+
+    def audits_for(self, task_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT * FROM tools_audit WHERE task_id = ? ORDER BY created_at, rowid", (task_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+

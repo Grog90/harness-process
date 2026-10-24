@@ -18,6 +18,7 @@ from . import hooks
 from .fsm import Engine, TransitionError, check_watchdog
 from .hooks import HookContext
 from .policy import Policy
+from .snapshot import compute_for_scope
 from .state import Store
 
 
@@ -396,6 +397,149 @@ def c_policy_version_drift(root: str) -> None:
     assert out.state in ("ACCEPTED", "VERIFY_BLOCKED"), out.state
 
 
+def _git_setup(root: str, files: dict[str, str] | None = None) -> None:
+    """Готовит минимальный git-репозиторий для проверок финализатора."""
+    import subprocess
+
+    files = files or {"src/fee.py": "def calculate_fee(amount):\n    return 0\n"}
+    for rel, content in files.items():
+        full = os.path.join(root, rel)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "w", encoding="utf-8") as fh:
+            fh.write(content)
+    cmds = [
+        ["git", "init", "-q", root],
+        ["git", "-C", root, "add", "-A"],
+        ["git", "-C", root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "base"],
+    ]
+    for cmd in cmds:
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise AssertionError(f"git не настроился: {proc.stderr.strip()[:200]}")
+
+
+def _accepted_task(eng: Engine, root: str, task_id: str = "T-GIT") -> str:
+    """Доводит задачу до ACCEPTED на текущем содержимом дерева и возвращает снимок."""
+    eng.store.create_task(task_id, policy_version="1.0.0")
+    eng.apply(task_id, "attach_brief", {"brief": brief_data(task_id)})
+    eng.apply(task_id, "dispatch", {"worker_id": "w"})
+    snapshot = compute_for_scope(root, "")
+    eng.apply(task_id, "submit", {"attempt": 1, "snapshot_id": snapshot})
+    eng.apply(task_id, "verdict", {"verdict": verdict_data(task_id, snapshot=snapshot)})
+    assert eng.store.get_task(task_id)["state"] == "ACCEPTED"
+    return snapshot
+
+
+def c_gateway_state(root: str) -> None:
+    from .gateway import Gateway
+
+    eng = _engine(root)
+    eng.store.create_task("T-SELF", policy_version="1.0.0")
+    eng.apply("T-SELF", "attach_brief", {"brief": brief_data()})
+    eng.apply("T-SELF", "dispatch", {"worker_id": "w"})
+    gw = Gateway(root, eng.policy, eng.store)
+
+    ok = gw.handle({"role": "worker", "task_id": "T-SELF", "tool": "write_file",
+                    "args": {"path": "src/fee.py", "content": "x = 1\n"}})
+    assert ok["ok"], ok
+
+    eng.apply("T-SELF", "submit", {"attempt": 1, "snapshot_id": "snap_x"})
+    denied = gw.handle({"role": "worker", "task_id": "T-SELF", "tool": "write_file",
+                        "args": {"path": "src/fee.py", "content": "x = 2\n"}})
+    assert not denied["ok"] and denied["rule"] == "R-STATE-1", denied
+
+
+def c_gateway_ignores_agent_scope(root: str) -> None:
+    from .gateway import Gateway
+
+    eng = _engine(root)
+    eng.store.create_task("T-SELF", policy_version="1.0.0")
+    eng.apply("T-SELF", "attach_brief", {"brief": brief_data()})
+    eng.apply("T-SELF", "dispatch", {"worker_id": "w"})
+    gw = Gateway(root, eng.policy, eng.store)
+
+    denied = gw.handle({
+        "role": "worker", "task_id": "T-SELF", "tool": "write_file",
+        "args": {"path": "src/billing.py", "content": "x = 1\n", "allowed_files": ["**"]},
+    })
+    assert not denied["ok"] and denied["rule"] == "R-WORK-1", denied
+
+
+def c_writeset_negative(root: str) -> None:
+    from .finalize import FinalizeError, finalize
+
+    _git_setup(root)
+    eng = _engine(root)
+    # посторонний файл существовал до проверки: снимок его содержит,
+    # значит проверка снимка молчит и вперёд выступает write-set
+    with open(os.path.join(root, "src", "stray.py"), "w", encoding="utf-8") as fh:
+        fh.write("x = 1\n")
+    _accepted_task(eng, root)
+    try:
+        finalize(eng.store, eng, root, "T-GIT")
+    except FinalizeError as exc:
+        assert exc.rule == "R-WRITESET-1", f"{exc.rule}: {exc}"
+        return
+    raise AssertionError("коммит с посторонним файлом прошёл")
+
+
+def c_finalize_ok(root: str) -> None:
+    from .finalize import finalize
+
+    _git_setup(root)
+    eng = _engine(root)
+    snapshot = _accepted_task(eng, root)
+    with open(os.path.join(root, "src", "fee.py"), "w", encoding="utf-8") as fh:
+        fh.write("def calculate_fee(amount):\n    return int(amount * 0.025)\n")
+    # снимок после правки уже другой — финализатор должен отказать
+    try:
+        finalize(eng.store, eng, root, "T-GIT")
+    except Exception as exc:  # noqa: BLE001
+        assert getattr(exc, "rule", "") == "R-SNAPSHOT-1", exc
+    else:
+        raise AssertionError("правка после PASS не отменила коммит")
+
+    # честный повтор: новый снимок проходит полную проверку
+    eng.apply("T-GIT", "invalidate", {})
+    eng.apply("T-GIT", "dispatch", {"worker_id": "w2"})
+    snapshot2 = compute_for_scope(root, "")
+    eng.apply("T-GIT", "submit", {"attempt": 2, "snapshot_id": snapshot2})
+    eng.apply("T-GIT", "verdict", {"verdict": verdict_data("T-GIT", attempt=2, snapshot=snapshot2)})
+    out = finalize(eng.store, eng, root, "T-GIT", message="fee: 2.5%")
+    assert out["ok"] and len(out["commit_sha"]) >= 7, out
+    task = eng.store.get_task("T-GIT")
+    assert task["state"] == "COMMITTED" and task["commit_sha"] == out["commit_sha"], task
+    assert snapshot2 != snapshot
+
+
+def c_checks_isolated(root: str) -> None:
+    from . import checks as checks_mod
+
+    os.makedirs(os.path.join(root, "src"), exist_ok=True)
+    with open(os.path.join(root, "src", "fee.py"), "w", encoding="utf-8") as fh:
+        fh.write("x = 1\n")
+    with open(os.path.join(root, "check_ok.py"), "w", encoding="utf-8") as fh:
+        fh.write("open('marker.txt', 'w').write('done')\nprint('ok')\n")
+
+    brief = brief_data()
+    brief["acceptance"] = {
+        "criteria": [
+            {"id": "AC-1", "statement": "проверка проходит", "mandatory": True, "check": "python check_ok.py"},
+            {"id": "AC-2", "statement": "ручная проверка", "mandatory": True, "check": "call"},
+        ],
+        "check_commands": ["python check_ok.py"],
+    }
+    report = checks_mod.run(root, brief, task_id="T-SELF", timeout=60)
+    assert report["all_ok"], report["results"]
+    # копия дерева изолирована: маркер появился там, а не в продукте
+    assert not os.path.exists(os.path.join(root, "marker.txt")), "проверка изменила рабочее дерево"
+
+    verdict = checks_mod.build_verdict(brief, report, task_id="T-SELF", attempt=1, snapshot_id="snap_x")
+    assert verdict["verdict"] == "INCONCLUSIVE", verdict["verdict"]
+    states = {c["id"]: c["result"] for c in verdict["criteria"]}
+    assert states["AC-1"] == "pass" and states["AC-2"] == "skip", states
+
+
 CHECKS: list[Check] = [
     Check("R-ORCH-1", "оркестратор пишет документацию", c_orch_positive),
     Check("R-ORCH-1", "оркестратор не пишет продукт", c_orch_negative),
@@ -428,6 +572,11 @@ CHECKS: list[Check] = [
     Check("R-TIMEOUT-1", "watchdog переводит в TIMED_OUT", c_watchdog),
     Check("R-FIND-1", "находка не закрывается без причины", c_finding_close_guard),
     Check("R-TRACE-1", "повторная доставка события идемпотентна", c_idempotency),
+    Check("R-STATE-1", "шлюз закрывает инструменты вне RUNNING", c_gateway_state),
+    Check("R-TOOL-1", "агент не расширяет себе allowed_files", c_gateway_ignores_agent_scope),
+    Check("R-WRITESET-1", "посторонний файл блокирует коммит", c_writeset_negative),
+    Check("R-FINAL-1", "финализатор коммитит проверенный снимок", c_finalize_ok),
+    Check("R-CHECK-1", "проверки идут в копии и дают артефакт", c_checks_isolated),
 ]
 
 

@@ -21,10 +21,10 @@ def control_index() -> dict[str, Any]:
     Объединяет хуки инструментов и охранные условия автомата: отчёт о покрытии
     должен видеть и то, и другое, иначе половина матрицы выглядит дырой.
     """
-    from . import brief, evals, findings, fsm, verdict
+    from . import brief, checks, evals, finalize, findings, fsm, gateway, verdict
 
     index: dict[str, Any] = dict(hooks.HOOKS)
-    for module in (brief, fsm, verdict, findings, evals):
+    for module in (brief, checks, evals, finalize, findings, fsm, gateway, verdict):
         for name, fn in getattr(module, "CONTROL_POINTS", {}).items():
             if fn is not None:
                 index[name] = fn

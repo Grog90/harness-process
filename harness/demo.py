@@ -19,7 +19,7 @@ from . import verdict as verdict_mod
 from .fsm import Engine, TransitionError, check_watchdog
 from .hooks import HookContext, run as run_hooks
 from .policy import Policy
-from .snapshot import compute_snapshot
+from .snapshot import compute_for_scope, compute_snapshot
 from .state import Store
 
 TOY_CODE = '''"""Учебный модуль: комиссия."""
@@ -280,11 +280,122 @@ class Demo:
         report = findings_mod.completeness([f1])
         self.check("находка с владельцем и треком", report["ok"], json.dumps(report, ensure_ascii=False)[:80])
 
+        self.step("13. Шлюз инструментов: агент не пишет напрямую")
+        self._gateway_steps(store, eng, policy)
+
+        self.step("14. Изолированный прогон проверок")
+        self._checks_steps()
+
+        self.step("15. Доверенный финализатор")
+        self._finalize_steps(store, policy)
+
         ok = all(c["ok"] for c in self.checks)
         self.say("")
         self.say(f"ИТОГ: {sum(1 for c in self.checks if c['ok'])}/{len(self.checks)} проверок пройдено "
                  f"— {'цикл держится' if ok else 'есть провалы'}")
         return {"ok": ok, "checks": self.checks, "log": self.lines}
+
+    # ---------------------------------------------------------------- новые шаги
+    def _gateway_steps(self, store: Store, eng: Engine, policy: Policy) -> None:
+        from .gateway import Gateway
+
+        store.create_task("DEMO-5", policy_version=policy.version)
+        eng.apply("DEMO-5", "attach_brief", {"brief": dict(BRIEF, task_id="DEMO-5")})
+        eng.apply("DEMO-5", "dispatch", {"worker_id": "gw-worker"})
+        gw = Gateway(self.root, policy, store)
+
+        allowed = gw.handle({"role": "worker", "task_id": "DEMO-5", "tool": "write_file",
+                             "args": {"path": "src/fee.py", "content": TOY_CODE}})
+        self.check("запись в allowed_files через шлюз", allowed["ok"], str(allowed.get("rule", "")))
+
+        denied = gw.handle({"role": "worker", "task_id": "DEMO-5", "tool": "write_file",
+                            "args": {"path": "src/billing.py", "content": "x = 1\n"}})
+        self.check("запись вне брифа отклонена шлюзом", not denied["ok"] and denied["rule"] == "R-WORK-1",
+                   denied.get("rule", ""))
+
+        escalated = gw.handle({"role": "worker", "task_id": "DEMO-5", "tool": "write_file",
+                               "args": {"path": "policies/policy.json", "content": "{}"}})
+        self.check("политика недоступна рабочей роли", not escalated["ok"], escalated.get("rule", ""))
+
+        cmd = gw.handle({"role": "worker", "task_id": "DEMO-5", "tool": "run_command",
+                         "args": {"command": "echo harness-ok"}})
+        self.check("run_command выполнен с урезанным окружением",
+                   cmd["ok"] and cmd["result"]["exit_code"] == 0 and "harness-ok" in cmd["result"]["stdout"],
+                   f"код {cmd.get('result', {}).get('exit_code')}")
+
+        sleep = gw.handle({"role": "worker", "task_id": "DEMO-5", "tool": "run_command",
+                           "args": {"command": "sleep 30"}})
+        self.check("ожидание отклонено до запуска", not sleep["ok"] and sleep["rule"] == "R-SLEEP-1",
+                   sleep.get("rule", ""))
+
+    def _checks_steps(self) -> None:
+        from . import checks as checks_mod
+
+        brief = dict(BRIEF, task_id="DEMO-CHECKS")
+        brief["acceptance"] = {
+            "criteria": [
+                {"id": "AC-1", "statement": "модуль импортируется", "mandatory": True,
+                 "check": "python -c \"import sys; sys.path.insert(0, 'src'); import fee\""},
+                {"id": "AC-2", "statement": "ручная проверка", "mandatory": True, "check": "call"},
+            ],
+            "check_commands": ["python -c \"import sys; sys.path.insert(0, 'src'); import fee\""],
+        }
+        report = checks_mod.run(self.root, brief, task_id="DEMO-CHECKS", timeout=60)
+        self.check("команды проверки выполнены в копии", report["all_ok"],
+                   f"{len(report['results'])} команд, артефакт {os.path.basename(report['artifacts'])}")
+        verdict = checks_mod.build_verdict(brief, report, task_id="DEMO-CHECKS", attempt=1, snapshot_id="snap_x")
+        self.check("критерий без запуска даёт skip и INCONCLUSIVE", verdict["verdict"] == "INCONCLUSIVE",
+                   verdict["verdict"])
+        self.check("копия не изменила рабочее дерево",
+                   not os.path.exists(os.path.join(self.root, "marker.txt")), "маркеров нет")
+
+    def _finalize_steps(self, store: Store, policy: Policy) -> None:
+        import subprocess
+
+        from .finalize import finalize
+
+        def git(*cmd):
+            proc = subprocess.run(["git", "-C", self.root, *cmd], capture_output=True, text=True)
+            if proc.returncode != 0:
+                raise RuntimeError(proc.stderr.strip()[:200])
+            return proc.stdout.strip()
+
+        subprocess.run(["git", "init", "-q", self.root], check=True)
+        git("-c", "user.name=demo", "-c", "user.email=demo@local", "add", "-A")
+        git("-c", "user.name=demo", "-c", "user.email=demo@local", "commit", "-q", "-m", "base")
+
+        store.create_task("DEMO-F", policy_version=policy.version)
+        eng = Engine(store, policy, self.root)
+        eng.apply("DEMO-F", "attach_brief", {"brief": dict(BRIEF, task_id="DEMO-F")})
+        eng.apply("DEMO-F", "dispatch", {"worker_id": "fin-worker"})
+        with open(os.path.join(self.root, "src", "fee.py"), "w", encoding="utf-8") as fh:
+            fh.write(TOY_CODE.replace('raise ValueError("FEE_NEGATIVE")', 'raise ValueError("FEE_NEGATIVE")  # ok'))
+        snapshot = compute_for_scope(self.root, "")
+        eng.apply("DEMO-F", "submit", {"attempt": 1, "snapshot_id": snapshot})
+        eng.apply("DEMO-F", "verdict", {"verdict": _verdict("DEMO-F", 1, snapshot, "PASS")})
+
+        with open(os.path.join(self.root, "src", "extra.py"), "w", encoding="utf-8") as fh:
+            fh.write("# обход шлюза\n")
+        try:
+            finalize(store, eng, self.root, "DEMO-F")
+        except Exception as exc:  # noqa: BLE001
+            rule = getattr(exc, "rule", "")
+            self.check("посторонний файл блокирует коммит", rule in ("R-WRITESET-1", "R-SNAPSHOT-1"), rule)
+        else:
+            self.check("посторонний файл блокирует коммит", False, "коммит прошёл")
+
+        os.unlink(os.path.join(self.root, "src", "extra.py"))
+        out = finalize(store, eng, self.root, "DEMO-F", message="fee: 2.5%")
+        self.check("финализатор закоммитил проверенный снимок", out["ok"] and len(out["commit_sha"]) >= 7,
+                   out["commit_sha"][:10])
+        log_in_commit = subprocess.run(
+            ["git", "-C", self.root, "show", "--name-only", "--pretty=format:", out["commit_sha"]],
+            capture_output=True, text=True,
+        ).stdout
+        self.check("журнал едет в том же коммите", f"pipeline-log/DEMO-F.jsonl" in log_in_commit,
+                   "pipeline-log/DEMO-F.jsonl")
+        self.check("связь «снимок → коммит» записана",
+                   store.commit_for_task("DEMO-F")["commit_sha"] == out["commit_sha"], out["commit_sha"][:10])
 
 
 def _hook_checks(demo: Demo, policy: Policy) -> None:

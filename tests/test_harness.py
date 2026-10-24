@@ -311,5 +311,164 @@ class EvalMetricTests(unittest.TestCase):
         self.assertTrue(m["caveats"])
 
 
+class GatewayTests(unittest.TestCase):
+    """Шлюз: права берутся из управляющего процесса, а не из запроса агента."""
+
+    def setUp(self) -> None:
+        self.root = make_root()
+        self.store = Store(os.path.join(self.root, ".harness", "state.db"))
+        self.eng = Engine(self.store, Policy.load(self.root), self.root)
+        self.eng.store.create_task("T1", policy_version="1.0.0")
+
+    def tearDown(self) -> None:
+        self.store.close()
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def _running(self) -> None:
+        self.eng.apply("T1", "attach_brief", {"brief": sample_brief()})
+        self.eng.apply("T1", "dispatch", {"worker_id": "w"})
+
+    def test_missing_role_denied(self) -> None:
+        from harness.gateway import Gateway
+
+        os.environ.pop("HARNESS_ROLE", None)
+        result = Gateway(self.root, Policy.load(self.root), self.store).handle(
+            {"tool": "read_file", "args": {"path": "src/a.py"}}
+        )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["rule"], "R-ROLE-1")
+
+    def test_write_outside_brief_denied(self) -> None:
+        from harness.gateway import Gateway
+
+        self._running()
+        result = Gateway(self.root, Policy.load(self.root), self.store).handle({
+            "role": "worker", "task_id": "T1", "tool": "write_file",
+            "args": {"path": "src/b.py", "content": "x", "allowed_files": ["**"]},
+        })
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["rule"], "R-WORK-1")
+
+    def test_tools_closed_outside_running(self) -> None:
+        from harness.gateway import Gateway
+
+        self._running()
+        self.eng.apply("T1", "submit", {"attempt": 1, "snapshot_id": "s1"})
+        result = Gateway(self.root, Policy.load(self.root), self.store).handle({
+            "role": "worker", "task_id": "T1", "tool": "write_file",
+            "args": {"path": "src/a.py", "content": "x"},
+        })
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["rule"], "R-STATE-1")
+
+    def test_path_traversal_denied(self) -> None:
+        from harness.gateway import Gateway
+
+        self._running()
+        result = Gateway(self.root, Policy.load(self.root), self.store).handle({
+            "role": "worker", "task_id": "T1", "tool": "read_file",
+            "args": {"path": "../../secrets.txt"},
+        })
+        self.assertFalse(result["ok"])
+
+
+class FinalizeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.root = make_root()
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def test_write_set_ignores_control_plane(self) -> None:
+        from harness.finalize import write_set
+
+        subprocess_git(self.root, "init", "-q", self.root)
+        subprocess_git(self.root, "-C", self.root, "add", "-A")
+        subprocess_git(self.root, "-C", self.root, "-c", "user.name=t", "-c", "user.email=t@t",
+                       "commit", "-q", "-m", "base")
+        os.makedirs(os.path.join(self.root, ".harness"), exist_ok=True)
+        open(os.path.join(self.root, ".harness", "state.db"), "w").close()
+        with open(os.path.join(self.root, "src", "a.py"), "w", encoding="utf-8") as fh:
+            fh.write("x = 1\n")
+        self.assertEqual(write_set(self.root), ["src/a.py"])
+
+    def test_requires_accepted_state(self) -> None:
+        from harness.finalize import FinalizeError, finalize
+
+        subprocess_git(self.root, "init", "-q", self.root)
+        store = Store(os.path.join(self.root, ".harness", "state.db"))
+        eng = Engine(store, Policy.load(self.root), self.root)
+        try:
+            store.create_task("T1", policy_version="1.0.0")
+            with self.assertRaises(FinalizeError) as ctx:
+                finalize(store, eng, self.root, "T1")
+            self.assertEqual(ctx.exception.rule, "R-VERIFY-1")
+        finally:
+            store.close()
+
+
+class ChecksTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.root = make_root()
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def test_command_collection_skips_labels(self) -> None:
+        from harness import checks
+
+        brief = {"acceptance": {"check_commands": ["pytest -q"],
+                                "criteria": [{"id": "A", "check": "call"}, {"id": "B", "check": "pytest -q"}]}}
+        self.assertEqual(checks.collect_commands(brief), ["pytest -q"])
+
+    def test_unexecuted_criterion_is_inconclusive(self) -> None:
+        from harness import checks
+
+        brief = {"acceptance": {"criteria": [{"id": "A", "check": "call"}]}}
+        report = {"results": [], "artifacts": self.root, "root": self.root}
+        verdict = checks.build_verdict(brief, report, task_id="T", attempt=1, snapshot_id="s")
+        self.assertEqual(verdict["verdict"], "INCONCLUSIVE")
+
+    def test_check_runs_in_copy(self) -> None:
+        from harness import checks
+
+        with open(os.path.join(self.root, "touch.py"), "w", encoding="utf-8") as fh:
+            fh.write("open('artifact.txt','w').write('x')\n")
+        brief = {"acceptance": {"check_commands": ["python touch.py"],
+                                "criteria": [{"id": "A", "check": "python touch.py"}]}}
+        report = checks.run(self.root, brief, timeout=60)
+        self.assertTrue(report["all_ok"])
+        self.assertFalse(os.path.exists(os.path.join(self.root, "artifact.txt")))
+        verdict = checks.build_verdict(brief, report, task_id="T", attempt=1, snapshot_id="s")
+        self.assertEqual(verdict["verdict"], "PASS")
+
+
+class SnapshotScopeTests(unittest.TestCase):
+    def test_scope_separates_subtree_from_worktree(self) -> None:
+        from harness.snapshot import compute_for_scope, scope_of
+
+        root = make_root()
+        try:
+            with open(os.path.join(root, "src", "a.py"), "w", encoding="utf-8") as fh:
+                fh.write("x = 1\n")
+            whole = compute_for_scope(root, "")
+            part = compute_for_scope(root, "src")
+            self.assertNotEqual(whole, part)
+            self.assertEqual(scope_of(root, os.path.join(root, "src")), "src")
+            self.assertEqual(scope_of(root, root), "")
+            with self.assertRaises(ValueError):
+                scope_of(root, os.path.join(root, "..", "outside"))
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+
+def subprocess_git(root: str, *args: str) -> None:
+    import subprocess
+
+    proc = subprocess.run(["git", *args], capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise AssertionError(f"git {args}: {proc.stderr.strip()[:200]}")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

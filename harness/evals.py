@@ -49,8 +49,11 @@ def run_verifier(cmd: str, payload: dict[str, Any], cwd: str) -> tuple[dict[str,
             input=json.dumps(payload, ensure_ascii=False),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=cwd,
             timeout=120,
+            env={**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"},
         )
     except subprocess.TimeoutExpired:
         return None, "timeout"

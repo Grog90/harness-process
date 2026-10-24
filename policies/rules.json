@@ -335,6 +335,71 @@
       "negative_test": "набор без дефектных случаев — отчёт помечает метрику недостоверной",
       "owner": "control",
       "residual_risk": "Малый набор меряет крупные проблемы, не частоту редких отказов."
+    },
+    {
+      "id": "R-STATE-1",
+      "statement": "Инструменты исполнителя доступны только в состоянии RUNNING и в пределах активной попытки.",
+      "event": "pretooluse",
+      "enforcement": "blocking",
+      "implemented": true,
+      "gap_kind": null,
+      "hook": "gateway.state",
+      "positive_test": "задача в RUNNING — запись через шлюз разрешена",
+      "negative_test": "задача в VERIFYING или COMMITTED — запись через шлюз отклонена",
+      "owner": "control",
+      "residual_risk": "Проверка действует только для вызовов через шлюз; прямая запись ловится финализатором."
+    },
+    {
+      "id": "R-TOOL-1",
+      "statement": "Права и allowed_files для инструмента определяет управляющий процесс, а не аргументы агента.",
+      "event": "pretooluse",
+      "enforcement": "blocking",
+      "implemented": true,
+      "gap_kind": null,
+      "hook": "gateway.tool",
+      "positive_test": "воркер пишет путь из брифа — разрешено, даже если агент передал другой список",
+      "negative_test": "агент передал allowed_files=['**'] — права не расширились, запись вне брифа отклонена",
+      "owner": "control",
+      "residual_risk": "Агент с доступом к файлу брифа в .harness/ мог бы прочитать его, но не изменить (R-PROT-1)."
+    },
+    {
+      "id": "R-WRITESET-1",
+      "statement": "Финализатор сверяет набор изменённых путей с allowed_files брифа до коммита.",
+      "event": "precommit",
+      "enforcement": "blocking",
+      "implemented": true,
+      "gap_kind": null,
+      "hook": "finalize.write_set",
+      "positive_test": "изменены только файлы из брифа плюс журнал — коммит разрешён",
+      "negative_test": "изменён файл вне брифа (обход шлюза) — коммит отклонён",
+      "owner": "control",
+      "residual_risk": "Проверка идёт относительно рабочего дерева; грязные файлы, существовавшие до задачи, тоже видны и требуют решения."
+    },
+    {
+      "id": "R-FINAL-1",
+      "statement": "Коммит делает доверенный финализатор: снимок сверен, журнал едет в том же коммите, связь «снимок → коммит» записана.",
+      "event": "precommit",
+      "enforcement": "blocking",
+      "implemented": true,
+      "gap_kind": null,
+      "hook": "finalize.commit",
+      "positive_test": "PASS на текущем снимке — финализатор коммитит и записывает sha",
+      "negative_test": "снимок изменился или коммит содержит посторонние файлы — отказ",
+      "owner": "control",
+      "residual_risk": "Хеш коммита нельзя записать внутрь него самого; связь хранится в состоянии и проверяется постфактум."
+    },
+    {
+      "id": "R-CHECK-1",
+      "statement": "Проверки из брифа выполняются в изолированной копии дерева; результат подтверждается артефактом, а не пересказом.",
+      "event": "postverdict",
+      "enforcement": "soft",
+      "implemented": true,
+      "gap_kind": null,
+      "hook": "checks.build_verdict",
+      "positive_test": "команды отработали, вердикт собран из фактических кодов возврата",
+      "negative_test": "критерий без выполненной команды даёт skip и INCONCLUSIVE, а не PASS",
+      "owner": "verifier",
+      "residual_risk": "Прогон идёт без изоляции сети и прав процесса; верификатор может не использовать раннер."
     }
   ]
 }

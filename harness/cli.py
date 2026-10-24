@@ -21,7 +21,7 @@ from . import verdict as verdict_mod
 from .fsm import Engine, TransitionError, check_watchdog
 from .hooks import HookContext, run as run_hooks
 from .policy import Policy
-from .snapshot import compute_snapshot
+from .snapshot import compute_for_scope, compute_snapshot, scope_of
 from .state import Store, StoreError
 
 EXIT_OK = 0
@@ -153,13 +153,19 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
 
 def cmd_submit(args: argparse.Namespace) -> int:
     eng = _engine(args)
+    scope = args.scope or ""
     snapshot = args.snapshot_id
     if not snapshot:
-        if not args.snapshot:
-            print("нужен --snapshot <каталог> или --snapshot-id", file=sys.stderr)
-            return EXIT_ERROR
-        snapshot = compute_snapshot(os.path.abspath(args.snapshot))
-    return _apply(eng, args, "submit", {"attempt": args.attempt, "snapshot_id": snapshot}, event_id=args.event_id)
+        if args.snapshot:
+            scope = scope_of(_root(args), args.snapshot)
+        snapshot = compute_for_scope(_root(args), scope)
+    return _apply(
+        eng,
+        args,
+        "submit",
+        {"attempt": args.attempt, "snapshot_id": snapshot, "snapshot_scope": scope},
+        event_id=args.event_id,
+    )
 
 
 def cmd_verdict(args: argparse.Namespace) -> int:
@@ -172,8 +178,9 @@ def cmd_verdict(args: argparse.Namespace) -> int:
 def cmd_commit(args: argparse.Namespace) -> int:
     eng = _engine(args)
     payload: dict[str, Any] = {}
-    if args.snapshot:
-        payload["snapshot_id"] = compute_snapshot(os.path.abspath(args.snapshot))
+    if args.snapshot or not args.skip_snapshot_check:
+        scope = args.scope or (scope_of(_root(args), args.snapshot) if args.snapshot else "")
+        payload["snapshot_id"] = compute_for_scope(_root(args), scope)
     return _apply(eng, args, "commit", payload, event_id=args.event_id)
 
 
@@ -323,6 +330,126 @@ def cmd_demo(args: argparse.Namespace) -> int:
     return run_demo(_root(args), verbose=not args.json, as_json=args.json)
 
 
+def cmd_tool(args: argparse.Namespace) -> int:
+    """Шлюз инструментов: единственный путь записи для агента."""
+    from .gateway import Gateway
+
+    root = _root(args)
+    if args.stdin:
+        request = json.load(sys.stdin)
+    else:
+        request = {
+            "tool": args.tool,
+            "role": args.role,
+            "task_id": args.task,
+            "args": {"path": args.path, "content": _read_content(args), "command": args.command},
+        }
+    store = _store(args)
+    try:
+        gateway = Gateway(root, Policy.load(root), store)
+        result = gateway.handle(request)
+    finally:
+        store.close()
+    _print(result, True)
+    return EXIT_OK if result.get("ok") else EXIT_DENIED
+
+
+def _read_content(args: argparse.Namespace) -> str | None:
+    if getattr(args, "content", None) is not None:
+        return args.content
+    if getattr(args, "content_file", None):
+        with open(args.content_file, encoding="utf-8") as fh:
+            return fh.read()
+    return None
+
+
+def cmd_finalize(args: argparse.Namespace) -> int:
+    """Доверенный финализатор: write-set, снимок, коммит, журнал."""
+    from .finalize import FinalizeError, finalize
+
+    root = _root(args)
+    store = _store(args)
+    try:
+        engine = Engine(store, Policy.load(root), root)
+        try:
+            out = finalize(store, engine, root, args.task, message=args.message, author=args.author)
+        except FinalizeError as exc:
+            _print(exc.to_dict(), True) if args.json else _deny_text(exc)
+            return EXIT_DENIED
+    finally:
+        store.close()
+    _print(out, args.json)
+    return EXIT_OK
+
+
+def _deny_text(exc: Any) -> None:
+    print(f"ОТКАЗ [{exc.rule}] {exc}", file=sys.stderr)
+    for key, value in (getattr(exc, "details", None) or {}).items():
+        print(f"  {key}: {value}", file=sys.stderr)
+
+
+def cmd_checks_run(args: argparse.Namespace) -> int:
+    """Изолированный прогон команд проверки из брифа."""
+    from . import checks as checks_mod
+
+    root = _root(args)
+    brief_data: dict[str, Any]
+    if args.brief:
+        with open(args.brief, encoding="utf-8") as fh:
+            brief_data = json.load(fh)
+    elif args.task:
+        store = _store(args)
+        try:
+            task = store.get_task(args.task)
+        finally:
+            store.close()
+        if not task.get("brief_json"):
+            print("у задачи нет брифа", file=sys.stderr)
+            return EXIT_ERROR
+        brief_data = json.loads(task["brief_json"])
+    else:
+        print("нужен --brief или --task", file=sys.stderr)
+        return EXIT_ERROR
+
+    try:
+        report = checks_mod.run(
+            root,
+            brief_data,
+            task_id=args.task or brief_data.get("task_id", "checks"),
+            commands=args.command,
+            timeout=args.timeout,
+            keep_workdir=args.keep,
+        )
+    except checks_mod.CheckError as exc:
+        print(f"ОШИБКА: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+
+    if args.verdict_out:
+        from .snapshot import compute_for_scope
+
+        snapshot = args.snapshot_id or compute_for_scope(root, args.scope or "")
+        verdict = checks_mod.build_verdict(
+            brief_data, report,
+            task_id=args.task or brief_data.get("task_id", "checks"),
+            attempt=args.attempt,
+            snapshot_id=snapshot,
+        )
+        os.makedirs(os.path.dirname(os.path.abspath(args.verdict_out)), exist_ok=True)
+        with open(args.verdict_out, "w", encoding="utf-8") as fh:
+            json.dump(verdict, fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+        report["verdict"] = {"path": args.verdict_out, "verdict": verdict["verdict"]}
+
+    if args.json:
+        _print(report, True)
+    else:
+        print(checks_mod.render_text(report))
+        if "verdict" in report:
+            print(f"вердикт: {report['verdict']['verdict']} -> {report['verdict']['path']}")
+    return EXIT_OK if report["all_ok"] else EXIT_DENIED
+
+
+
 # --------------------------------------------------------------------- парсер
 
 
@@ -373,7 +500,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("submit", help="подать результат на проверку")
     s.add_argument("--task", required=True)
     s.add_argument("--attempt", type=int, required=True)
-    s.add_argument("--snapshot", default=None, help="каталог кандидата")
+    s.add_argument("--snapshot", default=None, help="каталог кандидата (по умолчанию — всё дерево)")
+    s.add_argument("--scope", default=None, help="область снимка относительно корня")
     s.add_argument("--snapshot-id", default=None)
     s.add_argument("--event-id", default=None)
     s.set_defaults(func=cmd_submit)
@@ -387,6 +515,8 @@ def build_parser() -> argparse.ArgumentParser:
     c = sub.add_parser("commit", help="интегрировать принятого кандидата")
     c.add_argument("--task", required=True)
     c.add_argument("--snapshot", default=None)
+    c.add_argument("--scope", default=None)
+    c.add_argument("--skip-snapshot-check", action="store_true")
     c.add_argument("--event-id", default=None)
     c.set_defaults(func=cmd_commit)
 
@@ -443,6 +573,37 @@ def build_parser() -> argparse.ArgumentParser:
 
     dm = sub.add_parser("demo", help="сквозной демонстрационный прогон")
     dm.set_defaults(func=cmd_demo)
+
+    tl = sub.add_parser("tool", help="шлюз инструментов (единственный путь записи агента)")
+    tl.add_argument("--stdin", action="store_true", help="читать запрос из stdin (JSON)")
+    tl.add_argument("--tool", default="")
+    tl.add_argument("--role", default=None)
+    tl.add_argument("--task", default=None)
+    tl.add_argument("--path", default=None)
+    tl.add_argument("--content", default=None)
+    tl.add_argument("--content-file", default=None)
+    tl.add_argument("--command", default=None)
+    tl.set_defaults(func=cmd_tool)
+
+    fn = sub.add_parser("finalize", help="доверенный финализатор: write-set + коммит + журнал")
+    fn.add_argument("--task", required=True)
+    fn.add_argument("--message", default=None)
+    fn.add_argument("--author", default="harness")
+    fn.set_defaults(func=cmd_finalize)
+
+    ck = sub.add_parser("checks", help="изолированный прогон проверок из брифа")
+    cksub = ck.add_subparsers(dest="checks_cmd", required=True)
+    ckr = cksub.add_parser("run", help="выполнить команды проверки в копии дерева")
+    ckr.add_argument("--task", default=None)
+    ckr.add_argument("--brief", default=None)
+    ckr.add_argument("--command", action="append", default=None, help="переопределить команды")
+    ckr.add_argument("--timeout", type=int, default=300)
+    ckr.add_argument("--attempt", type=int, default=1)
+    ckr.add_argument("--scope", default="")
+    ckr.add_argument("--snapshot-id", default=None)
+    ckr.add_argument("--verdict-out", default=None)
+    ckr.add_argument("--keep", action="store_true", help="не удалять копию дерева (для разбора)")
+    ckr.set_defaults(func=cmd_checks_run)
 
     return p
 

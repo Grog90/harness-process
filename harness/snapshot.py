@@ -64,3 +64,44 @@ def compute_snapshot(root: str, include: Iterable[str] | None = None, exclude: I
 def file_hash(path: str) -> str:
     with open(path, "rb") as fh:
         return hashlib.sha256(fh.read()).hexdigest()
+
+
+WORKTREE_EXCLUDES = (
+    ".git/**",
+    ".harness/**",
+    "evidence/**",
+    "**/__pycache__/**",
+    "__pycache__/**",
+    "node_modules/**",
+    "dist/**",
+    "build/**",
+    ".pytest_cache/**",
+    "*.pyc",
+    "*.db",
+    "*.db-wal",
+    "*.db-shm",
+)
+
+
+def compute_for_scope(root: str, scope: str = "") -> str:
+    """Снимок в объявленной области: '' — всё рабочее дерево, иначе подкаталог.
+
+    Область хранится вместе с задачей: без неё нельзя доказать, что проверяли тот же
+    набор файлов, который собираются коммитить.
+    """
+    base = os.path.join(root, scope) if scope else root
+    excludes = WORKTREE_EXCLUDES if not scope else DEFAULT_EXCLUDES
+    return compute_snapshot(base, exclude=excludes)
+
+
+def scope_of(root: str, path: str) -> str:
+    """Нормализует область снимка: относительный путь внутри корня или '' для корня."""
+    if not path:
+        return ""
+    rel = os.path.relpath(os.path.abspath(path), os.path.abspath(root)).replace("\\", "/")
+    if rel in (".", ""):
+        return ""
+    if rel.startswith(".."):
+        raise ValueError(f"область снимка вне корня проекта: {path!r}")
+    return rel
+
