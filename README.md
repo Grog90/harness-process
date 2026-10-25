@@ -91,15 +91,15 @@ python -m harness task status --task FEE-101
 ```
 harness/          пакет: cli, fsm, state, policy, hooks, brief, verdict, snapshot,
                   gateway (шлюз), finalize (коммит), checks (прогон проверок),
-                  lanes (worktree), watchdog, cost, rulechange, scope, run, pluginctl, findings,
+                  lanes (worktree), watchdog, cost, rulechange, scope, run, pluginctl, doctor, findings,
                   rules, evals, selftest, demo
 policies/         policy.json — полномочия ролей; rules.json — матрица правил
 schemas/          JSON-схемы брифа и вердикта
 templates/        примеры артефактов
 examples/         учебные агент, верификаторы и размеченный набор evals
 plugins/          harness-guard — host-плагин DSH: ограждение на ctx.tools.guard()
-tests/            74 unittest-проверки свойств, включая паритет плагина и ядра
-docs/             ANALYSIS, ARCHITECTURE, ROADMAP, RUNNING, PLUGIN, RULES_MATRIX
+tests/            80 unittest-проверок свойств, включая паритет плагина и ядра
+docs/             ANALYSIS, ARCHITECTURE, ROADMAP, RUNNING, PLUGIN, PLUGINS, RULES_MATRIX
 bin/              обёртки harness / harness.cmd
 tools/            вспомогательное: экстрактор текста PDF (для сверки с источником)
 ```

@@ -318,6 +318,15 @@ def cmd_cost(args: argparse.Namespace) -> int:
     return EXIT_ERROR
 
 
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Проверка живой конфигурации: режим песочницы, плагин, указатель, висящие права."""
+    from . import doctor
+
+    report = doctor.run(_root(args))
+    _print(report, True) if args.json else print(doctor.render(report))
+    return EXIT_OK if report["ok"] else EXIT_DENIED
+
+
 def cmd_plugin(args: argparse.Namespace) -> int:
     """Подготовка установленного плагина: указатель на корень и проверка пакета."""
     from . import pluginctl
@@ -748,6 +757,9 @@ def build_parser() -> argparse.ArgumentParser:
     ru.add_argument("--reason", default=None)
     ru.add_argument("--author", default="human")
     ru.set_defaults(func=cmd_rule)
+
+    dr = sub.add_parser("doctor", help="проверка живой конфигурации контроля")
+    dr.set_defaults(func=cmd_doctor)
 
     pl = sub.add_parser("plugin", help="подготовка установленного плагина harness-guard")
     pl.add_argument("action", choices=["prepare", "status"])

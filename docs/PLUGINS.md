@@ -1,0 +1,116 @@
+# Что уже есть в экосистеме и что из этого брать
+
+Проверено 25.10.2026: по поставляемому коду DSH (`app.asar`), реестру npm и
+GitHub-топику `dsh-plugin`. Ниже — не список «интересных плагинов», а разбор
+наших пробелов и того, чем их закрывать: своим, чужим или уже включённым.
+
+---
+
+## 1. Что уже активно в профиле (base bundle)
+
+Профиль `desktop` собирается из `@deepseek-ai/dsh-base` и `dsh-web-app`. В базовом
+патче уже стоят — то есть работает без установки:
+
+| Плагин | Что делает | Наше правило/пробел |
+|---|---|---|
+| `dsh-sandbox` + `dsh-sandbox-local` + `dsh-pwsh-sandbox` / `dsh-bash-sandbox` | ОС-изоляция процесса: `read-only` / `workspace-write` / `danger-full-access`; на Windows активен pwsh-backend, bash выключен | **R-SANDBOX-1** (мы держали его пробелом) |
+| `dsh-sandbox-policy` | режим по умолчанию: `DSH_PERMISSION_MODE ?? workspace-write`, корень = `process.cwd()` | задаёт границу записи |
+| `dsh-permission-presets` | пресеты «песочница + правило подтверждений» одной ручкой | наш «человек на границе» |
+| `dsh-user-approval` + `dsh-client-ui-approval` | seam подтверждений: `ask` вместо отказа | наш **GAP** умел только deny |
+| `dsh-fs-observation-policy` | наблюдённое состояние, read-before-edit, version-guarded write | **R-READ-1** (наш счётчик чтений — дубль) |
+| `dsh-tool-call-timeout-policy` | дедлайн на каждый инструмент → `TOOL_TIMEOUT` | дополняет наш watchdog (**R-TIMEOUT-1**) |
+| `dsh-session-checkpoint-policy` | семантические чекпойнты перед запросами и побочными эффектами | аналог **WAL** из гл. 4 (мы честно писали «это не WAL») |
+| `dsh-plan-mode` | план → ревью человеком → выход из режима | родственник нашего брифа (**R-BRIEF-1/GAP-1**) |
+| `dsh-repeat-tool-reminder` | предупреждения при зацикливании на одинаковых вызовах | **R-READ-1**, но мягче и правильнее |
+| `dsh-session-query-sqlite` + `otel`/`session-telemetry-otel` | поиск по журналу сессии, телеметрия | наш `pipeline-log` (остаток Этапа 4) |
+| `dsh-tool-subagent`, `dsh-subagent-spawn/fork` | воркеры и форки агентов | наш «воркер» в драйвере |
+| `dsh-tool-workflow` | JS-оркестрация с фазами | «волна» из гл. 5 |
+| `dsh-mcp-client` | MCP-серверы как инструменты | проверяющий как внешний процесс |
+| `dsh-spill-policy`, `dsh-compaction-basic` | экономия контекста | стоимость/скорость |
+
+**Вывод:** половина «наших» механизмов — дубли того, что уже стоит. Их надо не
+развивать, а выключать или связывать.
+
+## 2. Доступно, но не включено
+
+| Пакет | Зачем нам | Статус |
+|---|---|---|
+| `dsh-experimental-tool-worktree`, `dsh-experimental-worktree` | лейны (worktree на задачу) нативно | не в base; ставится bundle'ом |
+| `dsh-tool-cordis` | инспекция живого рантайма и монтирование плагинов моделью | есть в установке |
+| `dsh-agent-preset` + registry | роли как пресеты агента (orchestrator/worker/verifier) | в base |
+| `dsh-experimental-ralph-bundle` | повторная работа «свежими» агентами | экспериментальный |
+
+## 3. Сообщество (npm / GitHub)
+
+Проверял только то, что относится к нашему контуру. Все ссылки — на npm.
+
+| Пакет | Что делает | Вердикт |
+|---|---|---|
+| [`dsh-jev-guard`](https://www.npmjs.com/package/dsh-jev-guard) | клапан на `tools/pre-execute`: 4 состояния (allow/revise/block/escalate), детект необратимых команд, аудит; без зависимостей | **Брать** — это наш `R-GIT-1`/`R-SLEEP-1`, сделанный лучше (и с `ask`) |
+| [`@jieai/dsh-plugin-vet`](https://www.npmjs.com/package/@jieai/dsh-plugin-vet) | аудит плагинов до установки: статика, supply-chain, honeypot | **Брать** — ставим сторонние плагины, значит нужен предполётный аудит |
+| [`dsh-plugin`](https://www.npmjs.com/package/dsh-plugin), [`dshmarket`](https://www.npmjs.com/package/dshmarket), [`dsh-plugin-shop-catalog`](https://www.npmjs.com/package/dsh-plugin-shop-catalog) | витрины/маркетплейсы плагинов | Для поиска — да; для доверия — нет |
+| [`create-dsh-plugin-cli`](https://www.npmjs.com/package/create-dsh-plugin-cli) | скаффолд плагина | Полезно для следующего плагина (мы писали руками) |
+| [`dsh-session-guard`](https://www.npmjs.com/package/dsh-session-guard) | пауза на пиковых часах, заморозка сессии | Спорно: влияет на бюджет, но и на предсказуемость |
+| [`dsh-plugin-guard`](https://www.npmjs.com/package/dsh-plugin-guard), [`@rclr-labs/dsh-plugin-guard`](https://www.npmjs.com/package/@rclr-labs/dsh-plugin-guard), [`@guojin-ai/dsh-plugin-guard`](https://www.npmjs.com/package/@guojin-ai/dsh-plugin-guard), [`dsh-bundle-dedup-guard`](https://www.npmjs.com/package/dsh-bundle-dedup-guard) | изоляция сломанных плагинов, аудит, защита от дублей в loader | Не для пайплайна; полезно при установке чужих плагинов |
+| [`dsh-lan-guard`](https://www.npmjs.com/package/dsh-lan-guard) | выставить UI в локальную сеть | Не нужно |
+
+Отдельно: `@deepseek-ai/dsh` CLI умеет «profile launch, plugin management,
+configuration inspection» — часть ручных шагов установки можно делать им.
+
+## 4. Что это меняет в нашем слое
+
+### Убрать как дубль
+
+| Наше | Почему |
+|---|---|
+| `R-READ-1` (deny на третий одинаковый read) | `dsh-fs-observation-policy` уже даёт read-before-edit и version-guarded write, а `dsh-repeat-tool-reminder` — мягкое предупреждение. Наш жёсткий deny только мешает |
+| `R-SLEEP-1`, `R-GIT-1` (эвристики по строкам команд) | `dsh-jev-guard` делает это на `tools/pre-execute` с четырьмя состояниями и аудитом; наши regex-эвристики слабее |
+| `lanes.py` (worktree) | есть экспериментальный worktree-bundle; наш остаётся для CI/headless |
+| `R-SANDBOX-1` как «пробел» | sandbox есть в рантайме; пробел теперь не в механизме, а в **режиме сессии** |
+
+### Связать
+
+1. **Режим сессии.** В этой сессии `danger-full-access` — то есть песочница
+   выключена, и наш guard остаётся единственной границей. Для рабочих задач нужен
+   `workspace-write`: тогда запись ограничена деревом на уровне ОС, а `allowed_files`
+   — на уровне брифа. Две границы вместо одной.
+2. **GAP → `ask`.** Наш guard умеет только `deny`; `tools/pre-execute` умеет
+   возвращать `ask` через `ctx.approval`. Спорный вопрос брифа должен спрашивать,
+   а не блокировать молча.
+3. **Timeout.** `dsh-tool-call-timeout-policy` даёт дедлайн на инструмент; наш
+   watchdog — дедлайн на весь диспатч. Это разные уровни, оба нужны.
+4. **Чекпойнты.** `session-checkpoint-policy` уже стоит; наш `pipeline-log`
+   остаётся бизнес-журналом, а не заменой WAL.
+5. **Трассировка.** `otel` уже есть; наш след — только доменный (задача, попытка,
+   вердикт).
+
+### Оставить своим (в экосистеме этого нет)
+
+| Наш механизм | Почему уникален |
+|---|---|
+| Бриф и его валидатор | контракт задачи с `allowed_files`, критериями и GAP-вопросами |
+| Вердикт-объект + привязка к снимку | «PASS только для этого дерева»; ни плагины, ни рантайм такого не дают |
+| Инвалидация вердикта после правки | `R-SNAPSHOT-1` — наша |
+| Бюджет попыток и стоимости | у рантайма есть таймауты, но не «три попытки и эскалация» |
+| Финализатор + write-set | коммит как привилегированная операция с проверкой набора файлов |
+| Evals верификатора | измерение самого контроля — этого нет ни в рантайме, ни в маркете |
+
+## 5. Порядок действий
+
+1. **Переключить рабочие сессии на `workspace-write`** (`/permission`), вернуть
+   `danger-full-access` только для разовых операций. Это закрывает `R-SANDBOX-1`
+   по существу, а не отчётом.
+2. **Поставить `dsh-jev-guard`** и снять наши bash-эвристики (`R-SLEEP-1`,
+   `R-GIT-1`) — иначе два слоя спорят о том, кто отказывает, и непонятно, чей отказ
+   видит модель.
+3. **Отключить `R-READ-1`** и полагаться на `fs-observation-policy`.
+4. **Сделать GAP→`ask`** через `tools/pre-execute` + `ctx.approval`.
+5. **Перед установкой любого стороннего плагина — `@jieai/dsh-plugin-vet`.**
+   Маркетплейс говорит «популярно», а не «безопасно».
+
+## 6. Чего в экосистеме нет и не будет
+
+Бриф, контракт вердикта, привязка к снимку, бюджет попыток, финализатор с
+write-set, evals. Это не «плагины», а **протокол работы**; его либо пишешь, либо
+живёшь на промптах. Поэтому наш слой остаётся, но становится тоньше: он отвечает
+за маршрут и доказательства, а не за песочницу, таймауты и защиту от повторов.
