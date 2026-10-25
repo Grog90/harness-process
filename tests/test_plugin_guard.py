@@ -73,6 +73,21 @@ class PluginGuardTests(unittest.TestCase):
             json.dump({"task_id": "T-GUARD", "role": "worker", "allowed_files": allowed,
                        "attempt": 1}, fh)
 
+    def test_missing_policy_denies_instead_of_crashing(self) -> None:
+        """Без политики плагин не падает при активации и не разрешает ничего."""
+        bare = tempfile.mkdtemp(prefix="harness-plugin-nopolicy-")
+        try:
+            payload = json.dumps({"root": bare, "calls": [{"name": "write", "arguments": {"path": "src/a.py"}}]})
+            proc = subprocess.run(
+                [NODE, PROBE], input=payload, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", cwd=bare, timeout=60,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr[:400])
+            results = json.loads(proc.stdout)
+            self.assertIn("R-HOOK-ERR", results[0]["deny"])
+        finally:
+            shutil.rmtree(bare, ignore_errors=True)
+
     def test_guard_registers_and_denies_outside_scope(self) -> None:
         self._write_scope(["src/a.py"])
         results = self._probe([
