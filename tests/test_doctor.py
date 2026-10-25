@@ -12,17 +12,19 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+from harness import tmpdir  # noqa: E402
+
 from harness import doctor  # noqa: E402
 
 
 class DoctorTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.root = tempfile.mkdtemp(prefix="harness-doctor-")
+        self.root = tmpdir.scratch(ROOT, "harness-doctor-")
         os.makedirs(os.path.join(self.root, "policies"), exist_ok=True)
         with open(os.path.join(self.root, "policies", "policy.json"), "w", encoding="utf-8") as fh:
             json.dump({"version": "1", "roles": {"human": {"tools": ["*"]}},
                        "product_globs": [], "protected_globs": []}, fh)
-        self.home = tempfile.mkdtemp(prefix="harness-doctor-home-")
+        self.home = tmpdir.scratch(ROOT, "harness-doctor-home-")
         self.profile = os.path.join(self.home, "profiles", "desktop")
         os.makedirs(self.profile, exist_ok=True)
         self._old = {k: os.environ.get(k) for k in ("DSH_HOME", "DSH_PROFILE_DIR", "DSH_PERMISSION_MODE")}

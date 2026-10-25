@@ -11,10 +11,10 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import tempfile
 import time
 
 from . import brief as brief_mod
+from . import tmpdir
 from . import verdict as verdict_mod
 from .fsm import Engine, TransitionError, check_watchdog
 from .hooks import HookContext, run as run_hooks
@@ -519,7 +519,7 @@ def _hook_checks(demo: Demo, policy: Policy) -> None:
 
 
 def run_demo(root: str, verbose: bool = True, as_json: bool = False) -> int:
-    work = tempfile.mkdtemp(prefix="harness-demo-")
+    work = tmpdir.scratch(root, "harness-demo-")
     try:
         demo = Demo(work, verbose=verbose)
         report = demo.run()

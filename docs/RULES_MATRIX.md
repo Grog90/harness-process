@@ -24,9 +24,9 @@ _Файл генерируется командой `harness coverage --markdown
 | `R-SNAPSHOT-1` | blocking | precommit | `verdict.require_current_pass` | покрыто | control |
 | `R-COMMIT-1` | blocking | precommit | `verdict.require_checks` | покрыто | control |
 | `R-COMMIT-2` | blocking | precommit | `verdict.require_pipeline_log` | покрыто | control |
-| `R-SLEEP-1` | delegated | pretooluse | `—` | делегировано — закрыто: dsh-jev-guard + @deepseek-ai/dsh-tool-call-timeout-policy | policy |
+| `R-SLEEP-1` | delegated | pretooluse | `—` | делегировано — закрыто: @deepseek-ai/dsh-tool-call-timeout-policy | policy |
 | `R-READ-1` | delegated | pretooluse | `—` | делегировано — закрыто: @deepseek-ai/dsh-fs-observation-policy | policy |
-| `R-GIT-1` | delegated | pretooluse | `—` | делегировано — закрыто: dsh-jev-guard | policy |
+| `R-GIT-1` | delegated | pretooluse | `—` | делегировано — закрыто: dsh-jev-guard (L0, локальные правила, без ключа) | policy |
 | `R-TIMEOUT-1` | blocking | watchdog | `watchdog.sweep` | покрыто | control |
 | `R-TRACE-1` | blocking | posttransition | `state.append_event` | покрыто | control |
 | `R-FIND-1` | blocking | postverdict | `findings.close_guard` | покрыто | control |
@@ -49,9 +49,9 @@ _Файл генерируется командой `harness coverage --markdown
 
 ## Делегировано рантайму и плагинам
 
-- **R-SLEEP-1**: Ожидание вне переходов запрещено: sleep и долгие паузы отклоняются. → `dsh-jev-guard + @deepseek-ai/dsh-tool-call-timeout-policy`. Остаточный риск: наш deny на sleep был эвристикой; дедлайн на инструмент даёт рантайм, необратимые команды — jev-guard
+- **R-SLEEP-1**: Ожидание вне переходов запрещено: sleep и долгие паузы отклоняются. → `@deepseek-ai/dsh-tool-call-timeout-policy`. Остаточный риск: ожидание не запрещено, а ограничено дедлайном инструмента; вечный цикл остановит таймаут, а не правило
 - **R-READ-1**: Третий одинаковый read без промежуточного изменения — отказ (ломалка циклов чтения). → `@deepseek-ai/dsh-fs-observation-policy`. Остаточный риск: read-before-edit и version-guarded write на уровне FS; повторные вызовы ловит @deepseek-ai/dsh-repeat-tool-reminder как предупреждение
-- **R-GIT-1**: Деструктивные git-операции обязаны явно называть дерево; работа сохраняется до revert. → `dsh-jev-guard`. Остаточный риск: клапан на tools/pre-execute: четыре состояния, детект необратимых команд, аудит
+- **R-GIT-1**: Деструктивные git-операции обязаны явно называть дерево; работа сохраняется до revert. → `dsh-jev-guard (L0, локальные правила, без ключа)`. Остаточный риск: L0 видит текст команды; обфускация (eval, base64) и «серые» случаи не ловятся — семантический слой платный и требует отказа от локальности
 - **R-SANDBOX-1**: Проверки из брифа выполняются в изоляции: контейнер без сети, если доступен, иначе копия дерева с урезанным окружением. → `@deepseek-ai/dsh-sandbox-policy + dsh-pwsh-sandbox`. Остаточный риск: ОС-изоляция режимами read-only/workspace-write/danger-full-access; наш checks.sandbox остаётся запасным путём для headless
 
 ## Остаточные риски покрытых правил

@@ -12,3 +12,5 @@ pipeline-log/
 __pycache__/
 *.pyc
 .pytest_cache/
+# рабочие каталоги тестов и прогонов внутри проекта
+.harness/tmp/

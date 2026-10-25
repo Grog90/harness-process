@@ -10,11 +10,11 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import tempfile
 from dataclasses import dataclass
 from typing import Callable
 
 from . import hooks
+from . import tmpdir
 from .fsm import Engine, TransitionError, check_watchdog
 from .hooks import HookContext
 from .policy import Policy
@@ -773,7 +773,7 @@ CHECKS: list[Check] = [
 
 def _run_one(check: Check, source_root: str) -> dict:
     src = os.path.abspath(source_root)
-    tmp = tempfile.mkdtemp(prefix="harness-selftest-")
+    tmp = tmpdir.scratch(src, "harness-selftest-")
     try:
         for sub in ("policies", "schemas"):
             s = os.path.join(src, sub)

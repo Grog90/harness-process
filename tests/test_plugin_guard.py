@@ -18,6 +18,8 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+from harness import tmpdir  # noqa: E402
+
 from harness.fsm import Engine  # noqa: E402
 from harness.policy import Policy  # noqa: E402
 from harness.state import Store  # noqa: E402
@@ -47,7 +49,7 @@ def brief_data(task_id: str = "T-GUARD") -> dict:
 @unittest.skipUnless(os.path.isfile(NODE), "node не найден: плагин не проверить")
 class PluginGuardTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.root = tempfile.mkdtemp(prefix="harness-plugin-")
+        self.root = tmpdir.scratch(ROOT, "harness-plugin-")
         shutil.copytree(os.path.join(ROOT, "policies"), os.path.join(self.root, "policies"))
         os.makedirs(os.path.join(self.root, "src"), exist_ok=True)
         os.makedirs(os.path.join(self.root, ".harness"), exist_ok=True)
@@ -80,16 +82,20 @@ class PluginGuardTests(unittest.TestCase):
 
     def test_missing_policy_allows_read_and_denies_writes(self) -> None:
         """Без политики сессия остаётся осматриваемой, но не даёт менять файлы."""
-        bare = tempfile.mkdtemp(prefix="harness-plugin-nopolicy-")
+        bare = tmpdir.scratch(ROOT, "harness-plugin-nopolicy-")
+        # глубже четырёх уровней от корня проекта, иначе поиск вверх найдёт
+        # политику рабочего дерева и тест перестанет проверять запасной путь
+        deep = os.path.join(bare, "a", "b", "c", "d", "e")
+        os.makedirs(deep, exist_ok=True)
         try:
-            payload = json.dumps({"root": bare, "calls": [
+            payload = json.dumps({"root": deep, "calls": [
                 {"name": "read", "arguments": {"path": "README.md"}},
                 {"name": "write", "arguments": {"path": "src/a.py"}},
                 {"name": "pwsh", "arguments": {"command": "echo hi"}},
             ]})
             proc = subprocess.run(
                 [NODE, PROBE], input=payload, capture_output=True, text=True,
-                encoding="utf-8", errors="replace", cwd=bare, timeout=60,
+                encoding="utf-8", errors="replace", cwd=deep, timeout=60,
                 env={**{k: v for k, v in os.environ.items() if not k.startswith("HARNESS_")},
                      "DSH_HOME": bare},
             )
@@ -112,8 +118,8 @@ class PluginGuardTests(unittest.TestCase):
 
     def test_pointer_file_resolves_project_root(self) -> None:
         """Корень находится по указателю ~/.dsh/harness-root даже из чужого каталога."""
-        home = tempfile.mkdtemp(prefix="harness-dsh-home-")
-        elsewhere = tempfile.mkdtemp(prefix="harness-elsewhere-")
+        home = tmpdir.scratch(ROOT, "harness-dsh-home-")
+        elsewhere = tmpdir.scratch(ROOT, "harness-elsewhere-")
         try:
             with open(os.path.join(home, "harness-root"), "w", encoding="utf-8") as fh:
                 fh.write(self.root + "\n")
@@ -189,11 +195,11 @@ class PluginPrepareTests(unittest.TestCase):
     """Подготовка плагина: указатель на корень и проверка пакета."""
 
     def setUp(self) -> None:
-        self.root = tempfile.mkdtemp(prefix="harness-prepare-")
+        self.root = tmpdir.scratch(ROOT, "harness-prepare-")
         shutil.copytree(os.path.join(ROOT, "policies"), os.path.join(self.root, "policies"))
         shutil.copytree(os.path.join(ROOT, "plugins", "harness-guard"),
                         os.path.join(self.root, "plugins", "harness-guard"))
-        self.home = tempfile.mkdtemp(prefix="harness-dsh-home-")
+        self.home = tmpdir.scratch(ROOT, "harness-dsh-home-")
         self._old_home = os.environ.get("DSH_HOME")
         os.environ["DSH_HOME"] = self.home
 

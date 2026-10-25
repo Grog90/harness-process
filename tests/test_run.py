@@ -13,6 +13,8 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+from harness import tmpdir  # noqa: E402
+
 from harness.fsm import Engine  # noqa: E402
 from harness.policy import Policy  # noqa: E402
 from harness.run import RunConfig, Runner  # noqa: E402
@@ -30,7 +32,7 @@ def git(*args: str, cwd: str) -> None:
 
 
 def make_repo() -> str:
-    root = tempfile.mkdtemp(prefix="harness-run-")
+    root = tmpdir.scratch(ROOT, "harness-run-")
     for sub in ("policies", "schemas"):
         shutil.copytree(os.path.join(ROOT, sub), os.path.join(root, sub))
     os.makedirs(os.path.join(root, "src"), exist_ok=True)

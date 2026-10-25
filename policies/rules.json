@@ -185,8 +185,8 @@
       "positive_test": "проверяется механизмом рантайма: см. docs/PLUGINS.md",
       "negative_test": "проверяется механизмом рантайма: см. docs/PLUGINS.md",
       "owner": "policy",
-      "residual_risk": "наш deny на sleep был эвристикой; дедлайн на инструмент даёт рантайм, необратимые команды — jev-guard",
-      "delegated_to": "dsh-jev-guard + @deepseek-ai/dsh-tool-call-timeout-policy"
+      "residual_risk": "ожидание не запрещено, а ограничено дедлайном инструмента; вечный цикл остановит таймаут, а не правило",
+      "delegated_to": "@deepseek-ai/dsh-tool-call-timeout-policy"
     },
     {
       "id": "R-READ-1",
@@ -211,8 +211,8 @@
       "positive_test": "проверяется механизмом рантайма: см. docs/PLUGINS.md",
       "negative_test": "проверяется механизмом рантайма: см. docs/PLUGINS.md",
       "owner": "policy",
-      "residual_risk": "клапан на tools/pre-execute: четыре состояния, детект необратимых команд, аудит",
-      "delegated_to": "dsh-jev-guard"
+      "residual_risk": "L0 видит текст команды; обфускация (eval, base64) и «серые» случаи не ловятся — семантический слой платный и требует отказа от локальности",
+      "delegated_to": "dsh-jev-guard (L0, локальные правила, без ключа)"
     },
     {
       "id": "R-TIMEOUT-1",

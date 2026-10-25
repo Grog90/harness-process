@@ -14,6 +14,8 @@ import sys
 import tempfile
 import unittest
 
+from harness import tmpdir
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from harness import brief as brief_mod  # noqa: E402
@@ -30,7 +32,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def make_root() -> str:
-    tmp = tempfile.mkdtemp(prefix="harness-test-")
+    tmp = tmpdir.scratch(ROOT, "harness-test-")
     for sub in ("policies", "schemas"):
         src = os.path.join(ROOT, sub)
         if os.path.isdir(src):

@@ -19,6 +19,8 @@ import tempfile
 import time
 from typing import Any
 
+from . import tmpdir
+
 IGNORE = shutil.ignore_patterns(
     ".git", ".harness", "evidence", "node_modules", "__pycache__", "*.pyc", "dist", "build", ".pytest_cache"
 )
@@ -150,7 +152,7 @@ def run(
     if not use_docker:
         isolation["mode"] = "copy-only"
 
-    workdir = tempfile.mkdtemp(prefix=f"harness-checks-{task_id}-")
+    workdir = tmpdir.scratch(root, f"harness-checks-{task_id}-")
     tree = os.path.join(workdir, "tree")
     shutil.copytree(root, tree, ignore=IGNORE, symlinks=False)
 
