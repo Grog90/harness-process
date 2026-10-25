@@ -1,0 +1,4 @@
+- insert:
+    - id: harness-guard
+      name: '@harness/dsh-guard'
+      config: {}

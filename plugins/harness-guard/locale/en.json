@@ -1,0 +1,1 @@
+{ "meta": { "title": "Harness Guard", "description": "Denies tool calls that the harness policy forbids: role boundaries, allowed files, protected paths." } }

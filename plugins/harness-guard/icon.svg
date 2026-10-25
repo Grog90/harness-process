@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Harness Guard">
+  <path d="M16 3.5 27 8v8.2c0 6.1-4.4 10.4-11 12.3C9.4 26.6 5 22.3 5 16.2V8l11-4.5Z"
+        fill="#1f6f6b" fill-opacity="0.16" stroke="#1f6f6b" stroke-width="2" stroke-linejoin="round"/>
+  <path d="m11 16.3 3.4 3.4L21.5 12" fill="none" stroke="#1f6f6b" stroke-width="2.6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

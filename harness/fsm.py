@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 from . import brief as brief_mod
 from . import cost as cost_mod
+from . import scope as scope_mod
 from . import verdict as verdict_mod
 from .policy import Decision, Policy, deny
 from .state import Store, StoreError, new_id, now
@@ -284,6 +285,11 @@ def _guard_dispatch(engine: Engine, task: dict[str, Any], payload: dict[str, Any
     attempt = engine.store.reserve_attempt(
         task["task_id"], deadline_ts=deadline, worker_id=payload.get("worker_id")
     )
+    # публикуем активную область прав для плагина-ограждения
+    scope_mod.write_scope(
+        engine.root, task_id=task["task_id"], role="worker",
+        allowed_files=b.allowed_files, attempt=attempt,
+    )
     payload["_attempt"] = attempt
     payload["_deadline"] = deadline
 
@@ -351,6 +357,8 @@ def _guard_verdict(engine: Engine, task: dict[str, Any], payload: dict[str, Any]
     payload["verdict"] = {**raw, "effective_verdict": effective}
     engine.store.save_verdict({**raw, "verdict": effective})
     engine.store.finish_attempt(task["task_id"], task["attempt"], status=effective.lower())
+    # проверка завершена: исполнителю больше нечего писать
+    scope_mod.clear_scope(engine.root)
 
     # фактическая стоимость попытки, если проверяющий её предъявил
     raw_cost = raw.get("cost")
@@ -447,6 +455,7 @@ def check_watchdog(engine: Engine, task_id: str) -> Outcome | None:
     if not deadline or now() <= float(deadline):
         return None
     engine.store.finish_attempt(task_id, int(task["attempt"]), status="timed_out")
+    scope_mod.clear_scope(engine.root)
     engine.store.update_task(task_id, state="TIMED_OUT", deadline_ts=None)
     engine.store.append_event(
         new_id("evt"),

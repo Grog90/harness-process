@@ -91,17 +91,30 @@ python -m harness task status --task FEE-101
 ```
 harness/          пакет: cli, fsm, state, policy, hooks, brief, verdict, snapshot,
                   gateway (шлюз), finalize (коммит), checks (прогон проверок),
-                  lanes (worktree), watchdog, cost, rulechange, findings, rules,
-                  evals, selftest, demo
+                  lanes (worktree), watchdog, cost, rulechange, scope, run, findings,
+                  rules, evals, selftest, demo
 policies/         policy.json — полномочия ролей; rules.json — матрица правил
 schemas/          JSON-схемы брифа и вердикта
 templates/        примеры артефактов
-examples/         учебные верификаторы и размеченный набор evals (10 случаев)
-tests/            63 unittest-проверки свойств
-docs/             ANALYSIS, ARCHITECTURE, ROADMAP, RUNNING, RULES_MATRIX
+examples/         учебные агент, верификаторы и размеченный набор evals
+plugins/          harness-guard — host-плагин DSH: ограждение на ctx.tools.guard()
+tests/            68 unittest-проверок свойств, включая паритет плагина и ядра
+docs/             ANALYSIS, ARCHITECTURE, ROADMAP, RUNNING, PLUGIN, RULES_MATRIX
 bin/              обёртки harness / harness.cmd
 tools/            вспомогательное: экстрактор текста PDF (для сверки с источником)
 ```
+
+## Две формы ограждения
+
+| Форма | Кто подчиняется | Когда использовать |
+|---|---|---|
+| Плагин `plugins/harness-guard` | **все** агенты профиля DSH: guard стоит на пути инструментов | работа внутри DSH |
+| Шлюз `harness tool` / `HarnessClient` | только агент, который сам ходит через шлюз | headless-прогоны, CI, другие рантаймы |
+
+Плагин — сильная форма: агент не может его обойти. Шлюз — переносимая: работает
+там, где нет плагинной системы. Обе опираются на один и тот же
+`policies/policy.json`; расхождение решений ловит `tests/test_parity.py`.
+Подробности — [`docs/PLUGIN.md`](docs/PLUGIN.md).
 
 ## Подключение к живому агенту
 
