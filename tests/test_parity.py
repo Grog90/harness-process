@@ -60,6 +60,11 @@ CASES: list[dict] = [
     {"role": "worker", "tool": "bash", "args": {"command": "pytest -q"}},
     {"role": "worker", "tool": "bash", "args": {"command": "sleep 60"}},
     {"role": "worker", "tool": "bash", "args": {"command": "git reset --hard"}},
+    {"role": "worker", "tool": "bash", "args": {"command": "git push --force origin main"}},
+    {"role": "worker", "tool": "bash", "args": {"command": "git clean -fd"}},
+    {"role": "worker", "tool": "bash", "args": {"command": "git branch -D feature"}},
+    # `>` внутри кавычек — не перенаправление
+    {"role": "worker", "tool": "bash", "args": {"command": "python -c \"print('a >> b')\""}, "allowed_files": ["src/a.py"]},
     {"role": "worker", "tool": "bash", "args": {"command": "git -C ../wt reset --hard"}},
     {"role": "orchestrator", "tool": "bash", "args": {"command": "echo hi >> src/a.py"}},
     {"role": "orchestrator", "tool": "bash", "args": {"command": "sed -i 's/a/b/' src/a.py"}},

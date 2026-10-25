@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from .policy import Decision, Policy, allow, deny, normalize_path
+from .policy import Decision, Policy, advise, allow, deny, normalize_path
 
 WRITE_TOOLS = ("write_file", "edit_file", "apply_patch", "create_file")
 
@@ -81,8 +81,41 @@ def policy_protected_paths(ctx: HookContext) -> Decision:
 
 
 _REDIRECT_RE = re.compile(r"(?:>>?|\btee\b(?:\s+-a)?)\s*([^\s;&|]+)")
+_QUOTED_RE = re.compile(r"'[^']*'|\"[^\"]*\"", re.S)
 _SED_INPLACE_RE = re.compile(r"sed\s+(-i\b|-i\.?\S*)\s+(?:-e\s+)?(?:'[^']*'|\"[^\"]*\"|\S+)\s+([^\s;&|]+)")
 _CP_MV_RE = re.compile(r"\b(?:cp|mv|install|rsync)\b[^;|&]*\s+([^\s;&|]+)\s*$")
+
+# Разрушительный git: то, что нельзя откатить, и что видно по тексту команды.
+# Между `git` и подкомандой могут стоять опции (`-C dir`, `--worktree`), поэтому
+# шаблон ищет подкоманду в любом месте строки, а не сразу после `git`.
+_DESTRUCTIVE_GIT = (
+    (re.compile(r"\bgit\b[^\n]*?\bpush\b[^\n]*?(?:--force\b|\s-f\b)"), "git push --force"),
+    (re.compile(r"\bgit\b[^\n]*?\breset\s+--hard\b"), "git reset --hard"),
+    (re.compile(r"\bgit\b[^\n]*?\bclean\s+-[a-z]*f"), "git clean -f"),
+    (re.compile(r"\bgit\b[^\n]*?\bcheckout\s+--\s+\."), "git checkout -- ."),
+    (re.compile(r"\bgit\b[^\n]*?\brestore\s+\."), "git restore ."),
+    (re.compile(r"\bgit\b[^\n]*?\bbranch\s+-D"), "git branch -D"),
+)
+# Дерево названо явно: команда целится в конкретный worktree/каталог, а не в текущий.
+_NAMED_TREE = re.compile(r"\bgit\s+(-C\s+\S+|--worktree[= ]\S+|--git-dir[= ]\S+)", re.IGNORECASE)
+
+
+def bash_git_destructive(ctx: HookContext) -> Decision:
+    """Необратимый git без явно названного дерева — отказ; с деревом — предупреждение."""
+    cmd = ctx.command or ""
+    if not cmd:
+        return allow("R-GIT-1")
+    named = bool(_NAMED_TREE.search(cmd))
+    for pattern, label in _DESTRUCTIVE_GIT:
+        if pattern.search(cmd):
+            if not named:
+                return deny(
+                    "R-GIT-1",
+                    f"{label} без явно названного дерева: работа может быть потеряна",
+                    command=cmd[:200],
+                )
+            return advise("R-GIT-1", f"{label}: дерево названо, но работу надо сохранить до отката")
+    return allow("R-GIT-1")
 
 
 def bash_write_bypass(ctx: HookContext) -> Decision:
@@ -92,16 +125,20 @@ def bash_write_bypass(ctx: HookContext) -> Decision:
     if not cmd or ctx.role == "system":
         return allow("R-ORCH-1")
 
+    # `>` внутри кавычек — это текст, а не перенаправление: `python -c "a >> b"`
+    # не пишет в файл `b`. Поэтому разбор идёт по строке без содержимого кавычек.
+    scan = _QUOTED_RE.sub("''", cmd)
+
     candidates: list[str] = []
-    for m in _REDIRECT_RE.finditer(cmd):
+    for m in _REDIRECT_RE.finditer(scan):
         tgt = m.group(1).strip().strip("'\"")
         if tgt in ("/dev/null", "&1", "&2", "NUL", "nul"):
             continue
         candidates.append(tgt)
-    m = _SED_INPLACE_RE.search(cmd)
+    m = _SED_INPLACE_RE.search(scan)
     if m:
         candidates.append(m.group(2))
-    for m in _CP_MV_RE.finditer(cmd):
+    for m in _CP_MV_RE.finditer(scan):
         candidates.append(m.group(1))
 
     for cand in candidates:
@@ -126,6 +163,7 @@ HOOKS: dict[str, Callable[[HookContext], Decision]] = {
     "policy.worker_scope": policy_worker_scope,
     "policy.protected_paths": policy_protected_paths,
     "bash.write_bypass": bash_write_bypass,
+    "bash.git_destructive": bash_git_destructive,
 }
 
 # Какие хуки запускаются на событие. Порядок не важен: deny доминирует.
@@ -137,6 +175,7 @@ EVENT_HOOKS: dict[str, list[str]] = {
         "policy.write_scope",
         "policy.worker_scope",
         "bash.write_bypass",
+        "bash.git_destructive",
     ],
     "posttooluse": [],
     "precommit": [],

@@ -266,6 +266,20 @@ class HookTests(unittest.TestCase):
         result = self._run(role="orchestrator", tool="bash", command="echo hi >> src/a.py")
         self.assertEqual(result["decision"], "deny")
 
+    def test_destructive_git_denied_without_named_tree(self) -> None:
+        result = self._run(role="worker", tool="bash", command="git push --force origin main")
+        self.assertEqual(result["decision"], "deny")
+        self.assertEqual(result["rule"], "R-GIT-1")
+
+    def test_destructive_git_advised_with_named_tree(self) -> None:
+        result = self._run(role="worker", tool="bash", command="git -C ../wt reset --hard")
+        self.assertEqual(result["decision"], "advise")
+        self.assertEqual(result["rule"], "R-GIT-1")
+
+    def test_ordinary_git_is_allowed(self) -> None:
+        result = self._run(role="worker", tool="bash", command="git log --oneline -5")
+        self.assertIn(result["decision"], ("allow", "advise"))
+
     def test_unknown_hook_fails_closed(self) -> None:
         from harness import hooks
 

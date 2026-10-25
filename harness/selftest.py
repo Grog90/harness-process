@@ -196,6 +196,18 @@ def c_role_identity_negative(root: str) -> None:
 
 
 
+def c_git_destructive_negative(root: str) -> None:
+    d = hooks.run("pretooluse", _ctx(root, role="worker", tool="bash", command="git push --force origin main"))
+    assert d["decision"] == "deny" and d["rule"] == "R-GIT-1", d
+
+
+def c_git_destructive_positive(root: str) -> None:
+    d = hooks.run("pretooluse", _ctx(root, role="worker", tool="bash", command="git -C ../wt reset --hard"))
+    assert d["decision"] in ("allow", "advise"), d
+    ok = hooks.run("pretooluse", _ctx(root, role="worker", tool="bash", command="git log --oneline"))
+    assert ok["decision"] in ("allow", "advise"), ok
+
+
 def c_brief_negative(root: str) -> None:
     eng = _engine(root)
     eng.store.create_task("T-SELF", policy_version="1.0.0")
@@ -738,6 +750,8 @@ CHECKS: list[Check] = [
     Check("R-WORK-2", "воркер не диспетчит", c_worker_tool_negative),
     Check("R-PROT-1", "политика защищена от рабочей роли", c_protected_negative),
     Check("R-ROLE-1", "подмена роли отклоняется", c_role_identity_negative),
+    Check("R-GIT-1", "force-push без названного дерева отклоняется", c_git_destructive_negative),
+    Check("R-GIT-1", "git с названным деревом и обычный git проходят", c_git_destructive_positive),
     Check("R-BRIEF-1", "нет брифа — нет диспетча", c_brief_negative),
     Check("R-BRIEF-1", "полный бриф — диспетч разрешён", c_brief_positive),
     Check("R-BRIEF-1", "пустое поле — отдельная причина отказа", c_brief_empty_field),

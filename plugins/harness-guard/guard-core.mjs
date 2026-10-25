@@ -176,21 +176,44 @@ const REDIRECT_RE = /(?:>>?|\btee\b(?:\s+-a)?)\s*([^\s;&|"']+)/gi;
 const SED_INPLACE_RE = /sed\s+(-i\b|-i\.?\S*)\s+(?:-e\s+)?(?:'[^']*'|"[^"]*"|\S+)\s+([^\s;&|]+)/i;
 const CP_MV_RE = /\b(?:cp|mv|install|rsync)\b[^;|&]*\s+([^\s;&|]+)\s*$/i;
 
+// Разрушительный git: подкоманда ищется в любом месте строки, потому что между
+// `git` и `reset` могут стоять опции (`-C dir`, `--worktree`).
+const DESTRUCTIVE_GIT = [
+  [/\bgit\b[^\n]*?\bpush\b[^\n]*?(?:--force\b|\s-f\b)/i, 'git push --force'],
+  [/\bgit\b[^\n]*?\breset\s+--hard\b/i, 'git reset --hard'],
+  [/\bgit\b[^\n]*?\bclean\s+-[a-z]*f/i, 'git clean -f'],
+  [/\bgit\b[^\n]*?\bcheckout\s+--\s+\./i, 'git checkout -- .'],
+  [/\bgit\b[^\n]*?\brestore\s+\./i, 'git restore .'],
+  [/\bgit\b[^\n]*?\bbranch\s+-D/, 'git branch -D'],
+];
+const NAMED_TREE = /\bgit\s+(-C\s+\S+|--worktree[= ]\S+|--git-dir[= ]\S+)/i;
+
 function checkBash(policy, root, roleName, role, req) {
   const command = String((req.args && (req.args.command || req.args.cmd)) || '');
   if (!command) return null;
 
+  const namedTree = NAMED_TREE.test(command);
+  for (const [rx, label] of DESTRUCTIVE_GIT) {
+    if (!rx.test(command)) continue;
+    if (!namedTree) {
+      return deny('R-GIT-1', `${label} без явно названного дерева: работа может быть потеряна`);
+    }
+    return advise('R-GIT-1', `${label}: дерево названо, но работу надо сохранить до отката`);
+  }
+
   const candidates = [];
+  // `>` внутри кавычек — текст, а не перенаправление
+  const scan = command.replace(/'[^']*'|"[^"]*"/g, "''");
   let m;
   REDIRECT_RE.lastIndex = 0;
-  while ((m = REDIRECT_RE.exec(command)) !== null) {
+  while ((m = REDIRECT_RE.exec(scan)) !== null) {
     const tgt = m[1];
     if (['/dev/null', '&1', '&2', 'NUL', 'nul'].includes(tgt)) continue;
     candidates.push(tgt);
   }
-  const sed = SED_INPLACE_RE.exec(command);
+  const sed = SED_INPLACE_RE.exec(scan);
   if (sed) candidates.push(sed[2]);
-  const cp = CP_MV_RE.exec(command);
+  const cp = CP_MV_RE.exec(scan);
   if (cp) candidates.push(cp[1]);
 
   for (const cand of candidates) {

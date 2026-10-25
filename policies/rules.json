@@ -205,14 +205,13 @@
       "id": "R-GIT-1",
       "statement": "Деструктивные git-операции обязаны явно называть дерево; работа сохраняется до revert.",
       "event": "pretooluse",
-      "enforcement": "delegated",
-      "implemented": false,
-      "hook": null,
-      "positive_test": "проверяется механизмом рантайма: см. docs/PLUGINS.md",
-      "negative_test": "проверяется механизмом рантайма: см. docs/PLUGINS.md",
+      "enforcement": "blocking",
+      "implemented": true,
+      "hook": "bash.git_destructive",
+      "positive_test": "git push --force без названного дерева отклоняется",
+      "negative_test": "git -C <dir> reset --hard получает предупреждение, обычный git log проходит",
       "owner": "policy",
-      "residual_risk": "L0 видит текст команды; обфускация (eval, base64) и «серые» случаи не ловятся — семантический слой платный и требует отказа от локальности",
-      "delegated_to": "dsh-jev-guard (L0, локальные правила, без ключа)"
+      "residual_risk": "ловится текст команды: обфускация (eval, base64, алиасы) и команды, собранные из переменных, проходят мимо; откат уже случившегося не предусмотрен"
     },
     {
       "id": "R-TIMEOUT-1",
