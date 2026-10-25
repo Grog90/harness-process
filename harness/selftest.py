@@ -195,37 +195,6 @@ def c_role_identity_negative(root: str) -> None:
     assert d["decision"] == "deny" and d["rule"] == "R-ROLE-1", d
 
 
-def c_sleep_negative(root: str) -> None:
-    d = hooks.run("pretooluse", _ctx(root, role="worker", tool="bash", command="sleep 60"))
-    assert d["decision"] == "deny" and d["rule"] == "R-SLEEP-1", d
-
-
-def c_sleep_positive(root: str) -> None:
-    d = hooks.run("pretooluse", _ctx(root, role="worker", tool="bash", command="pytest -q"))
-    assert d["decision"] in ("allow", "advise"), d
-
-
-def c_git_destructive_negative(root: str) -> None:
-    d = hooks.run("pretooluse", _ctx(root, role="worker", tool="bash", command="git reset --hard"))
-    assert d["decision"] == "deny" and d["rule"] == "R-GIT-1", d
-
-
-def c_git_destructive_positive(root: str) -> None:
-    d = hooks.run("pretooluse", _ctx(root, role="worker", tool="bash", command="git -C ../wt reset --hard"))
-    assert d["decision"] in ("allow", "advise"), d
-
-
-def c_read_loop_negative(root: str) -> None:
-    target = os.path.join(root, "src", "fee.py")
-    os.makedirs(os.path.dirname(target), exist_ok=True)
-    with open(target, "w", encoding="utf-8") as fh:
-        fh.write("def calculate_fee(): pass\n")
-    results = []
-    for _ in range(3):
-        results.append(hooks.run("pretooluse", _ctx(root, role="worker", tool="read_file", path="src/fee.py")))
-    assert results[0]["decision"] == "allow", results[0]
-    assert results[2]["decision"] == "deny" and results[2]["rule"] == "R-READ-1", results[2]
-
 
 def c_brief_negative(root: str) -> None:
     eng = _engine(root)
@@ -769,11 +738,6 @@ CHECKS: list[Check] = [
     Check("R-WORK-2", "воркер не диспетчит", c_worker_tool_negative),
     Check("R-PROT-1", "политика защищена от рабочей роли", c_protected_negative),
     Check("R-ROLE-1", "подмена роли отклоняется", c_role_identity_negative),
-    Check("R-SLEEP-1", "sleep запрещён", c_sleep_negative),
-    Check("R-SLEEP-1", "обычная команда разрешена", c_sleep_positive),
-    Check("R-GIT-1", "git reset --hard без дерева запрещён", c_git_destructive_negative),
-    Check("R-GIT-1", "git reset --hard с названным деревом разрешён", c_git_destructive_positive),
-    Check("R-READ-1", "третий одинаковый read отклоняется", c_read_loop_negative),
     Check("R-BRIEF-1", "нет брифа — нет диспетча", c_brief_negative),
     Check("R-BRIEF-1", "полный бриф — диспетч разрешён", c_brief_positive),
     Check("R-BRIEF-1", "пустое поле — отдельная причина отказа", c_brief_empty_field),

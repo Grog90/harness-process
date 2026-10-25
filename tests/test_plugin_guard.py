@@ -136,11 +136,12 @@ class PluginGuardTests(unittest.TestCase):
         results = self._probe([
             {"name": "write", "arguments": {"path": "src/a.py"}},
             {"name": "write", "arguments": {"path": "src/b.py"}},
-            {"name": "pwsh", "arguments": {"command": "sleep 30"}},
+            {"name": "pwsh", "arguments": {"command": "echo x > src/c.py"}},
         ])
         self.assertIsNone(results[0]["deny"])
         self.assertIn("R-WORK-1", results[1]["deny"])
-        self.assertIn("R-SLEEP-1", results[2]["deny"])
+        # обходной путь через shell тоже закрыт: правило R-WORK-1 применяется к цели
+        self.assertIn("R-WORK-1", results[2]["deny"])
 
     def test_scope_changes_take_effect_without_reload(self) -> None:
         self._write_scope(["src/a.py"])

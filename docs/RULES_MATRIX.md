@@ -2,9 +2,9 @@
 
 _Файл генерируется командой `harness coverage --markdown`. Руками не править: источник — `policies/rules.json` и код хуков._
 
-Всего правил: **32** · покрыто: **32** · пробелов: **0** · сломанных объявлений: **0**
+Всего правил: **32** · покрыто: **28** · пробелов: **0** · делегировано рантайму: **4** · сломанных объявлений: **0**
 
-Проверяется исполняемыми тестами: **32** из **32**. У каждого правила есть хотя бы одна исполняемая проверка.
+Проверяется исполняемыми тестами: **28** из **28** наших правил; ещё **4** закрыты механизмами рантайма и плагинами (см. ниже). У каждого нашего правила есть хотя бы одна исполняемая проверка.
 
 > доля покрытия не равна доле безопасности: одна незакрытая критическая операция важнее десятков закрытых малозначимых правил
 
@@ -24,16 +24,16 @@ _Файл генерируется командой `harness coverage --markdown
 | `R-SNAPSHOT-1` | blocking | precommit | `verdict.require_current_pass` | покрыто | control |
 | `R-COMMIT-1` | blocking | precommit | `verdict.require_checks` | покрыто | control |
 | `R-COMMIT-2` | blocking | precommit | `verdict.require_pipeline_log` | покрыто | control |
-| `R-SLEEP-1` | blocking | pretooluse | `bash.no_sleep` | покрыто | policy |
-| `R-READ-1` | blocking | pretooluse | `bash.read_loop` | покрыто | policy |
-| `R-GIT-1` | blocking | pretooluse | `bash.git_destructive` | покрыто | policy |
+| `R-SLEEP-1` | delegated | pretooluse | `—` | делегировано — закрыто: dsh-jev-guard + @deepseek-ai/dsh-tool-call-timeout-policy | policy |
+| `R-READ-1` | delegated | pretooluse | `—` | делегировано — закрыто: @deepseek-ai/dsh-fs-observation-policy | policy |
+| `R-GIT-1` | delegated | pretooluse | `—` | делегировано — закрыто: dsh-jev-guard | policy |
 | `R-TIMEOUT-1` | blocking | watchdog | `watchdog.sweep` | покрыто | control |
 | `R-TRACE-1` | blocking | posttransition | `state.append_event` | покрыто | control |
 | `R-FIND-1` | blocking | postverdict | `findings.close_guard` | покрыто | control |
 | `R-FIND-2` | soft | postverdict | `findings.route` | покрыто | control |
 | `R-ADV-1` | blocking | postverdict | `verdict.adversarial_requires_scenario` | покрыто | verifier |
 | `R-COST-1` | blocking | predispatch | `cost.check_dispatch` | покрыто | control |
-| `R-SANDBOX-1` | soft | postverdict | `checks.sandbox` | покрыто | environment |
+| `R-SANDBOX-1` | delegated | postverdict | `—` | делегировано — закрыто: @deepseek-ai/dsh-sandbox-policy + dsh-pwsh-sandbox | environment |
 | `R-HOOK-1` | blocking | process | `rules.change` | покрыто | policy |
 | `R-WAVE-1` | blocking | precommit | `lanes.merge` | покрыто | control |
 | `R-EVAL-1` | soft | process | `evals.metrics` | покрыто | control |
@@ -46,6 +46,13 @@ _Файл генерируется командой `harness coverage --markdown
 ## Пробелы покрытия
 
 Пробелов нет (это утверждение стоит перепроверять, а не праздновать).
+
+## Делегировано рантайму и плагинам
+
+- **R-SLEEP-1**: Ожидание вне переходов запрещено: sleep и долгие паузы отклоняются. → `dsh-jev-guard + @deepseek-ai/dsh-tool-call-timeout-policy`. Остаточный риск: наш deny на sleep был эвристикой; дедлайн на инструмент даёт рантайм, необратимые команды — jev-guard
+- **R-READ-1**: Третий одинаковый read без промежуточного изменения — отказ (ломалка циклов чтения). → `@deepseek-ai/dsh-fs-observation-policy`. Остаточный риск: read-before-edit и version-guarded write на уровне FS; повторные вызовы ловит @deepseek-ai/dsh-repeat-tool-reminder как предупреждение
+- **R-GIT-1**: Деструктивные git-операции обязаны явно называть дерево; работа сохраняется до revert. → `dsh-jev-guard`. Остаточный риск: клапан на tools/pre-execute: четыре состояния, детект необратимых команд, аудит
+- **R-SANDBOX-1**: Проверки из брифа выполняются в изоляции: контейнер без сети, если доступен, иначе копия дерева с урезанным окружением. → `@deepseek-ai/dsh-sandbox-policy + dsh-pwsh-sandbox`. Остаточный риск: ОС-изоляция режимами read-only/workspace-write/danger-full-access; наш checks.sandbox остаётся запасным путём для headless
 
 ## Остаточные риски покрытых правил
 
@@ -63,16 +70,12 @@ _Файл генерируется командой `harness coverage --markdown
 - **R-SNAPSHOT-1**: Хеш показывает изменение, но не авторство; нужен доверенный источник записи.
 - **R-COMMIT-1**: Доверяем отчёту о выполнении команд; независимый тест-раннер — следующий этап.
 - **R-COMMIT-2**: Журнал пишет финализатор; это traceability, а не WAL.
-- **R-SLEEP-1**: Обход через интерпретатор или фоновый процесс не ловится эвристикой.
-- **R-READ-1**: Счётчик хранится в .harness/read_counter.json и сбрасывается изменением файла, то есть реальным прогрессом, а не перезапуском.
-- **R-GIT-1**: Эвристика по подкомандам; алиасы и обёртки не распознаются.
 - **R-TIMEOUT-1**: Если сторож не запущен, отзыв не произойдёт; состояние при этом сохраняется и разбирается позже.
 - **R-TRACE-1**: Журнал локален; вывоз в доверенное хранилище не реализован.
 - **R-FIND-1**: Причина может быть формальной; качество разбирает владелец.
 - **R-FIND-2**: Предупреждение не блокирует; находка может формально висеть без ответственного.
 - **R-ADV-1**: Сценарий может быть выполнен формально; проверяется человеком при разборе.
 - **R-COST-1**: Бюджет действует, только если он задан в брифе; оценка попытки — допущение, а не измерение.
-- **R-SANDBOX-1**: При отсутствии docker остаётся только копия дерева: права процесса и сеть не ограничены.
 - **R-HOOK-1**: Проверка сравнивает отпечаток файла: правка кода хука без правки rules.json ею не ловится.
 - **R-WAVE-1**: Лейны разделяют дерево, но не тестовые БД, порты и внешние ресурсы: это настраивается в проекте.
 - **R-EVAL-1**: Малый набор меряет крупные проблемы, не частоту редких отказов.

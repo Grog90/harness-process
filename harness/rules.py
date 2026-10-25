@@ -45,10 +45,11 @@ class RuleStatus:
     enforcement: str
     implemented: bool
     hook: str | None
-    status: str  # covered | gap | broken
+    status: str  # covered | delegated | gap | broken
     reason: str = ""
     owner: str = ""
     residual_risk: str = ""
+    delegated_to: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -62,6 +63,7 @@ class RuleStatus:
             "reason": self.reason,
             "owner": self.owner,
             "residual_risk": self.residual_risk,
+            "delegated_to": self.delegated_to,
         }
 
 
@@ -81,7 +83,13 @@ def evaluate(registry: dict[str, Any], available_hooks: dict[str, Any] | None = 
         owner = str(r.get("owner", ""))
 
         status, reason = "covered", ""
-        if enforcement == "n/a":
+        delegated_to = str(r.get("delegated_to") or "")
+        if enforcement == "delegated":
+            # правило закрыто механизмом рантайма или плагином, а не нашим хуком:
+            # это не «покрыто нами» и не «пробел», а отдельное состояние
+            status = "delegated"
+            reason = f"закрыто: {delegated_to or 'механизм рантайма'}"
+        elif enforcement == "n/a":
             kind = r.get("gap_kind") or GAP_NOT_IMPLEMENTED
             status = "gap"
             reason = {
@@ -111,6 +119,7 @@ def evaluate(registry: dict[str, Any], available_hooks: dict[str, Any] | None = 
                 reason=reason,
                 owner=owner,
                 residual_risk=str(r.get("residual_risk", "")),
+                delegated_to=delegated_to,
             )
         )
     return out
@@ -121,19 +130,25 @@ def summary(statuses: list[RuleStatus], tested: set[str] | None = None) -> dict[
     covered = sum(1 for s in statuses if s.status == "covered")
     gap = sum(1 for s in statuses if s.status == "gap")
     broken = sum(1 for s in statuses if s.status == "broken")
+    delegated = sum(1 for s in statuses if s.status == "delegated")
     blocking = sum(1 for s in statuses if s.enforcement == "blocking" and s.status == "covered")
     soft = sum(1 for s in statuses if s.enforcement == "soft" and s.status == "covered")
     tested_ids = tested or set()
-    untested = [s.id for s in statuses if s.id not in tested_ids]
+    # делегированные правила проверяются механизмом рантайма — их отсутствие
+    # среди наших тестов не пробел покрытия
+    untested = [s.id for s in statuses if s.status != "delegated" and s.id not in tested_ids]
+    owned = total - delegated
     return {
         "total": total,
         "covered": covered,
         "gap": gap,
         "broken": broken,
+        "delegated": delegated,
+        "owned": owned,
         "blocking_covered": blocking,
         "soft_covered": soft,
         "coverage_ratio": round(covered / total, 3) if total else 0.0,
-        "tested": total - len(untested),
+        "tested": owned - len(untested),
         "untested": untested,
         "honest_note": "доля покрытия не равна доле безопасности: одна незакрытая критическая операция важнее десятков закрытых малозначимых правил",
     }
@@ -146,13 +161,15 @@ def render_markdown(statuses: list[RuleStatus], sums: dict[str, Any]) -> str:
         "_Файл генерируется командой `harness coverage --markdown`. Руками не править: источник — `policies/rules.json` и код хуков._",
         "",
         f"Всего правил: **{sums['total']}** · покрыто: **{sums['covered']}** · "
-        f"пробелов: **{sums['gap']}** · сломанных объявлений: **{sums['broken']}**",
+        f"пробелов: **{sums['gap']}** · делегировано рантайму: **{sums['delegated']}** · "
+        f"сломанных объявлений: **{sums['broken']}**",
         "",
-        f"Проверяется исполняемыми тестами: **{sums.get('tested', 0)}** из **{sums['total']}**."
+        f"Проверяется исполняемыми тестами: **{sums.get('tested', 0)}** из **{sums.get('owned', sums['total'])}** "
+        f"наших правил; ещё **{sums['delegated']}** закрыты механизмами рантайма и плагинами (см. ниже)."
         + (
             " Без тестов остаются: " + ", ".join(f"`{x}`" for x in sums.get("untested", []))
             if sums.get("untested")
-            else " У каждого правила есть хотя бы одна исполняемая проверка."
+            else " У каждого нашего правила есть хотя бы одна исполняемая проверка."
         ),
         "",
         f"> {sums['honest_note']}",
@@ -161,17 +178,24 @@ def render_markdown(statuses: list[RuleStatus], sums: dict[str, Any]) -> str:
         "|---|---|---|---|---|---|",
     ]
     for s in statuses:
-        mark = {"covered": "покрыто", "gap": "ПРОБЕЛ", "broken": "СЛОМАНО"}[s.status]
+        mark = {"covered": "покрыто", "delegated": "делегировано", "gap": "ПРОБЕЛ",
+                "broken": "СЛОМАНО"}[s.status]
         note = f" — {s.reason}" if s.reason else ""
         lines.append(
             f"| `{s.id}` | {s.enforcement} | {s.event} | `{s.hook or '—'}` | {mark}{note} | {s.owner or '—'} |"
         )
     lines += ["", "## Пробелы покрытия", ""]
-    gaps = [s for s in statuses if s.status != "covered"]
+    gaps = [s for s in statuses if s.status in ("gap", "broken")]
     if not gaps:
         lines.append("Пробелов нет (это утверждение стоит перепроверять, а не праздновать).")
     for s in gaps:
         lines.append(f"- **{s.id}** ({s.enforcement}): {s.statement} — {s.reason}. Остаточный риск: {s.residual_risk}")
+    delegated = [s for s in statuses if s.status == "delegated"]
+    lines += ["", "## Делегировано рантайму и плагинам", ""]
+    if not delegated:
+        lines.append("Делегированных правил нет.")
+    for s in delegated:
+        lines.append(f"- **{s.id}**: {s.statement} → `{s.delegated_to}`. Остаточный риск: {s.residual_risk}")
     lines += ["", "## Остаточные риски покрытых правил", ""]
     for s in statuses:
         if s.status == "covered" and s.residual_risk:

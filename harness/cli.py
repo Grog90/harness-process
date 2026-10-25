@@ -484,12 +484,15 @@ def cmd_coverage(args: argparse.Namespace) -> int:
     if args.json:
         _print({"summary": sums, "rules": [s.to_dict() for s in statuses]}, True)
         return EXIT_OK
-    print(f"правил: {sums['total']} · покрыто: {sums['covered']} · пробелов: {sums['gap']} · "
+    print(f"правил: {sums['total']} · покрыто нами: {sums['covered']} · "
+          f"делегировано: {sums['delegated']} · пробелов: {sums['gap']} · "
           f"сломано: {sums['broken']} · покрытие: {sums['coverage_ratio']:.0%} · "
           f"с исполняемыми тестами: {sums['tested']}/{sums['total']}")
     for s in statuses:
-        if s.status != "covered":
+        if s.status in ("gap", "broken"):
             print(f"  ПРОБЕЛ {s.id} ({s.enforcement}): {s.reason}")
+        elif s.status == "delegated":
+            print(f"  делегировано {s.id} → {s.delegated_to}")
     if sums["untested"]:
         print("  без исполняемых проверок: " + ", ".join(sums["untested"]))
     return EXIT_OK if sums["broken"] == 0 else EXIT_DENIED

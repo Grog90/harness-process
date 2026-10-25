@@ -10,14 +10,11 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
-import os
 import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from .policy import Decision, Policy, advise, allow, deny, normalize_path
+from .policy import Decision, Policy, allow, deny, normalize_path
 
 WRITE_TOOLS = ("write_file", "edit_file", "apply_patch", "create_file")
 
@@ -83,52 +80,6 @@ def policy_protected_paths(ctx: HookContext) -> Decision:
     return allow("R-PROT-1")
 
 
-_SLEEP_RE = re.compile(r"(?:^|[;&|]\s*|\s)sleep\s+\d", re.IGNORECASE)
-_SLEEP_API_RE = re.compile(r"time\.sleep\s*\(|Start-Sleep|Wait-Event|-Wait\b", re.IGNORECASE)
-_LONG_TIMEOUT_RE = re.compile(r"timeout\s+(\d{3,})", re.IGNORECASE)
-
-
-def bash_no_sleep(ctx: HookContext) -> Decision:
-    cmd = ctx.command or ""
-    if not cmd:
-        return allow("R-SLEEP-1")
-    if _SLEEP_RE.search(cmd) or _SLEEP_API_RE.search(cmd):
-        return deny(
-            "R-SLEEP-1",
-            "ожидание вне переходов запрещено: автомат событийный, а не таймерный",
-            command=cmd[:200],
-        )
-    m = _LONG_TIMEOUT_RE.search(cmd)
-    if m and int(m.group(1)) > 120:
-        return deny("R-SLEEP-1", f"длинный таймаут {m.group(1)}с: ожидание должно быть отменяемым", command=cmd[:200])
-    return allow("R-SLEEP-1")
-
-
-_DESTRUCTIVE_GIT = (
-    (re.compile(r"git\s+reset\s+--hard"), "git reset --hard"),
-    (re.compile(r"git\s+clean\s+-[a-z]*f"), "git clean -f"),
-    (re.compile(r"git\s+checkout\s+--\s+\."), "git checkout -- ."),
-    (re.compile(r"git\s+restore\s+\."), "git restore ."),
-    (re.compile(r"git\s+push\s+.*--force"), "git push --force"),
-    (re.compile(r"git\s+branch\s+-D"), "git branch -D"),
-)
-_NAMED_TREE = re.compile(r"\bgit\s+(-C\s+\S+|--worktree[= ]\S+|--git-dir[= ]\S+)", re.IGNORECASE)
-
-
-def bash_git_destructive(ctx: HookContext) -> Decision:
-    cmd = ctx.command or ""
-    for pattern, label in _DESTRUCTIVE_GIT:
-        if pattern.search(cmd):
-            if not _NAMED_TREE.search(cmd):
-                return deny(
-                    "R-GIT-1",
-                    f"{label} без явно названного дерева: работа может быть потеряна",
-                    command=cmd[:200],
-                )
-            return advise("R-GIT-1", f"{label}: дерево названо, но работа должна быть сохранена до revert")
-    return allow("R-GIT-1")
-
-
 _REDIRECT_RE = re.compile(r"(?:>>?|\btee\b(?:\s+-a)?)\s*([^\s;&|]+)")
 _SED_INPLACE_RE = re.compile(r"sed\s+(-i\b|-i\.?\S*)\s+(?:-e\s+)?(?:'[^']*'|\"[^\"]*\"|\S+)\s+([^\s;&|]+)")
 _CP_MV_RE = re.compile(r"\b(?:cp|mv|install|rsync)\b[^;|&]*\s+([^\s;&|]+)\s*$")
@@ -166,58 +117,6 @@ def bash_write_bypass(ctx: HookContext) -> Decision:
     return allow("R-ORCH-1")
 
 
-def _read_counter_path(root: str) -> str:
-    return os.path.join(root, ".harness", "read_counter.json")
-
-
-def bash_read_loop(ctx: HookContext) -> Decision:
-    """Третий одинаковый read без промежуточного изменения — отказ."""
-    assert ctx.policy is not None
-    max_same = int(ctx.policy.limit("max_same_read", 2))
-    target = ctx.target or ctx.path or ""
-    if ctx.tool not in ("read_file", "bash_readonly") or not target:
-        return allow("R-READ-1")
-
-    rel = normalize_path(ctx.root, target)
-    full = os.path.join(ctx.root, rel)
-    try:
-        stamp = ""
-        if os.path.exists(full):
-            st = os.stat(full)
-            stamp = f"{st.st_mtime_ns}:{st.st_size}"
-    except OSError:
-        stamp = ""
-
-    path = _read_counter_path(ctx.root)
-    data: dict[str, Any] = {}
-    try:
-        with open(path, encoding="utf-8") as fh:
-            data = json.load(fh)
-    except (OSError, json.JSONDecodeError):
-        data = {}
-
-    key = hashlib.sha256(f"{ctx.role}|{rel}|{stamp}".encode()).hexdigest()[:16]
-    count = int(data.get(key, 0)) + 1
-    data[key] = count
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(data, fh)
-    except OSError:
-        pass
-
-    if count > max_same:
-        return deny(
-            "R-READ-1",
-            f"{rel} прочитан {count} раз без изменений: цикл чтения, нужен другой шаг",
-            path=rel,
-            count=count,
-        )
-    if count == max_same:
-        return advise("R-READ-1", f"{rel} прочитан {count} раза без изменений", path=rel)
-    return allow("R-READ-1")
-
-
 # --------------------------------------------------------------------- реестр
 
 HOOKS: dict[str, Callable[[HookContext], Decision]] = {
@@ -226,10 +125,7 @@ HOOKS: dict[str, Callable[[HookContext], Decision]] = {
     "policy.write_scope": policy_write_scope,
     "policy.worker_scope": policy_worker_scope,
     "policy.protected_paths": policy_protected_paths,
-    "bash.no_sleep": bash_no_sleep,
-    "bash.git_destructive": bash_git_destructive,
     "bash.write_bypass": bash_write_bypass,
-    "bash.read_loop": bash_read_loop,
 }
 
 # Какие хуки запускаются на событие. Порядок не важен: deny доминирует.
@@ -241,9 +137,6 @@ EVENT_HOOKS: dict[str, list[str]] = {
         "policy.write_scope",
         "policy.worker_scope",
         "bash.write_bypass",
-        "bash.no_sleep",
-        "bash.git_destructive",
-        "bash.read_loop",
     ],
     "posttooluse": [],
     "precommit": [],

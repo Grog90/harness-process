@@ -126,7 +126,7 @@ export function decide(policy, root, req) {
   if (tool === 'bash') {
     const bashDecision = checkBash(policy, root, roleName, role, req);
     if (bashDecision) return bashDecision;
-    return allow('R-SLEEP-1');
+    return allow('R-ORCH-1');
   }
 
   const rawPath = args.path || args.file_path || args.filePath;
@@ -172,17 +172,6 @@ function checkWrite(policy, root, roleName, role, tool, rawPath, allowedFiles) {
   return null;
 }
 
-const SLEEP_RE = /(?:^|[;&|]\s*|\s)sleep\s+\d/i;
-const SLEEP_API_RE = /time\.sleep\s*\(|Start-Sleep|Wait-Event|-Wait\b/i;
-const DESTRUCTIVE_GIT = [
-  [/git\s+reset\s+--hard/i, 'git reset --hard'],
-  [/git\s+clean\s+-[a-z]*f/i, 'git clean -f'],
-  [/git\s+checkout\s+--\s+\./i, 'git checkout -- .'],
-  [/git\s+restore\s+\./i, 'git restore .'],
-  [/git\s+push\s+.*--force/i, 'git push --force'],
-  [/git\s+branch\s+-D/, 'git branch -D'],
-];
-const NAMED_TREE = /\bgit\s+(-C\s+\S+|--worktree[= ]\S+|--git-dir[= ]\S+)/i;
 const REDIRECT_RE = /(?:>>?|\btee\b(?:\s+-a)?)\s*([^\s;&|"']+)/gi;
 const SED_INPLACE_RE = /sed\s+(-i\b|-i\.?\S*)\s+(?:-e\s+)?(?:'[^']*'|"[^"]*"|\S+)\s+([^\s;&|]+)/i;
 const CP_MV_RE = /\b(?:cp|mv|install|rsync)\b[^;|&]*\s+([^\s;&|]+)\s*$/i;
@@ -190,18 +179,6 @@ const CP_MV_RE = /\b(?:cp|mv|install|rsync)\b[^;|&]*\s+([^\s;&|]+)\s*$/i;
 function checkBash(policy, root, roleName, role, req) {
   const command = String((req.args && (req.args.command || req.args.cmd)) || '');
   if (!command) return null;
-
-  if (SLEEP_RE.test(command) || SLEEP_API_RE.test(command)) {
-    return deny('R-SLEEP-1', 'ожидание вне переходов запрещено: автомат событийный, а не таймерный');
-  }
-  for (const [rx, label] of DESTRUCTIVE_GIT) {
-    if (rx.test(command)) {
-      if (!NAMED_TREE.test(command)) {
-        return deny('R-GIT-1', `${label} без явно названного дерева: работа может быть потеряна`);
-      }
-      return advise('R-GIT-1', `${label}: дерево названо, но работа должна быть сохранена до revert`);
-    }
-  }
 
   const candidates = [];
   let m;

@@ -337,10 +337,11 @@ class Demo:
                    cmd["ok"] and cmd["result"]["exit_code"] == 0 and "harness-ok" in cmd["result"]["stdout"],
                    f"код {cmd.get('result', {}).get('exit_code')}")
 
-        sleep = gw.handle({"role": "worker", "task_id": "DEMO-5", "tool": "run_command",
-                           "args": {"command": "sleep 30"}})
-        self.check("ожидание отклонено до запуска", not sleep["ok"] and sleep["rule"] == "R-SLEEP-1",
-                   sleep.get("rule", ""))
+        bypass = gw.handle({"role": "worker", "task_id": "DEMO-5", "tool": "run_command",
+                            "args": {"command": "echo x > harness/evil.py"}})
+        self.check("запись в продукт через shell отклонена до запуска",
+                   not bypass["ok"] and bypass["rule"] in ("R-WORK-1", "R-ORCH-1", "R-PROT-1"),
+                   bypass.get("rule", ""))
 
     def _checks_steps(self) -> None:
         from . import checks as checks_mod
@@ -509,8 +510,8 @@ def _hook_checks(demo: Demo, policy: Policy) -> None:
     demo.check("обход через tee отклонён", r["decision"] == "deny", r["rule"])
     r = hook(role="worker", tool="write_file", path="src/billing.py", allowed_files=["src/fee.py"])
     demo.check("воркер вне allowed_files", r["decision"] == "deny", r["rule"])
-    r = hook(role="worker", tool="bash", command="sleep 120")
-    demo.check("sleep запрещён", r["decision"] == "deny", r["rule"])
+    r = hook(role="worker", tool="bash", command="echo x > src/billing.py", allowed_files=["src/fee.py"])
+    demo.check("обход allowed_files через shell отклонён", r["decision"] == "deny", r["rule"])
     r = hook(role="verifier", tool="write_file", path="src/fee.py")
     demo.check("верификатор не правит продукт", r["decision"] == "deny", r["rule"])
     r = hook(role="verifier", tool="write_file", path="evidence/verdict.json")
