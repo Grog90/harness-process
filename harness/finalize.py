@@ -75,11 +75,20 @@ def write_set(root: str) -> list[str]:
             # при переименовании следующим элементом идёт исходный путь
             paths.append(entries[i].replace("\\", "/"))
             i += 1
-    return sorted(set(p for p in paths if not p.startswith(CONTROL_PLANE_PREFIXES)))
+    return sorted(set(p for p in paths if not _is_control(p)))
+
+
+def _is_control(path: str) -> bool:
+    """Служебные файлы: состояние, артефакты, сгенерированный кэш."""
+    if path.startswith(CONTROL_PLANE_PREFIXES):
+        return True
+    low = path.lower()
+    return "__pycache__/" in low or low.endswith(".pyc") or low.startswith(".pytest_cache/")
 
 
 def pipeline_log_path(task_id: str) -> str:
     return f"pipeline-log/{task_id}.jsonl"
+
 
 def finalize(
     store: Store,
@@ -89,6 +98,7 @@ def finalize(
     *,
     message: str | None = None,
     author: str = "harness",
+    ignore_paths: list[str] | None = None,
 ) -> dict[str, Any]:
     root = os.path.abspath(root)
     task = store.get_task(task_id)
@@ -112,7 +122,9 @@ def finalize(
 
     allowed = [normalize_path(root, p) for p in _allowed_files(task)]
     log_path = pipeline_log_path(task_id)
-    changed = write_set(root)
+    # бриф и служебные файлы не продукт: они не должны блокировать коммит
+    ignored = {normalize_path(root, p) for p in (ignore_paths or [])}
+    changed = [p for p in write_set(root) if p not in ignored]
     unexpected = [p for p in changed if p != log_path and not _within(p, allowed)]
     if unexpected:
         raise FinalizeError(
@@ -128,7 +140,8 @@ def finalize(
         changed = write_set(root)
 
     # 2. Коммит содержит только разрешённые пути и журнал.
-    paths_to_commit = [p for p in write_set(root) if p == log_path or _within(p, allowed)]
+    paths_to_commit = [p for p in write_set(root)
+                       if p not in ignored and (p == log_path or _within(p, allowed))]
     if not paths_to_commit:
         raise FinalizeError("R-FINAL-1", "нет изменений для коммита")
     add = _git(root, "add", "--", *paths_to_commit)
@@ -146,7 +159,8 @@ def finalize(
     sha = _git(root, "rev-parse", "HEAD").stdout.strip()
 
     # 3. После коммита ничего из разрешённой области не должно остаться грязным.
-    leftover = [p for p in write_set(root) if p == log_path or _within(p, allowed)]
+    leftover = [p for p in write_set(root)
+                if p not in ignored and (p == log_path or _within(p, allowed))]
     if leftover:
         raise FinalizeError(
             "R-FINAL-1", "после коммита остались незакоммиченные изменения разрешённых файлов",

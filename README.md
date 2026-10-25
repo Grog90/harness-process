@@ -16,7 +16,16 @@ python -m harness coverage        # покрытие, пробелы и нали
 python -m unittest discover -s tests -v
 ```
 
-Ручной проход одной задачи:
+Запуск задачи целиком — одной командой (исполнитель и проверяющий — любые команды):
+
+```powershell
+python -m harness run --task FEE-101 --brief templates/brief.example.json `
+  --worker   "python examples/agents/demo_worker.py" `
+  --verifier "python examples/verifiers/behavior_verifier.py" `
+  --commit
+```
+
+Пошагово (для отладки и ручного контроля):
 
 ```powershell
 python -m harness init
@@ -39,6 +48,10 @@ python -m harness task status --task FEE-101
 `templates/verdict.example.json` — образец формы, а не готовый вердикт: его
 `snapshot_id` — заглушка, и такой файл будет отклонён по `R-SNAPSHOT-1`. Это
 намеренно: вердикт, не привязанный к конкретному состоянию файлов, не принимается.
+
+Подробности запуска: [`docs/RUNNING.md`](docs/RUNNING.md) — контракты команд
+воркера и проверяющего, режимы (`--lane`, `--merge`, `--adversarial`), что делать,
+когда прогон остановился.
 
 Любой отказ печатает правило и причину и возвращает код выхода `2`:
 
@@ -84,8 +97,8 @@ policies/         policy.json — полномочия ролей; rules.json �
 schemas/          JSON-схемы брифа и вердикта
 templates/        примеры артефактов
 examples/         учебные верификаторы и размеченный набор evals (10 случаев)
-tests/            58 unittest-проверок свойств
-docs/             ANALYSIS (разбор книги), ARCHITECTURE, ROADMAP, RULES_MATRIX
+tests/            63 unittest-проверки свойств
+docs/             ANALYSIS, ARCHITECTURE, ROADMAP, RUNNING, RULES_MATRIX
 bin/              обёртки harness / harness.cmd
 tools/            вспомогательное: экстрактор текста PDF (для сверки с источником)
 ```

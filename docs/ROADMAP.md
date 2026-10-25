@@ -171,7 +171,7 @@ R-FINAL-1, сценарий 15 демо.
 ## Как проверять, что этап закрыт
 
 ```powershell
-python -m unittest discover -s tests -v      # 58 проверок свойств
+python -m unittest discover -s tests -v      # 63 проверки свойств
 python -m harness selftest                   # 45 исполняемых отказов
 python -m harness demo                       # 50 сквозных проверок
 python -m harness coverage                   # покрытие и наличие тестов

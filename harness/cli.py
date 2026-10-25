@@ -33,14 +33,19 @@ def _root(args: argparse.Namespace) -> str:
     return os.path.abspath(args.root)
 
 
+def _control_root(args: argparse.Namespace) -> str:
+    """Корень управляющего слоя: политика и правила живут здесь, а не в лейне."""
+    return os.path.abspath(getattr(args, "control_root", None) or args.root)
+
+
 def _store(args: argparse.Namespace) -> Store:
-    path = args.db or os.path.join(_root(args), ".harness", "state.db")
+    path = args.db or os.path.join(_control_root(args), ".harness", "state.db")
     return Store(path)
 
 
 def _engine(args: argparse.Namespace, store: Store | None = None) -> Engine:
     root = _root(args)
-    return Engine(store or _store(args), Policy.load(root), root)
+    return Engine(store or _store(args), Policy.load(_control_root(args)), root)
 
 
 def _print(obj: Any, as_json: bool) -> None:
@@ -252,6 +257,43 @@ def cmd_sandbox(args: argparse.Namespace) -> int:
     return EXIT_OK if args.action == "probe" else EXIT_ERROR
 
 
+def cmd_run(args: argparse.Namespace) -> int:
+    """Полный цикл одной командой: бриф → воркер → проверка → коммит/эскалация."""
+    from .run import RunConfig, RunError, Runner, render
+
+    root = _root(args)
+    store = _store(args)
+    try:
+        engine = Engine(store, Policy.load(_control_root(args)), root)
+        config = RunConfig(
+            root=root,
+            task_id=args.task,
+            brief_path=args.brief,
+            worker_cmd=args.worker,
+            verifier_cmd=args.verifier,
+            adversarial_cmd=args.adversarial,
+            commit=args.commit,
+            lane=args.lane,
+            merge=args.merge,
+            scope_override=args.scope,
+            timeout=args.timeout,
+            message=args.message,
+        )
+        runner = Runner(config, store, engine.policy, engine)
+        try:
+            result = runner.run()
+        except RunError as exc:
+            print(f"ОШИБКА ЗАПУСКА: {exc}", file=sys.stderr)
+            for line in runner.log:
+                print(f"  {line}", file=sys.stderr)
+            return EXIT_ERROR
+    finally:
+        store.close()
+
+    _print(result.to_dict(), True) if args.json else print(render(result))
+    return EXIT_OK if result.ok else EXIT_DENIED
+
+
 def cmd_cost(args: argparse.Namespace) -> int:
     """Учёт стоимости задачи: запись факта и отчёт."""
     from . import cost as cost_mod
@@ -357,7 +399,7 @@ def cmd_hook(args: argparse.Namespace) -> int:
         command=payload.get("command"),
         target=payload.get("target"),
         allowed_files=list(payload.get("allowed_files") or []),
-        policy=Policy.load(root),
+        policy=Policy.load(_control_root(args)),
         root=root,
     )
     result = run_hooks(ctx.event, ctx)
@@ -470,7 +512,7 @@ def cmd_tool(args: argparse.Namespace) -> int:
         }
     store = _store(args)
     try:
-        gateway = Gateway(root, Policy.load(root), store)
+        gateway = Gateway(root, Policy.load(_control_root(args)), store)
         result = gateway.handle(request)
     finally:
         store.close()
@@ -494,7 +536,7 @@ def cmd_finalize(args: argparse.Namespace) -> int:
     root = _root(args)
     store = _store(args)
     try:
-        engine = Engine(store, Policy.load(root), root)
+        engine = Engine(store, Policy.load(_control_root(args)), root)
         try:
             out = finalize(store, engine, root, args.task, message=args.message, author=args.author)
         except FinalizeError as exc:
@@ -584,6 +626,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="Управляемый агентный цикл: бриф → исполнитель → независимая проверка → принятие/эскалация.",
     )
     p.add_argument("--root", default=".", help="корень проекта (по умолчанию текущий каталог)")
+    p.add_argument("--control-root", default=None,
+                   help="где живут политика и состояние, если работа идёт в лейне")
     p.add_argument("--db", default=None, help="путь к хранилищу состояния")
     p.add_argument("--json", action="store_true", help="машинный вывод")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -687,6 +731,20 @@ def build_parser() -> argparse.ArgumentParser:
     ru.add_argument("--reason", default=None)
     ru.add_argument("--author", default="human")
     ru.set_defaults(func=cmd_rule)
+
+    rn = sub.add_parser("run", help="прогнать задачу через пайплайн одной командой")
+    rn.add_argument("--task", required=True)
+    rn.add_argument("--brief", default=None, help="JSON брифа (нужен для новой задачи)")
+    rn.add_argument("--worker", required=True, help="команда исполнителя (exit 0 = работа сделана)")
+    rn.add_argument("--verifier", default=None, help="команда проверяющего: вердикт в stdout или $HARNESS_VERDICT_OUT")
+    rn.add_argument("--adversarial", default=None, help="адверсальный проверяющий (необязательно)")
+    rn.add_argument("--commit", action="store_true", help="закоммитить принятый результат финализатором")
+    rn.add_argument("--lane", action="store_true", help="работать в отдельном worktree")
+    rn.add_argument("--merge", action="store_true", help="слить лейн в главное дерево после коммита")
+    rn.add_argument("--scope", default=None, help="область снимка относительно корня лейна")
+    rn.add_argument("--timeout", type=int, default=None)
+    rn.add_argument("--message", default=None)
+    rn.set_defaults(func=cmd_run)
 
     h = sub.add_parser("hook", help="событие инструмента (для обвязки рантайма)")
     h.add_argument("event", default="pretooluse", nargs="?")

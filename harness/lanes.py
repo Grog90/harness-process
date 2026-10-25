@@ -150,7 +150,8 @@ def list_lanes(root: str) -> list[dict[str, Any]]:
     return lanes
 
 
-def merge(root: str, store: Store, task_id: str, *, message: str | None = None) -> dict[str, Any]:
+def merge(root: str, store: Store, task_id: str, *, message: str | None = None,
+          ignore_paths: list[str] | None = None) -> dict[str, Any]:
     """Сливает завершённый лейн в главное дерево под мьютексом.
 
     Координатор не разрешает конфликты: при конфликте слияние откатывается,
@@ -169,8 +170,12 @@ def merge(root: str, store: Store, task_id: str, *, message: str | None = None) 
         raise LaneError("R-FINAL-1", "у задачи нет зафиксированного коммита")
 
     with merge_lock(root):
+        ignored = {p.replace("\\", "/") for p in (ignore_paths or [])}
         dirty = _git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all").stdout
-        if dirty and any(not p.startswith((".harness/", "evidence/")) for p in _paths(dirty)):
+        if dirty and any(
+            not p.startswith((".harness/", "evidence/")) and p not in ignored
+            for p in _paths(dirty)
+        ):
             raise LaneError("R-WAVE-1", "главное дерево грязное: слияние требует чистого состояния")
 
         proc = _git(

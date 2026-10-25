@@ -39,10 +39,15 @@ class HarnessClient:
     task_id: str | None = None
     python: str = sys.executable
     timeout: float = 180.0
+    control_root: str | None = None
+    state_path: str | None = None
 
     def __post_init__(self) -> None:
         self.role = self.role or os.environ.get("HARNESS_ROLE")
         self.task_id = self.task_id or os.environ.get("HARNESS_TASK_ID")
+        # в лейне файлы лежат в worktree, а политика и состояние — в главном дереве
+        self.control_root = self.control_root or os.environ.get("HARNESS_CONTROL_ROOT")
+        self.state_path = self.state_path or os.environ.get("HARNESS_STATE")
 
     # ------------------------------------------------------------------ инструменты
     def call(self, tool: str, **args: Any) -> dict[str, Any]:
@@ -87,7 +92,12 @@ class HarnessClient:
 
     # ------------------------------------------------------------------ транспорт
     def _run(self, args: list[str], stdin: str | None = None) -> dict[str, Any]:
-        cmd = [self.python, "-m", "harness", "--root", self.root, "--json", *args]
+        cmd = [self.python, "-m", "harness", "--root", self.root]
+        if self.control_root:
+            cmd += ["--control-root", self.control_root]
+        if self.state_path:
+            cmd += ["--db", self.state_path]
+        cmd += ["--json", *args]
         proc = subprocess.run(
             cmd,
             input=stdin,
