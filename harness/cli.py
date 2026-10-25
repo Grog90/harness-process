@@ -318,6 +318,23 @@ def cmd_cost(args: argparse.Namespace) -> int:
     return EXIT_ERROR
 
 
+def cmd_plugin(args: argparse.Namespace) -> int:
+    """Подготовка установленного плагина: указатель на корень и проверка пакета."""
+    from . import pluginctl
+
+    root = _root(args)
+    if args.action == "prepare":
+        report = pluginctl.prepare(root)
+    elif args.action == "status":
+        report = pluginctl.status(root)
+    else:
+        print(f"неизвестное действие: {args.action}", file=sys.stderr)
+        return EXIT_ERROR
+
+    _print(report, True) if args.json else print(pluginctl.render(report))
+    return EXIT_OK if report["ok"] else EXIT_DENIED
+
+
 def cmd_rule(args: argparse.Namespace) -> int:
     """Дисциплина изменения правил: причина + прогон, затем запись."""
     from . import rulechange
@@ -731,6 +748,10 @@ def build_parser() -> argparse.ArgumentParser:
     ru.add_argument("--reason", default=None)
     ru.add_argument("--author", default="human")
     ru.set_defaults(func=cmd_rule)
+
+    pl = sub.add_parser("plugin", help="подготовка установленного плагина harness-guard")
+    pl.add_argument("action", choices=["prepare", "status"])
+    pl.set_defaults(func=cmd_plugin)
 
     rn = sub.add_parser("run", help="прогнать задачу через пайплайн одной командой")
     rn.add_argument("--task", required=True)

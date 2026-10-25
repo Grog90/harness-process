@@ -58,11 +58,16 @@ class PluginGuardTests(unittest.TestCase):
         self.store.close()
         shutil.rmtree(self.root, ignore_errors=True)
 
-    def _probe(self, calls: list[dict]) -> list[dict]:
+    def _probe(self, calls: list[dict], cwd: str | None = None,
+               env: dict[str, str] | None = None) -> list[dict]:
         payload = json.dumps({"root": self.root, "calls": calls})
+        run_env = {**os.environ}
+        run_env.pop("HARNESS_ROOT", None)
+        run_env.pop("HARNESS_ROLE", None)
+        run_env.update(env or {})
         proc = subprocess.run(
             [NODE, PROBE], input=payload, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", cwd=PLUGIN, timeout=60,
+            encoding="utf-8", errors="replace", cwd=cwd or PLUGIN, timeout=60, env=run_env,
         )
         self.assertEqual(proc.returncode, 0, proc.stderr[:400])
         return json.loads(proc.stdout)
@@ -73,20 +78,58 @@ class PluginGuardTests(unittest.TestCase):
             json.dump({"task_id": "T-GUARD", "role": "worker", "allowed_files": allowed,
                        "attempt": 1}, fh)
 
-    def test_missing_policy_denies_instead_of_crashing(self) -> None:
-        """Без политики плагин не падает при активации и не разрешает ничего."""
+    def test_missing_policy_allows_read_and_denies_writes(self) -> None:
+        """Без политики сессия остаётся осматриваемой, но не даёт менять файлы."""
         bare = tempfile.mkdtemp(prefix="harness-plugin-nopolicy-")
         try:
-            payload = json.dumps({"root": bare, "calls": [{"name": "write", "arguments": {"path": "src/a.py"}}]})
+            payload = json.dumps({"root": bare, "calls": [
+                {"name": "read", "arguments": {"path": "README.md"}},
+                {"name": "write", "arguments": {"path": "src/a.py"}},
+                {"name": "pwsh", "arguments": {"command": "echo hi"}},
+            ]})
             proc = subprocess.run(
                 [NODE, PROBE], input=payload, capture_output=True, text=True,
                 encoding="utf-8", errors="replace", cwd=bare, timeout=60,
+                env={**{k: v for k, v in os.environ.items() if not k.startswith("HARNESS_")},
+                     "DSH_HOME": bare},
             )
             self.assertEqual(proc.returncode, 0, proc.stderr[:400])
             results = json.loads(proc.stdout)
-            self.assertIn("R-HOOK-ERR", results[0]["deny"])
+            self.assertIsNone(results[0]["deny"], "чтение должно остаться доступным")
+            self.assertIn("R-HOOK-ERR", results[1]["deny"])
+            self.assertIn("R-HOOK-ERR", results[2]["deny"])
         finally:
             shutil.rmtree(bare, ignore_errors=True)
+
+    def test_default_role_is_human_outside_task(self) -> None:
+        """Без активной задачи агент работает как руки человека, а не как воркер."""
+        results = self._probe([
+            {"name": "write", "arguments": {"path": "src/a.py"}},
+            {"name": "write", "arguments": {"path": "docs/note.md"}},
+        ])
+        self.assertIsNone(results[0]["deny"], results)
+        self.assertIsNone(results[1]["deny"], results)
+
+    def test_pointer_file_resolves_project_root(self) -> None:
+        """Корень находится по указателю ~/.dsh/harness-root даже из чужого каталога."""
+        home = tempfile.mkdtemp(prefix="harness-dsh-home-")
+        elsewhere = tempfile.mkdtemp(prefix="harness-elsewhere-")
+        try:
+            with open(os.path.join(home, "harness-root"), "w", encoding="utf-8") as fh:
+                fh.write(self.root + "\n")
+            payload = json.dumps({"calls": [{"name": "write", "arguments": {"path": "src/b.py"}}]})
+            proc = subprocess.run(
+                [NODE, PROBE], input=payload, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", cwd=elsewhere, timeout=60,
+                env={**{k: v for k, v in os.environ.items() if not k.startswith("HARNESS_")},
+                     "DSH_HOME": home},
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr[:400])
+            results = json.loads(proc.stdout)
+            self.assertIsNone(results[0]["deny"], "policy должна найтись по указателю")
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+            shutil.rmtree(elsewhere, ignore_errors=True)
 
     def test_guard_registers_and_denies_outside_scope(self) -> None:
         self._write_scope(["src/a.py"])
@@ -129,6 +172,55 @@ class PluginGuardTests(unittest.TestCase):
             }
         })
         self.assertFalse(os.path.isfile(scope_file), "после вердикта область прав должна сниматься")
+
+
+class PluginPrepareTests(unittest.TestCase):
+    """Подготовка плагина: указатель на корень и проверка пакета."""
+
+    def setUp(self) -> None:
+        self.root = tempfile.mkdtemp(prefix="harness-prepare-")
+        shutil.copytree(os.path.join(ROOT, "policies"), os.path.join(self.root, "policies"))
+        shutil.copytree(os.path.join(ROOT, "plugins", "harness-guard"),
+                        os.path.join(self.root, "plugins", "harness-guard"))
+        self.home = tempfile.mkdtemp(prefix="harness-dsh-home-")
+        self._old_home = os.environ.get("DSH_HOME")
+        os.environ["DSH_HOME"] = self.home
+
+    def tearDown(self) -> None:
+        if self._old_home is None:
+            os.environ.pop("DSH_HOME", None)
+        else:
+            os.environ["DSH_HOME"] = self._old_home
+        shutil.rmtree(self.root, ignore_errors=True)
+        shutil.rmtree(self.home, ignore_errors=True)
+
+    def test_status_before_prepare_reports_missing_pointer(self) -> None:
+        from harness import pluginctl
+
+        report = pluginctl.status(self.root)
+        self.assertFalse(report["ok"])
+        self.assertFalse(report["checks"]["pointer"])
+        self.assertTrue(report["checks"]["policy"])
+
+    def test_prepare_writes_pointer_and_becomes_ready(self) -> None:
+        from harness import pluginctl
+
+        report = pluginctl.prepare(self.root)
+        self.assertTrue(report["ok"], report)
+        pointer = os.path.join(self.home, "harness-root")
+        self.assertTrue(os.path.isfile(pointer))
+        with open(pointer, encoding="utf-8") as fh:
+            self.assertEqual(fh.read().strip(), self.root)
+
+    def test_status_detects_broken_manifest(self) -> None:
+        from harness import pluginctl
+
+        manifest = os.path.join(self.root, "plugins", "harness-guard", "package.json")
+        with open(manifest, "w", encoding="utf-8") as fh:
+            fh.write("{}")
+        report = pluginctl.status(self.root)
+        self.assertFalse(report["checks"]["manifest"])
+        self.assertIn("dsh.bundle.patch", report["manifest_error"])
 
 
 if __name__ == "__main__":

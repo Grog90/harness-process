@@ -2,30 +2,37 @@
  * Host-плагин: ограждение инструментов решениями harness.
  *
  * Точка крепления — `ctx.tools.guard()`: синхронная проверка, которую нельзя
- * обойти другим плагином (guard может только запретить; разрешение другого
- * guard'а не отменяет запрет). Именно этого не хватало CLI-версии: там агент
- * мог просто не пойти через шлюз.
+ * обойти другим плагином (guard может только запретить; чужой запрет не отменить).
  *
- * Откуда берутся права:
- *   1. `.harness/guard-scope.json` — публикует управляющий процесс при диспетче
- *      и снимает при вердикте/таймауте. Файл защищён политикой (R-PROT-1).
- *   2. Переменные окружения HARNESS_* — запасной вариант для headless-прогонов.
+ * Чьи права применяются (первое найденное):
+ *   1. `.harness/guard-scope.json` — активная задача: роль и allowed_files
+ *      публикует управляющий процесс при диспетче, снимает при вердикте.
+ *   2. `config.role` из патча.
+ *   3. `HARNESS_ROLE` из окружения.
+ *   4. `human` — интерактивная сессия без задачи. Это осознанный дефолт: между
+ *      задачами агент работает как руки человека, а не как воркер. Рабочие роли
+ *      включаются только активной задачей, чтобы профиль не превращался в кирпич.
  *
- * Поведение при отсутствии политики: плагин НЕ падает при активации (иначе он
- * ломает профиль), но и не разрешает ничего — все вызовы получают отказ
- * R-HOOK-ERR с указанием, где искали. Это fail-closed без побочного ущерба.
+ * Где ищется политика (первое найденное):
+ *   `config.root` → `HARNESS_ROOT` → указатель `~/.dsh/harness-root` →
+ *   текущий каталог → до четырёх уровней вверх.
+ *
+ * Если политика не найдена: чтение разрешено, запись и команды запрещены с
+ * `R-HOOK-ERR`. Так сессия остаётся осматриваемой, но не даёт менять файлы
+ * в неизвестных правилах.
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { decide, loadPolicy } from './guard-core.mjs';
+import { decide, loadPolicy, canonicalTool } from './guard-core.mjs';
 
 export const name = 'harness-guard';
 export const inject = ['tools'];
 
-/** Кэш области прав по mtime: чтение на каждый инструмент, но без лишних syscall-нагрузок. */
+const MUTATING = new Set(['write_file', 'bash']);
+
 const scopeCache = { mtimeMs: -1, value: null };
-/** Кэш политики: путь + mtime, чтобы правка policy.json подхватывалась без перезапуска. */
 const policyCache = { key: '', mtimeMs: -1, value: null };
 
 function hasPolicy(dir) {
@@ -36,12 +43,25 @@ function hasPolicy(dir) {
   }
 }
 
-/** Ищет корень проекта: конфиг → env → текущий каталог → вверх по дереву. */
+/** Указатель на корень проекта: один файл с путём, без переменных окружения. */
+function readPointer() {
+  const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh');
+  const file = path.join(home, 'harness-root');
+  try {
+    const value = fs.readFileSync(file, 'utf8').trim();
+    return value ? path.resolve(value) : null;
+  } catch {
+    return null;
+  }
+}
+
 function resolveRoot(config) {
   const tried = [];
   const candidates = [];
   if (config?.root) candidates.push(path.resolve(config.root));
   if (process.env.HARNESS_ROOT) candidates.push(path.resolve(process.env.HARNESS_ROOT));
+  const pointer = readPointer();
+  if (pointer) candidates.push(pointer);
   candidates.push(path.resolve(process.cwd()));
 
   for (const candidate of candidates) {
@@ -102,15 +122,20 @@ export function apply(ctx, config) {
   const resolved = resolveRoot(config);
 
   const guard = (exec) => {
+    const tool = canonicalTool(exec?.name);
     try {
       if (!resolved.root) {
+        // политики нет: осматривать можно, менять — нет
+        if (!MUTATING.has(tool)) return undefined;
         const tried = resolved.tried.slice(0, 5).join(', ');
-        return `R-HOOK-ERR: harness-guard не нашёл policies/policy.json (искал: ${tried})`;
+        return `R-HOOK-ERR: harness-guard не нашёл policies/policy.json (искал: ${tried}). `
+          + 'Укажите корень проекта: harness --root <проект> plugin prepare или HARNESS_ROOT';
       }
+
       const root = resolved.root;
       const policy = readPolicy(root);
       const scope = readScope(root);
-      const role = scope?.role || config?.role || process.env.HARNESS_ROLE || 'worker';
+      const role = scope?.role || config?.role || process.env.HARNESS_ROLE || 'human';
       const allowedFiles = Array.isArray(scope?.allowed_files)
         ? scope.allowed_files
         : config?.allowedFiles || envAllowedFiles();
@@ -126,12 +151,10 @@ export function apply(ctx, config) {
       }
       return undefined;
     } catch (error) {
-      // fail-closed: сбой проверки закрывает действие, а не открывает его
+      if (!MUTATING.has(tool)) return undefined;
       return `R-HOOK-ERR: harness-guard не смог проверить вызов (${error.message})`;
     }
   };
 
-  // guard() сам регистрирует эффект на контексте плагина: при выгрузке
-  // плагина регистрация снимается вместе с ним
   return ctx.tools.guard(guard);
 }
