@@ -623,6 +623,141 @@ def c_lane_merge(root: str) -> None:
         store.close()
 
 
+def c_cost_gate(root: str) -> None:
+    """Бюджет стоимости останавливает запуск до траты, а не после."""
+    from . import cost as cost_mod
+
+    eng = _engine(root)
+    brief = brief_data()
+    brief["control"]["budget"] = {"max_cost": 10, "estimate_per_attempt": 6, "unit": "cost_units"}
+    eng.store.create_task("T-SELF", policy_version="1.0.0")
+    eng.apply("T-SELF", "attach_brief", {"brief": brief})
+
+    out = eng.apply("T-SELF", "dispatch", {"worker_id": "w1"})
+    assert out.state == "RUNNING", out
+
+    cost_mod.record(eng.store, "T-SELF", 5, attempt=1)
+    eng.apply("T-SELF", "submit", {"attempt": 1, "snapshot_id": "snap_1"})
+    eng.apply("T-SELF", "verdict", {
+        "verdict": verdict_data("T-SELF", snapshot="snap_1", verdict="FAIL",
+                                findings=[{"finding_id": "F", "severity": "major", "statement": "s"}])
+    })
+    # остаток 5 < оценки 6 — второй запуск не начинается
+    _expect_deny(lambda: eng.apply("T-SELF", "dispatch", {"worker_id": "w2"}), "R-COST-1")
+
+    # без бюджета ограничение не действует, но это явно сказано
+    plain = cost_mod.check_dispatch(eng.store, "T-SELF", brief_data())
+    assert plain["allowed"] and "не задан" in plain.get("note", ""), plain
+
+
+def c_rule_change(root: str) -> None:
+    """Изменение правила: причина + прогон, иначе — дрейф."""
+    from . import rulechange
+
+    store = Store(os.path.join(root, ".harness", "state.db"))
+    try:
+        before = rulechange.verify(store, root)
+        assert before["state"] == "no_history" and before["ok"] is True, before
+
+        with open(os.path.join(root, "policies", "rules.json"), encoding="utf-8") as fh:
+            import json as _json
+
+            registry = _json.load(fh)
+        assert registry["rules"], "реестр правил пуст"
+
+        try:
+            rulechange.change(store, root, "R-COST-1", "   ")
+        except ValueError as exc:
+            assert "R-HOOK-1" in str(exc), exc
+        else:
+            raise AssertionError("изменение без причины прошло")
+
+        out = rulechange.change(store, root, "R-COST-1", "бюджет проверяется до запуска")
+        assert out["tests_passed"] >= 1, out
+        after = rulechange.verify(store, root)
+        assert after["state"] == "current" and after["ok"] is True, after
+
+        # правка файла правил без записи снова даёт дрейф
+        path = os.path.join(root, "policies", "rules.json")
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write("\n")
+        drifted = rulechange.verify(store, root)
+        assert drifted["state"] == "drift" and drifted["ok"] is False, drifted
+
+        try:
+            rulechange.change(store, root, "R-NOPE", "нет такого правила")
+        except ValueError as exc:
+            assert "не найдено" in str(exc), exc
+        else:
+            raise AssertionError("запись для несуществующего правила прошла")
+    finally:
+        store.close()
+
+
+def c_budget_escalates(root: str) -> None:
+    """Исчерпание бюджета — эскалация, а не новый виток."""
+    eng = _engine(root)
+    eng.store.create_task("T-SELF", policy_version="1.0.0")
+    eng.apply("T-SELF", "attach_brief", {"brief": brief_data()})
+    for attempt in (1, 2, 3):
+        eng.apply("T-SELF", "dispatch", {"worker_id": f"w{attempt}"})
+        snap = f"snap_{attempt}"
+        eng.apply("T-SELF", "submit", {"attempt": attempt, "snapshot_id": snap})
+        eng.apply("T-SELF", "verdict", {
+            "verdict": verdict_data("T-SELF", attempt=attempt, snapshot=snap, verdict="FAIL",
+                                    findings=[{"finding_id": f"F{attempt}", "severity": "major",
+                                               "statement": "дефект"}])
+        })
+    task = eng.store.get_task("T-SELF")
+    assert task["state"] == "ESCALATED", task["state"]
+    assert task["attempt"] == 3
+    # доработки после исчерпания нет: из ESCALATED только человек
+    try:
+        eng.apply("T-SELF", "requeue", {})
+    except TransitionError as exc:
+        assert exc.rule == "R-TRACE-1", exc.rule
+    else:
+        raise AssertionError("доработка после исчерпания бюджета прошла")
+
+
+def c_commit_requires_log(root: str) -> None:
+    """Коммит без записи pipeline-log невозможен."""
+    eng = _engine(root)
+    _drive_to_verifying(eng, snapshot="snap_1")
+    eng.apply("T-SELF", "verdict", {"verdict": verdict_data(snapshot="snap_1")})
+    assert eng.store.get_task("T-SELF")["state"] == "ACCEPTED"
+
+    eng.store.conn.execute("DELETE FROM pipeline_log WHERE task_id = ?", ("T-SELF",))
+    _expect_deny(lambda: eng.apply("T-SELF", "commit", {"snapshot_id": "snap_1"}), "R-COMMIT-2")
+
+
+def c_findings_routing(root: str) -> None:
+    """Находка получает владельца и трек; без владельца — видимый дефект."""
+    from . import findings as findings_mod
+
+    own = findings_mod.route({"finding_id": "F-1", "owner": "w1", "in_scope": True}, worker_ids=["w1"])
+    foreign = findings_mod.route({"finding_id": "F-2", "owner": "team-b", "in_scope": False}, worker_ids=["w1"])
+    assert own["track"] == "own_diff", own
+    assert foreign["track"] == "foreign_code", foreign
+    report = findings_mod.completeness([{"finding_id": "F-3", "severity": "major", "status": "open"}])
+    assert report["ok"] is False and report["unowned"] == ["F-3"], report
+
+
+def c_evals_metrics(root: str) -> None:
+    """Метрики верификатора считаются и помечают недостоверность малой выборки."""
+    from . import evals as evals_mod
+
+    rows = [
+        {"case_id": "a", "expected": "FAIL", "predicted": "PASS", "agreement": False, "note": "x"},
+        {"case_id": "b", "expected": "FAIL", "predicted": "FAIL", "agreement": True, "note": "x"},
+        {"case_id": "c", "expected": "PASS", "predicted": "PASS", "agreement": True, "note": "x"},
+    ]
+    metrics = evals_mod.metrics(rows)
+    assert metrics["miss_rate"] == 0.5, metrics
+    assert metrics["false_fail_rate"] == 0.0, metrics
+    assert metrics["caveats"], "малая выборка должна быть помечена"
+
+
 CHECKS: list[Check] = [
     Check("R-ORCH-1", "оркестратор пишет документацию", c_orch_positive),
     Check("R-ORCH-1", "оркестратор не пишет продукт", c_orch_negative),
@@ -663,27 +798,33 @@ CHECKS: list[Check] = [
     Check("R-TIMEOUT-1", "сторож отзывает просрочку отдельным проходом", c_watchdog_loop),
     Check("R-SANDBOX-1", "изоляция честно помечена", c_sandbox_degrades_honestly),
     Check("R-WAVE-1", "лейн: worktree, коммит, слияние", c_lane_merge),
+    Check("R-COST-1", "бюджет останавливает запуск до траты", c_cost_gate),
+    Check("R-HOOK-1", "изменение правила требует причины и тестов", c_rule_change),
+    Check("R-BUDGET-2", "исчерпание бюджета ведёт к эскалации", c_budget_escalates),
+    Check("R-COMMIT-2", "коммит требует pipeline-log", c_commit_requires_log),
+    Check("R-FIND-2", "находка получает владельца и трек", c_findings_routing),
+    Check("R-EVAL-1", "метрики верификатора считаются", c_evals_metrics),
 ]
 
 
-def run_all(source_root: str | None = None) -> dict:
-    src = os.path.abspath(source_root or ".")
-    results = []
-    for check in CHECKS:
-        tmp = tempfile.mkdtemp(prefix="harness-selftest-")
-        try:
-            for sub in ("policies", "schemas"):
-                s = os.path.join(src, sub)
-                if os.path.isdir(s):
-                    shutil.copytree(s, os.path.join(tmp, sub))
-            os.makedirs(os.path.join(tmp, "src"), exist_ok=True)
-            check.fn(tmp)
-            results.append({"rule": check.rule, "name": check.name, "ok": True, "error": ""})
-        except Exception as exc:  # noqa: BLE001
-            results.append({"rule": check.rule, "name": check.name, "ok": False, "error": f"{type(exc).__name__}: {exc}"})
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
+def _run_one(check: Check, source_root: str) -> dict:
+    src = os.path.abspath(source_root)
+    tmp = tempfile.mkdtemp(prefix="harness-selftest-")
+    try:
+        for sub in ("policies", "schemas"):
+            s = os.path.join(src, sub)
+            if os.path.isdir(s):
+                shutil.copytree(s, os.path.join(tmp, sub))
+        os.makedirs(os.path.join(tmp, "src"), exist_ok=True)
+        check.fn(tmp)
+        return {"rule": check.rule, "name": check.name, "ok": True, "error": ""}
+    except Exception as exc:  # noqa: BLE001 - отчёт важнее трассы
+        return {"rule": check.rule, "name": check.name, "ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
+
+def _summarise(results: list[dict]) -> dict:
     failed = [r for r in results if not r["ok"]]
     return {
         "total": len(results),
@@ -692,3 +833,18 @@ def run_all(source_root: str | None = None) -> dict:
         "ok": not failed,
         "results": results,
     }
+
+
+def run_all(source_root: str | None = None) -> dict:
+    src = os.path.abspath(source_root or ".")
+    return _summarise([_run_one(check, src) for check in CHECKS])
+
+
+def run_rule(rule_id: str, source_root: str | None = None) -> dict:
+    """Прогон проверок одного правила — для дисциплины изменения правил."""
+    src = os.path.abspath(source_root or ".")
+    selected = [c for c in CHECKS if c.rule == rule_id]
+    if not selected:
+        return {"total": 0, "passed": 0, "failed": 0, "ok": False, "results": [],
+                "error": f"для правила {rule_id} нет исполняемых проверок"}
+    return _summarise([_run_one(c, src) for c in selected])

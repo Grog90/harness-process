@@ -252,6 +252,58 @@ def cmd_sandbox(args: argparse.Namespace) -> int:
     return EXIT_OK if args.action == "probe" else EXIT_ERROR
 
 
+def cmd_cost(args: argparse.Namespace) -> int:
+    """Учёт стоимости задачи: запись факта и отчёт."""
+    from . import cost as cost_mod
+
+    store = _store(args)
+    try:
+        if args.action == "record":
+            if not args.task or args.amount is None:
+                print("нужны --task и --amount", file=sys.stderr)
+                return EXIT_ERROR
+            entry = cost_mod.record(
+                store, args.task, args.amount, unit=args.unit, kind=args.kind,
+                attempt=args.attempt, note=args.note or "",
+            )
+            _print(entry, args.json)
+            return EXIT_OK
+        if args.action == "report":
+            _print(cost_mod.report(store, args.unit), args.json)
+            return EXIT_OK
+    finally:
+        store.close()
+    return EXIT_ERROR
+
+
+def cmd_rule(args: argparse.Namespace) -> int:
+    """Дисциплина изменения правил: причина + прогон, затем запись."""
+    from . import rulechange
+
+    root = _root(args)
+    store = _store(args)
+    try:
+        if args.action == "verify":
+            report = rulechange.verify(store, root)
+            _print(report, args.json)
+            return EXIT_OK if report["ok"] else EXIT_DENIED
+        if args.action == "change":
+            if not args.id or not args.reason:
+                print("нужны --id и --reason", file=sys.stderr)
+                return EXIT_ERROR
+            try:
+                out = rulechange.change(store, root, args.id, args.reason, author=args.author)
+            except ValueError as exc:
+                _print({"ok": False, "rule": "R-HOOK-1", "reason": str(exc)}, args.json) if args.json \
+                    else print(f"ОТКАЗ [R-HOOK-1] {exc}", file=sys.stderr)
+                return EXIT_DENIED
+            _print(out, args.json)
+            return EXIT_OK
+    finally:
+        store.close()
+    return EXIT_ERROR
+
+
 def cmd_lane(args: argparse.Namespace) -> int:
     """Параллельные лейны: worktree на задачу, слияние под мьютексом."""
     from . import lanes as lanes_mod
@@ -351,7 +403,8 @@ def cmd_coverage(args: argparse.Namespace) -> int:
     root = _root(args)
     registry = rules_mod.load_registry(root, args.rules)
     statuses = rules_mod.evaluate(registry)
-    sums = rules_mod.summary(statuses)
+    tested = {c.rule for c in selftest_mod.CHECKS}
+    sums = rules_mod.summary(statuses, tested)
     if args.markdown:
         text = rules_mod.render_markdown(statuses, sums)
         parent = os.path.dirname(os.path.abspath(args.markdown))
@@ -364,10 +417,13 @@ def cmd_coverage(args: argparse.Namespace) -> int:
         _print({"summary": sums, "rules": [s.to_dict() for s in statuses]}, True)
         return EXIT_OK
     print(f"правил: {sums['total']} · покрыто: {sums['covered']} · пробелов: {sums['gap']} · "
-          f"сломано: {sums['broken']} · покрытие: {sums['coverage_ratio']:.0%}")
+          f"сломано: {sums['broken']} · покрытие: {sums['coverage_ratio']:.0%} · "
+          f"с исполняемыми тестами: {sums['tested']}/{sums['total']}")
     for s in statuses:
         if s.status != "covered":
             print(f"  ПРОБЕЛ {s.id} ({s.enforcement}): {s.reason}")
+    if sums["untested"]:
+        print("  без исполняемых проверок: " + ", ".join(sums["untested"]))
     return EXIT_OK if sums["broken"] == 0 else EXIT_DENIED
 
 
@@ -614,6 +670,23 @@ def build_parser() -> argparse.ArgumentParser:
     ln.add_argument("--message", default=None)
     ln.add_argument("--keep-branch", action="store_true")
     ln.set_defaults(func=cmd_lane)
+
+    co = sub.add_parser("cost", help="стоимость задачи: запись и отчёт")
+    co.add_argument("action", choices=["record", "report"])
+    co.add_argument("--task", default=None)
+    co.add_argument("--amount", type=float, default=None)
+    co.add_argument("--unit", default="cost_units")
+    co.add_argument("--kind", default="model")
+    co.add_argument("--attempt", type=int, default=None)
+    co.add_argument("--note", default=None)
+    co.set_defaults(func=cmd_cost)
+
+    ru = sub.add_parser("rule", help="дисциплина изменения правил")
+    ru.add_argument("action", choices=["change", "verify"])
+    ru.add_argument("--id", default=None)
+    ru.add_argument("--reason", default=None)
+    ru.add_argument("--author", default="human")
+    ru.set_defaults(func=cmd_rule)
 
     h = sub.add_parser("hook", help="событие инструмента (для обвязки рантайма)")
     h.add_argument("event", default="pretooluse", nargs="?")

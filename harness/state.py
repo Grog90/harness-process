@@ -16,7 +16,7 @@ import uuid
 from contextlib import contextmanager
 from typing import Any, Iterable, Iterator
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -122,6 +122,28 @@ CREATE TABLE IF NOT EXISTS tools_audit (
     path       TEXT,
     summary    TEXT,
     created_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS costs (
+    entry_id   TEXT PRIMARY KEY,
+    task_id    TEXT NOT NULL,
+    attempt    INTEGER,
+    kind       TEXT NOT NULL,
+    amount     REAL NOT NULL,
+    unit       TEXT NOT NULL,
+    note       TEXT,
+    created_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS rule_changes (
+    change_id    TEXT PRIMARY KEY,
+    rule_id      TEXT NOT NULL,
+    reason       TEXT NOT NULL,
+    rules_hash   TEXT NOT NULL,
+    tests_run    INTEGER NOT NULL,
+    tests_passed INTEGER NOT NULL,
+    author       TEXT,
+    created_at   REAL NOT NULL
 );
 """
 
@@ -473,5 +495,69 @@ class Store:
         rows = self.conn.execute(
             "SELECT * FROM tools_audit WHERE task_id = ? ORDER BY created_at, rowid", (task_id,)
         ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------ стоимость
+    def add_cost(self, *, task_id: str, amount: float, unit: str = "cost_units",
+                 kind: str = "model", attempt: int | None = None, note: str = "") -> dict[str, Any]:
+        eid = new_id("cost")
+        with self.transaction() as c:
+            c.execute(
+                """INSERT INTO costs(entry_id, task_id, attempt, kind, amount, unit, note, created_at)
+                   VALUES(?,?,?,?,?,?,?,?)""",
+                (eid, task_id, attempt, kind, float(amount), unit, note, now()),
+            )
+        return {"entry_id": eid, "task_id": task_id, "amount": float(amount), "unit": unit, "kind": kind}
+
+    def costs_for(self, task_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT * FROM costs WHERE task_id = ? ORDER BY created_at, rowid", (task_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def cost_total(self, task_id: str, unit: str = "cost_units") -> float:
+        row = self.conn.execute(
+            "SELECT COALESCE(SUM(amount), 0) AS total FROM costs WHERE task_id = ? AND unit = ?",
+            (task_id, unit),
+        ).fetchone()
+        return float(row["total"])
+
+    def cost_report(self, unit: str = "cost_units") -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """SELECT task_id, COUNT(*) AS entries, COALESCE(SUM(amount), 0) AS total
+               FROM costs WHERE unit = ? GROUP BY task_id ORDER BY total DESC""",
+            (unit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------ изменения правил
+    def record_rule_change(self, *, rule_id: str, reason: str, rules_hash: str,
+                           tests_run: int, tests_passed: int, author: str = "human") -> dict[str, Any]:
+        if not (reason or "").strip():
+            raise StoreError("R-HOOK-1: изменение правила требует причины")
+        cid = new_id("rulechg")
+        with self.transaction() as c:
+            c.execute(
+                """INSERT INTO rule_changes(change_id, rule_id, reason, rules_hash, tests_run,
+                                            tests_passed, author, created_at)
+                   VALUES(?,?,?,?,?,?,?,?)""",
+                (cid, rule_id, reason, rules_hash, tests_run, tests_passed, author, now()),
+            )
+        return {
+            "change_id": cid,
+            "rule_id": rule_id,
+            "reason": reason,
+            "rules_hash": rules_hash,
+            "tests_passed": tests_passed,
+        }
+
+    def latest_rule_change(self) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT * FROM rule_changes ORDER BY created_at DESC, rowid DESC LIMIT 1"
+        ).fetchone()
+        return dict(row) if row else None
+
+    def rule_changes(self) -> list[dict[str, Any]]:
+        rows = self.conn.execute("SELECT * FROM rule_changes ORDER BY created_at, rowid").fetchall()
         return [dict(r) for r in rows]
 

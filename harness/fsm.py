@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from . import brief as brief_mod
+from . import cost as cost_mod
 from . import verdict as verdict_mod
 from .policy import Decision, Policy, deny
 from .state import Store, StoreError, new_id, now
@@ -273,6 +274,11 @@ def _guard_dispatch(engine: Engine, task: dict[str, Any], payload: dict[str, Any
             max_attempts=task["max_attempts"],
         )
 
+    # R-COST-1: стоимость проверяется до запуска, а не по факту
+    budget = cost_mod.check_dispatch(engine.store, task["task_id"], b.data)
+    if not budget["allowed"]:
+        raise TransitionError("R-COST-1", budget["reason"], **budget)
+
     timeout = int(payload.get("timeout_seconds") or engine.policy.limit("dispatch_timeout_seconds", 3600))
     deadline = now() + timeout
     attempt = engine.store.reserve_attempt(
@@ -345,6 +351,20 @@ def _guard_verdict(engine: Engine, task: dict[str, Any], payload: dict[str, Any]
     payload["verdict"] = {**raw, "effective_verdict": effective}
     engine.store.save_verdict({**raw, "verdict": effective})
     engine.store.finish_attempt(task["task_id"], task["attempt"], status=effective.lower())
+
+    # фактическая стоимость попытки, если проверяющий её предъявил
+    raw_cost = raw.get("cost")
+    if isinstance(raw_cost, (int, float)):
+        budget = cost_mod.budget_of(b.data if b else None)
+        cost_mod.record(
+            engine.store,
+            task["task_id"],
+            float(raw_cost),
+            unit=str(budget.get("unit", cost_mod.DEFAULT_UNIT)),
+            kind="model",
+            attempt=int(task["attempt"]),
+            note=f"verdict {raw.get('verdict_id')}",
+        )
 
 
 def _guard_commit(engine: Engine, task: dict[str, Any], payload: dict[str, Any]) -> None:

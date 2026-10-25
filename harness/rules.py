@@ -21,10 +21,12 @@ def control_index() -> dict[str, Any]:
     Объединяет хуки инструментов и охранные условия автомата: отчёт о покрытии
     должен видеть и то, и другое, иначе половина матрицы выглядит дырой.
     """
-    from . import brief, checks, evals, finalize, findings, fsm, gateway, lanes, verdict, watchdog
+    from . import (brief, checks, cost, evals, finalize, findings, fsm, gateway, lanes,
+                   rulechange, verdict, watchdog)
 
     index: dict[str, Any] = dict(hooks.HOOKS)
-    for module in (brief, checks, evals, finalize, findings, fsm, gateway, lanes, verdict, watchdog):
+    for module in (brief, checks, cost, evals, finalize, findings, fsm, gateway, lanes,
+                   rulechange, verdict, watchdog):
         for name, fn in getattr(module, "CONTROL_POINTS", {}).items():
             if fn is not None:
                 index[name] = fn
@@ -114,13 +116,15 @@ def evaluate(registry: dict[str, Any], available_hooks: dict[str, Any] | None = 
     return out
 
 
-def summary(statuses: list[RuleStatus]) -> dict[str, Any]:
+def summary(statuses: list[RuleStatus], tested: set[str] | None = None) -> dict[str, Any]:
     total = len(statuses)
     covered = sum(1 for s in statuses if s.status == "covered")
     gap = sum(1 for s in statuses if s.status == "gap")
     broken = sum(1 for s in statuses if s.status == "broken")
     blocking = sum(1 for s in statuses if s.enforcement == "blocking" and s.status == "covered")
     soft = sum(1 for s in statuses if s.enforcement == "soft" and s.status == "covered")
+    tested_ids = tested or set()
+    untested = [s.id for s in statuses if s.id not in tested_ids]
     return {
         "total": total,
         "covered": covered,
@@ -129,6 +133,8 @@ def summary(statuses: list[RuleStatus]) -> dict[str, Any]:
         "blocking_covered": blocking,
         "soft_covered": soft,
         "coverage_ratio": round(covered / total, 3) if total else 0.0,
+        "tested": total - len(untested),
+        "untested": untested,
         "honest_note": "доля покрытия не равна доле безопасности: одна незакрытая критическая операция важнее десятков закрытых малозначимых правил",
     }
 
@@ -141,6 +147,13 @@ def render_markdown(statuses: list[RuleStatus], sums: dict[str, Any]) -> str:
         "",
         f"Всего правил: **{sums['total']}** · покрыто: **{sums['covered']}** · "
         f"пробелов: **{sums['gap']}** · сломанных объявлений: **{sums['broken']}**",
+        "",
+        f"Проверяется исполняемыми тестами: **{sums.get('tested', 0)}** из **{sums['total']}**."
+        + (
+            " Без тестов остаются: " + ", ".join(f"`{x}`" for x in sums.get("untested", []))
+            if sums.get("untested")
+            else " У каждого правила есть хотя бы одна исполняемая проверка."
+        ),
         "",
         f"> {sums['honest_note']}",
         "",

@@ -10,9 +10,9 @@
 ## Быстрый старт
 
 ```powershell
-python -m harness selftest        # 39 исполняемых проверок правил
-python -m harness demo            # сквозной цикл, 43 проверки: шлюз, проверки, коммит, лейн
-python -m harness coverage        # матрица правил и пробелы покрытия
+python -m harness selftest        # 45 исполняемых проверок правил
+python -m harness demo            # сквозной цикл, 50 проверок
+python -m harness coverage        # покрытие, пробелы и наличие тестов
 python -m unittest discover -s tests -v
 ```
 
@@ -66,21 +66,25 @@ python -m harness task status --task FEE-101
 | Просроченный диспетч отзывает отдельный процесс | `harness watchdog sweep/serve` | R-TIMEOUT-1 |
 | Проверки изолируются, если это возможно | docker без сети, иначе копия с явной пометкой | R-SANDBOX-1 |
 | Параллельные задачи не смешивают write-set | `harness lane create/merge` + мьютекс | R-WAVE-1 |
+| Запуск останавливается по бюджету до траты | `cost.check_dispatch` в guard диспетча | R-COST-1 |
+| Правка правил без причины и тестов видна | `harness rule verify` (отпечаток файла) | R-HOOK-1 |
 
-Полный список — `docs/RULES_MATRIX.md` (генерируется, 30 из 32 правил покрыто,
-2 пробела названы явно).
+Полный список — `docs/RULES_MATRIX.md` (генерируется). Сейчас покрыто 32 из 32
+правил, и у каждого есть исполняемая проверка в `selftest` — но это про наличие
+механизма, а не про его безошибочность: остаточные риски перечислены там же.
 
 ## Структура
 
 ```
 harness/          пакет: cli, fsm, state, policy, hooks, brief, verdict, snapshot,
-                  gateway (шлюз инструментов), finalize (коммит), checks (прогон проверок),
-                  findings, rules, evals, selftest, demo
+                  gateway (шлюз), finalize (коммит), checks (прогон проверок),
+                  lanes (worktree), watchdog, cost, rulechange, findings, rules,
+                  evals, selftest, demo
 policies/         policy.json — полномочия ролей; rules.json — матрица правил
 schemas/          JSON-схемы брифа и вердикта
 templates/        примеры артефактов
 examples/         учебные верификаторы и размеченный набор evals (10 случаев)
-tests/            40 unittest-проверок свойств
+tests/            58 unittest-проверок свойств
 docs/             ANALYSIS (разбор книги), ARCHITECTURE, ROADMAP, RULES_MATRIX
 bin/              обёртки harness / harness.cmd
 tools/            вспомогательное: экстрактор текста PDF (для сверки с источником)
@@ -154,6 +158,21 @@ python -m harness lane list
 python -m harness watchdog sweep                 # один проход (cron/CI)
 python -m harness watchdog serve --interval 15   # отдельный цикл
 python -m harness sandbox probe                  # что доступно: docker/copy-only
+```
+
+Стоимость и дисциплина правил:
+
+```powershell
+python -m harness cost record --task FEE-101 --amount 3.5 --note "попытка 1"
+python -m harness cost report
+python -m harness rule verify                    # правила менялись без записи?
+python -m harness rule change --id R-COST-1 --reason "бюджет проверяется до запуска"
+```
+
+Бюджет задаётся в брифе (`control.budget`), и запуск останавливается **до** траты:
+
+```json
+"control": {"budget": {"max_cost": 12, "estimate_per_attempt": 4}}
 ```
 
 При ошибке внутри хука решение — `deny` (`R-HOOK-ERR`): неопределённость закрывает

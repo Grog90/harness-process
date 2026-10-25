@@ -300,6 +300,9 @@ class Demo:
         self.step("16. Параллельный лейн: worktree → коммит → слияние")
         self._lane_steps(store, policy)
 
+        self.step("17. Бюджет стоимости и дисциплина правил")
+        self._cost_steps(store, eng, policy)
+
         ok = all(c["ok"] for c in self.checks)
         self.say("")
         self.say(f"ИТОГ: {sum(1 for c in self.checks if c['ok'])}/{len(self.checks)} проверок пройдено "
@@ -410,6 +413,50 @@ class Demo:
                    "pipeline-log/DEMO-F.jsonl")
         self.check("связь «снимок → коммит» записана",
                    store.commit_for_task("DEMO-F")["commit_sha"] == out["commit_sha"], out["commit_sha"][:10])
+
+    def _cost_steps(self, store: Store, eng: Engine, policy: Policy) -> None:
+        from . import cost as cost_mod
+        from . import rulechange
+
+        brief = dict(BRIEF, task_id="DEMO-C")
+        brief["control"] = dict(BRIEF["control"], budget={"max_cost": 4, "estimate_per_attempt": 3})
+        store.create_task("DEMO-C", policy_version=policy.version)
+        eng.apply("DEMO-C", "attach_brief", {"brief": brief})
+        out = eng.apply("DEMO-C", "dispatch", {"worker_id": "cost-worker"})
+        self.check("запуск в пределах бюджета", out.state == "RUNNING", "0 + 3 ≤ 4")
+
+        cost_mod.record(store, "DEMO-C", 3, attempt=1, note="первая попытка")
+        eng.apply("DEMO-C", "submit", {"attempt": 1, "snapshot_id": "snap_c1"})
+        eng.apply("DEMO-C", "verdict", {
+            "verdict": _verdict("DEMO-C", 1, "snap_c1", "FAIL",
+                                findings=[{"finding_id": "F-C1", "severity": "major",
+                                           "statement": "нет проверки границы", "owner": "w"}])
+        })
+        try:
+            eng.apply("DEMO-C", "dispatch", {"worker_id": "cost-worker-2"})
+        except TransitionError as exc:
+            self.check("остаток меньше оценки — запуск остановлен",
+                       exc.rule == "R-COST-1", f"{exc.rule}: {exc}"[:90])
+        else:
+            self.check("остаток меньше оценки — запуск остановлен", False, "запуск прошёл")
+
+        report = cost_mod.report(store)
+        self.check("отчёт по стоимости собран", report["total"] >= 3, f"{report['total']} {report['unit']}")
+
+        before = rulechange.verify(store, self.root)
+        self.check("пустая история — не дрейф, а её отсутствие", before["state"] == "no_history",
+                   before["state"])
+        changed = rulechange.change(store, self.root, "R-COST-1", "бюджет проверяется до запуска")
+        self.check("запись изменения после прогона проверок",
+                   changed["tests_passed"] >= 1, f"тестов {changed['tests_passed']}")
+        self.check("после записи состояние current", rulechange.verify(store, self.root)["state"] == "current",
+                   rulechange.rules_hash(self.root))
+
+        with open(os.path.join(self.root, "policies", "rules.json"), "a", encoding="utf-8") as fh:
+            fh.write("\n")
+        drifted = rulechange.verify(store, self.root)
+        self.check("правка файла без записи видна как дрейф",
+                   drifted["state"] == "drift" and drifted["ok"] is False, drifted["reason"][:60])
 
     def _lane_steps(self, store: Store, policy: Policy) -> None:
         from . import lanes as lanes_mod

@@ -273,16 +273,16 @@
     },
     {
       "id": "R-COST-1",
-      "statement": "Бюджет стоимости и времени задачи учитывается и ограничивается.",
+      "statement": "Стоимость задачи ограничивается до запуска: остаток бюджета сверяется с оценкой следующей попытки.",
       "event": "predispatch",
-      "enforcement": "n/a",
-      "implemented": false,
-      "gap_kind": "not_implemented",
-      "hook": null,
-      "positive_test": "—",
-      "negative_test": "—",
-      "owner": "unassigned",
-      "residual_risk": "Расход считается вручную; автоматического гейта нет."
+      "enforcement": "blocking",
+      "implemented": true,
+      "gap_kind": null,
+      "hook": "cost.check_dispatch",
+      "positive_test": "остаток покрывает оценку попытки — диспетч разрешён",
+      "negative_test": "остаток меньше оценки — диспетч отклонён с цифрами",
+      "owner": "control",
+      "residual_risk": "Бюджет действует, только если он задан в брифе; оценка попытки — допущение, а не измерение."
     },
     {
       "id": "R-SANDBOX-1",
@@ -299,16 +299,16 @@
     },
     {
       "id": "R-HOOK-1",
-      "statement": "Изменение хука или правила требует общей записи причины и прогона его позитивного и негативного теста.",
+      "statement": "Изменение правила требует причины и прогона его проверок; изменение без записи видно как дрейф файла правил.",
       "event": "process",
-      "enforcement": "n/a",
-      "implemented": false,
-      "gap_kind": "not_implemented",
-      "hook": null,
-      "positive_test": "—",
-      "negative_test": "—",
+      "enforcement": "blocking",
+      "implemented": true,
+      "gap_kind": null,
+      "hook": "rules.change",
+      "positive_test": "запись причины после успешного прогона проверок правила",
+      "negative_test": "изменённый rules.json без записи — verify сообщает дрейф; правило без проверок включать нельзя",
       "owner": "policy",
-      "residual_risk": "Пока дисциплина ручная: изменение фиксируется записью решения в журнале."
+      "residual_risk": "Проверка сравнивает отпечаток файла: правка кода хука без правки rules.json ею не ловится."
     },
     {
       "id": "R-WAVE-1",

@@ -637,5 +637,90 @@ class LaneTests(unittest.TestCase):
                     pass
 
 
+class CostTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.root = make_root()
+        self.store = Store(os.path.join(self.root, ".harness", "state.db"))
+        self.eng = Engine(self.store, Policy.load(self.root), self.root)
+
+    def tearDown(self) -> None:
+        self.store.close()
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def test_no_budget_means_no_gate_but_is_stated(self) -> None:
+        from harness import cost
+
+        result = cost.check_dispatch(self.store, "T1", {})
+        self.assertTrue(result["allowed"])
+        self.assertIn("не задан", result["note"])
+
+    def test_gate_blocks_before_spending(self) -> None:
+        from harness import cost
+
+        brief = {"control": {"budget": {"max_cost": 10, "estimate_per_attempt": 6}}}
+        self.assertTrue(cost.check_dispatch(self.store, "T1", brief)["allowed"])
+        cost.record(self.store, "T1", 5)
+        second = cost.check_dispatch(self.store, "T1", brief)
+        self.assertFalse(second["allowed"])
+        self.assertEqual(second["spent"], 5.0)
+
+    def test_overrun_blocks_dispatch(self) -> None:
+        from harness import cost
+
+        brief = {"control": {"budget": {"max_cost": 10, "estimate_per_attempt": 1}}}
+        cost.record(self.store, "T1", 12)
+        result = cost.check_dispatch(self.store, "T1", brief)
+        self.assertFalse(result["allowed"])
+        self.assertIn("израсходовано", result["reason"])
+
+    def test_verdict_cost_is_recorded(self) -> None:
+        brief = sample_brief()
+        brief["control"]["budget"] = {"max_cost": 100, "estimate_per_attempt": 1}
+        self.store.create_task("T1", policy_version="1.0.0")
+        self.eng.apply("T1", "attach_brief", {"brief": brief})
+        self.eng.apply("T1", "dispatch", {"worker_id": "w"})
+        self.eng.apply("T1", "submit", {"attempt": 1, "snapshot_id": "s1"})
+        verdict = sample_verdict("s1")
+        verdict["cost"] = 2.5
+        self.eng.apply("T1", "verdict", {"verdict": verdict})
+        self.assertEqual(self.store.cost_total("T1"), 2.5)
+
+
+class RuleChangeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.root = make_root()
+        self.store = Store(os.path.join(self.root, ".harness", "state.db"))
+
+    def tearDown(self) -> None:
+        self.store.close()
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def test_empty_history_is_not_drift(self) -> None:
+        from harness import rulechange
+
+        report = rulechange.verify(self.store, self.root)
+        self.assertEqual(report["state"], "no_history")
+        self.assertFalse(report["drift"])
+        self.assertTrue(report["ok"])
+        self.assertIsNone(report["last_change"])
+
+    def test_change_requires_reason_and_known_rule(self) -> None:
+        from harness import rulechange
+
+        with self.assertRaises(ValueError):
+            rulechange.change(self.store, self.root, "R-COST-1", "")
+        with self.assertRaises(ValueError):
+            rulechange.change(self.store, self.root, "R-UNKNOWN", "причина")
+
+    def test_change_records_hash_and_clears_drift(self) -> None:
+        from harness import rulechange
+
+        out = rulechange.change(self.store, self.root, "R-COST-1", "бюджет до запуска")
+        self.assertGreaterEqual(out["tests_passed"], 1)
+        report = rulechange.verify(self.store, self.root)
+        self.assertEqual(report["state"], "current")
+        self.assertEqual(report["last_change"]["rule_id"], "R-COST-1")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
