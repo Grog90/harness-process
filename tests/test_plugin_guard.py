@@ -173,6 +173,16 @@ class PluginGuardTests(unittest.TestCase):
         })
         self.assertFalse(os.path.isfile(scope_file), "после вердикта область прав должна сниматься")
 
+    def test_cancel_clears_scope(self) -> None:
+        """Отмена задачи не оставляет исполнителю прав писать."""
+        self.store.create_task("T-GUARD", policy_version="1.0.0")
+        self.engine.apply("T-GUARD", "attach_brief", {"brief": brief_data()})
+        self.engine.apply("T-GUARD", "dispatch", {"worker_id": "w"})
+        scope_file = os.path.join(self.root, ".harness", "guard-scope.json")
+        self.assertTrue(os.path.isfile(scope_file))
+        self.engine.apply("T-GUARD", "cancel", {})
+        self.assertFalse(os.path.isfile(scope_file))
+
 
 class PluginPrepareTests(unittest.TestCase):
     """Подготовка плагина: указатель на корень и проверка пакета."""

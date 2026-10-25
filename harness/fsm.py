@@ -207,6 +207,9 @@ class Engine:
         task_id = task["task_id"]
         fields = {**fields, "state": new_state, "last_event_id": new_id("evt")}
         self.store.update_task(task_id, **fields)
+        # область прав исполнителя живёт ровно столько, сколько длится запуск
+        if new_state != "RUNNING":
+            scope_mod.clear_scope(self.root)
         self.store.log(task_id, f"{task['state']} -> {new_state} ({event})", attempt=task.get("attempt"))
 
     def _resolve_verdict_state(self, task: dict[str, Any], payload: dict[str, Any]) -> str:
