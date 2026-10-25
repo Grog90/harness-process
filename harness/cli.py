@@ -13,6 +13,7 @@ import sys
 from typing import Any
 
 from . import brief as brief_mod
+from . import doctor as doctor_mod
 from . import evals as evals_mod
 from . import findings as findings_mod
 from . import rules as rules_mod
@@ -470,7 +471,8 @@ def cmd_findings(args: argparse.Namespace) -> int:
 def cmd_coverage(args: argparse.Namespace) -> int:
     root = _root(args)
     registry = rules_mod.load_registry(root, args.rules)
-    statuses = rules_mod.evaluate(registry)
+    installed = doctor_mod.installed_packages()
+    statuses = rules_mod.evaluate(registry, installed=installed)
     tested = {c.rule for c in selftest_mod.CHECKS}
     sums = rules_mod.summary(statuses, tested)
     if args.markdown:

@@ -2,9 +2,9 @@
 
 _Файл генерируется командой `harness coverage --markdown`. Руками не править: источник — `policies/rules.json` и код хуков._
 
-Всего правил: **32** · покрыто: **28** · пробелов: **0** · делегировано рантайму: **4** · сломанных объявлений: **0**
+Всего правил: **32** · покрыто: **28** · пробелов: **1** · делегировано рантайму: **3** · сломанных объявлений: **0**
 
-Проверяется исполняемыми тестами: **28** из **28** наших правил; ещё **4** закрыты механизмами рантайма и плагинами (см. ниже). У каждого нашего правила есть хотя бы одна исполняемая проверка.
+Проверяется исполняемыми тестами: **28** из **29** наших правил; ещё **3** закрыты механизмами рантайма и плагинами (см. ниже). Без тестов остаются: `R-GIT-1`
 
 > доля покрытия не равна доле безопасности: одна незакрытая критическая операция важнее десятков закрытых малозначимых правил
 
@@ -26,14 +26,14 @@ _Файл генерируется командой `harness coverage --markdown
 | `R-COMMIT-2` | blocking | precommit | `verdict.require_pipeline_log` | покрыто | control |
 | `R-SLEEP-1` | delegated | pretooluse | `—` | делегировано — закрыто: @deepseek-ai/dsh-tool-call-timeout-policy | policy |
 | `R-READ-1` | delegated | pretooluse | `—` | делегировано — закрыто: @deepseek-ai/dsh-fs-observation-policy | policy |
-| `R-GIT-1` | delegated | pretooluse | `—` | делегировано — закрыто: dsh-jev-guard (L0, локальные правила, без ключа) | policy |
+| `R-GIT-1` | delegated | pretooluse | `—` | ПРОБЕЛ — делегировано, но не установлено: dsh-jev-guard | policy |
 | `R-TIMEOUT-1` | blocking | watchdog | `watchdog.sweep` | покрыто | control |
 | `R-TRACE-1` | blocking | posttransition | `state.append_event` | покрыто | control |
 | `R-FIND-1` | blocking | postverdict | `findings.close_guard` | покрыто | control |
 | `R-FIND-2` | soft | postverdict | `findings.route` | покрыто | control |
 | `R-ADV-1` | blocking | postverdict | `verdict.adversarial_requires_scenario` | покрыто | verifier |
 | `R-COST-1` | blocking | predispatch | `cost.check_dispatch` | покрыто | control |
-| `R-SANDBOX-1` | delegated | postverdict | `—` | делегировано — закрыто: @deepseek-ai/dsh-sandbox-policy + dsh-pwsh-sandbox | environment |
+| `R-SANDBOX-1` | delegated | postverdict | `—` | делегировано — закрыто: @deepseek-ai/dsh-sandbox-policy + @deepseek-ai/dsh-pwsh-sandbox | environment |
 | `R-HOOK-1` | blocking | process | `rules.change` | покрыто | policy |
 | `R-WAVE-1` | blocking | precommit | `lanes.merge` | покрыто | control |
 | `R-EVAL-1` | soft | process | `evals.metrics` | покрыто | control |
@@ -45,14 +45,13 @@ _Файл генерируется командой `harness coverage --markdown
 
 ## Пробелы покрытия
 
-Пробелов нет (это утверждение стоит перепроверять, а не праздновать).
+- **R-GIT-1** (delegated): Деструктивные git-операции обязаны явно называть дерево; работа сохраняется до revert. — делегировано, но не установлено: dsh-jev-guard. Остаточный риск: L0 видит текст команды; обфускация (eval, base64) и «серые» случаи не ловятся — семантический слой платный и требует отказа от локальности
 
 ## Делегировано рантайму и плагинам
 
 - **R-SLEEP-1**: Ожидание вне переходов запрещено: sleep и долгие паузы отклоняются. → `@deepseek-ai/dsh-tool-call-timeout-policy`. Остаточный риск: ожидание не запрещено, а ограничено дедлайном инструмента; вечный цикл остановит таймаут, а не правило
 - **R-READ-1**: Третий одинаковый read без промежуточного изменения — отказ (ломалка циклов чтения). → `@deepseek-ai/dsh-fs-observation-policy`. Остаточный риск: read-before-edit и version-guarded write на уровне FS; повторные вызовы ловит @deepseek-ai/dsh-repeat-tool-reminder как предупреждение
-- **R-GIT-1**: Деструктивные git-операции обязаны явно называть дерево; работа сохраняется до revert. → `dsh-jev-guard (L0, локальные правила, без ключа)`. Остаточный риск: L0 видит текст команды; обфускация (eval, base64) и «серые» случаи не ловятся — семантический слой платный и требует отказа от локальности
-- **R-SANDBOX-1**: Проверки из брифа выполняются в изоляции: контейнер без сети, если доступен, иначе копия дерева с урезанным окружением. → `@deepseek-ai/dsh-sandbox-policy + dsh-pwsh-sandbox`. Остаточный риск: ОС-изоляция режимами read-only/workspace-write/danger-full-access; наш checks.sandbox остаётся запасным путём для headless
+- **R-SANDBOX-1**: Проверки из брифа выполняются в изоляции: контейнер без сети, если доступен, иначе копия дерева с урезанным окружением. → `@deepseek-ai/dsh-sandbox-policy + @deepseek-ai/dsh-pwsh-sandbox`. Остаточный риск: ОС-изоляция режимами read-only/workspace-write/danger-full-access; наш checks.sandbox остаётся запасным путём для headless
 
 ## Остаточные риски покрытых правил
 

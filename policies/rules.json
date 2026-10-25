@@ -299,7 +299,7 @@
       "negative_test": "проверяется механизмом рантайма: см. docs/PLUGINS.md",
       "owner": "environment",
       "residual_risk": "ОС-изоляция режимами read-only/workspace-write/danger-full-access; наш checks.sandbox остаётся запасным путём для headless",
-      "delegated_to": "@deepseek-ai/dsh-sandbox-policy + dsh-pwsh-sandbox"
+      "delegated_to": "@deepseek-ai/dsh-sandbox-policy + @deepseek-ai/dsh-pwsh-sandbox"
     },
     {
       "id": "R-HOOK-1",

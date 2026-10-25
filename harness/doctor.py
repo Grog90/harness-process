@@ -56,6 +56,11 @@ def _installed_bundles(profile: str) -> list[str]:
     return list(bundles) + list(deps)
 
 
+def installed_packages(profile: str | None = None) -> set[str]:
+    """Пакеты, реально стоящие в профиле: по ним проверяется делегирование."""
+    return {str(b) for b in _installed_bundles(profile or _profile_dir())}
+
+
 def _permission_presets(profile: str) -> dict[str, Any]:
     """Пресеты подтверждений из патча профиля (если он есть)."""
     path = os.path.join(profile, "cordis.patch.yml")

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -73,7 +74,21 @@ def load_registry(root: str = ".", path: str | None = None) -> dict[str, Any]:
         return json.load(fh)
 
 
-def evaluate(registry: dict[str, Any], available_hooks: dict[str, Any] | None = None) -> list[RuleStatus]:
+def external_targets(delegated_to: str) -> list[str]:
+    """Имена пакетов, которым делегировано правило (без встроенного рантайма)."""
+    tokens = re.findall(r"@?[A-Za-z0-9][\w.-]*/[\w.-]+|dsh-[\w.-]+", delegated_to or "")
+    out: list[str] = []
+    for token in tokens:
+        token = token.strip(".,;:()")
+        if token.startswith("@deepseek-ai/"):
+            continue  # поставляется рантаймом, отдельной установки не требует
+        if token not in out:
+            out.append(token)
+    return out
+
+
+def evaluate(registry: dict[str, Any], available_hooks: dict[str, Any] | None = None,
+             installed: set[str] | None = None) -> list[RuleStatus]:
     available = available_hooks if available_hooks is not None else control_index()
     out: list[RuleStatus] = []
     for r in registry.get("rules", []):
@@ -85,10 +100,17 @@ def evaluate(registry: dict[str, Any], available_hooks: dict[str, Any] | None = 
         status, reason = "covered", ""
         delegated_to = str(r.get("delegated_to") or "")
         if enforcement == "delegated":
-            # правило закрыто механизмом рантайма или плагином, а не нашим хуком:
-            # это не «покрыто нами» и не «пробел», а отдельное состояние
-            status = "delegated"
-            reason = f"закрыто: {delegated_to or 'механизм рантайма'}"
+            # Правило закрыто механизмом рантайма или плагином, а не нашим хуком.
+            # Но «делегировано» — это обещание, которое надо проверять: если
+            # сторонний плагин удалён, правило снова становится пробелом.
+            missing = [t for t in external_targets(delegated_to)
+                       if installed is not None and t not in installed]
+            if missing:
+                status = "gap"
+                reason = f"делегировано, но не установлено: {', '.join(missing)}"
+            else:
+                status = "delegated"
+                reason = f"закрыто: {delegated_to or 'механизм рантайма'}"
         elif enforcement == "n/a":
             kind = r.get("gap_kind") or GAP_NOT_IMPLEMENTED
             status = "gap"
