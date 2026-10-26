@@ -152,7 +152,8 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
         eng,
         args,
         "dispatch",
-        {"worker_id": args.worker, "timeout_seconds": args.timeout},
+        {"worker_id": args.worker, "timeout_seconds": args.timeout,
+         "primary_agent": args.primary_agent},
         event_id=args.event_id,
     )
 
@@ -694,6 +695,8 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--task", required=True)
     d.add_argument("--worker", default=None)
     d.add_argument("--timeout", type=int, default=None)
+    d.add_argument("--primary-agent", default=None,
+                   help="id агента-оркестратора: он получит роль orchestrator, остальные — роль фазы")
     d.add_argument("--event-id", default=None)
     d.set_defaults(func=cmd_dispatch)
 
