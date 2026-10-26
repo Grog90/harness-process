@@ -39,7 +39,12 @@ if (typeof captured !== 'function') {
 }
 
 const results = (input.calls || []).map((call) => {
-  const reason = captured({ name: call.name, arguments: call.arguments || {} });
+  const reason = captured({
+    name: call.name,
+    arguments: call.arguments || {},
+    // маркер дочернего агента: так проверяется запрет наследовать права человека
+    parent: call.parent ? { id: 'child' } : undefined,
+  });
   return { name: call.name, args: call.arguments || {}, deny: reason ?? null };
 });
 

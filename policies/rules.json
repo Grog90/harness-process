@@ -92,6 +92,18 @@
       "residual_risk": "Схема проверяет структуру, не смысл; смысл проверяет человек или брифер-агент."
     },
     {
+      "id": "R-BRIEF-2",
+      "statement": "allowed_files брифа должны быть записываемы ролью worker; недостижимый бриф не выдаётся.",
+      "event": "predispatch",
+      "enforcement": "blocking",
+      "implemented": true,
+      "hook": "fsm.brief_policy_compat",
+      "positive_test": "allowed_files в зоне записи воркера — диспетч разрешён",
+      "negative_test": "allowed_files в protected-пути — отказ R-BRIEF-2 до запуска воркера",
+      "owner": "briefer",
+      "residual_risk": "Проверяется только доступность путей политикой; смысл задачи и объём работы по-прежнему не проверяются."
+    },
+    {
       "id": "R-GAP-1",
       "statement": "Открытый блокирующий вопрос (GAP) в брифе останавливает диспетч до решения человека.",
       "event": "predispatch",

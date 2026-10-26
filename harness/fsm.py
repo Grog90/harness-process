@@ -16,7 +16,7 @@ from . import brief as brief_mod
 from . import cost as cost_mod
 from . import scope as scope_mod
 from . import verdict as verdict_mod
-from .policy import Decision, Policy, deny
+from .policy import Decision, Policy, deny, normalize_path
 from .state import Store, StoreError, new_id, now
 
 
@@ -270,6 +270,26 @@ def _guard_dispatch(engine: Engine, task: dict[str, Any], payload: dict[str, Any
     if not b.allowed_files:
         raise TransitionError("R-BRIEF-1", "allowed_files пуст: нечего разрешать писать")
 
+    # R-BRIEF-2: бриф, который воркер физически не сможет выполнить, не выдаётся.
+    # Живой прогон: задача просила править harness/doctor.py, а политика запрещает
+    # воркеру запись в protected-пути — воркер упёрся в отказ уже после диспетча.
+    blocked = []
+    for rel in b.allowed_files:
+        rel_norm = normalize_path(engine.root, rel)
+        if rel_norm == "<outside-root>":
+            blocked.append((rel, "путь вне корня"))
+            continue
+        decision = engine.policy.check_write("worker", rel_norm, allowed_files=b.allowed_files)
+        if not decision.allowed:
+            blocked.append((rel, f"{decision.rule}: {decision.reason}"))
+    if blocked:
+        raise TransitionError(
+            "R-BRIEF-2",
+            "allowed_files недостижимы для роли worker: "
+            + "; ".join(f"{rel} ({why})" for rel, why in blocked),
+            blocked=[{"path": rel, "reason": why} for rel, why in blocked],
+        )
+
     if int(task["attempt"]) >= int(task["max_attempts"]):
         raise TransitionError(
             "R-BUDGET-1",
@@ -474,6 +494,7 @@ def check_watchdog(engine: Engine, task_id: str) -> Outcome | None:
 # Точки контроля, которые реально существуют в коде (для отчёта о покрытии матрицы).
 CONTROL_POINTS = {
     "fsm.reserve_attempt": Store.reserve_attempt,
+    "fsm.brief_policy_compat": _guard_dispatch,
     "fsm.apply_verdict": _guard_verdict,
     "fsm.watchdog": check_watchdog,
     "state.append_event": Store.append_event,

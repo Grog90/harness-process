@@ -116,6 +116,27 @@ class PluginGuardTests(unittest.TestCase):
         self.assertIsNone(results[0]["deny"], results)
         self.assertIsNone(results[1]["deny"], results)
 
+    def test_child_agent_does_not_inherit_human_rights(self) -> None:
+        """Отменили задачу — субагент не получает права человека молча."""
+        results = self._probe([
+            {"name": "write", "arguments": {"path": "src/x.py"}, "parent": True},
+            {"name": "pwsh", "arguments": {"command": "echo hi"}, "parent": True},
+            {"name": "read", "arguments": {"path": "src/x.py"}, "parent": True},
+        ])
+        self.assertIn("R-ROLE-1", results[0]["deny"])
+        self.assertIn("R-ROLE-1", results[1]["deny"])
+        self.assertIsNone(results[2]["deny"], "чтение дочернему агенту не запрещено")
+
+    def test_child_agent_with_scope_works(self) -> None:
+        """Внутри задачи субагент работает по области прав, а не по запрету."""
+        self._write_scope(["src/a.py"])
+        results = self._probe([
+            {"name": "write", "arguments": {"path": "src/a.py"}, "parent": True},
+            {"name": "write", "arguments": {"path": "src/b.py"}, "parent": True},
+        ])
+        self.assertIsNone(results[0]["deny"], results)
+        self.assertIn("R-WORK-1", results[1]["deny"])
+
     def test_pointer_file_resolves_project_root(self) -> None:
         """Корень находится по указателю ~/.dsh/harness-root даже из чужого каталога."""
         home = tmpdir.scratch(ROOT, "harness-dsh-home-")

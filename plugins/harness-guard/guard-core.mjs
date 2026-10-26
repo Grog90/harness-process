@@ -123,6 +123,15 @@ export function decide(policy, root, req) {
     return deny('R-WORK-2', `инструмент '${tool}' не разрешён роли '${roleName}'`);
   }
 
+  // Субагент без активной задачи не наследует права человека: иначе достаточно
+  // отменить задачу, чтобы дочерний агент молча получил полный доступ.
+  if (req.is_child && !req.scoped && (WRITE_TOOLS.has(tool) || tool === 'bash')) {
+    return deny(
+      'R-ROLE-1',
+      'нет активной области прав: субагент не получает права человека вне задачи',
+    );
+  }
+
   if (tool === 'bash') {
     const bashDecision = checkBash(policy, root, roleName, role, req);
     if (bashDecision) return bashDecision;

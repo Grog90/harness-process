@@ -145,6 +145,8 @@ export function apply(ctx, config) {
         tool: exec?.name,
         args: exec?.arguments || {},
         allowed_files: allowedFiles,
+        scoped: Boolean(scope),
+        is_child: Boolean(exec?.parent),
       });
       if (decision.decision === 'deny') {
         return `${decision.rule}: ${decision.reason}`;

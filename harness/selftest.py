@@ -230,6 +230,24 @@ def c_brief_empty_field(root: str) -> None:
     _expect_deny(lambda: eng.apply("T-SELF", "attach_brief", {"brief": bad}), "R-BRIEF-1")
 
 
+def c_brief_policy_negative(root: str) -> None:
+    """Бриф, который воркер не сможет выполнить, не выдаётся: отказ до запуска."""
+    eng = _engine(root)
+    eng.store.create_task("T-SELF", policy_version="1.0.0")
+    impossible = brief_data(allowed_files=["harness/policy.py"])  # protected для worker
+    eng.apply("T-SELF", "attach_brief", {"brief": impossible})
+    _expect_deny(lambda: eng.apply("T-SELF", "dispatch", {"worker_id": "w1"}), "R-BRIEF-2")
+
+
+def c_brief_policy_positive(root: str) -> None:
+    """Достижимые allowed_files диспетч не блокируют."""
+    eng = _engine(root)
+    eng.store.create_task("T-SELF", policy_version="1.0.0")
+    eng.apply("T-SELF", "attach_brief", {"brief": brief_data(allowed_files=["tests/test_x.py"])})
+    out = eng.apply("T-SELF", "dispatch", {"worker_id": "w1"})
+    assert out.state == "RUNNING", out
+
+
 def c_brief_contradiction(root: str) -> None:
     eng = _engine(root)
     eng.store.create_task("T-SELF", policy_version="1.0.0")
@@ -756,6 +774,8 @@ CHECKS: list[Check] = [
     Check("R-BRIEF-1", "полный бриф — диспетч разрешён", c_brief_positive),
     Check("R-BRIEF-1", "пустое поле — отдельная причина отказа", c_brief_empty_field),
     Check("R-BRIEF-1", "противоречие в области работ — отказ", c_brief_contradiction),
+    Check("R-BRIEF-2", "недостижимый allowed_files — отказ до диспетча", c_brief_policy_negative),
+    Check("R-BRIEF-2", "достижимый allowed_files — диспетч разрешён", c_brief_policy_positive),
     Check("R-GAP-1", "блокирующий вопрос останавливает диспетч", c_gap_negative),
     Check("R-BUDGET-1", "три попытки и эскалация", c_budget_negative),
     Check("R-VERIFY-1", "коммит без вердикта невозможен", c_commit_without_verdict),
