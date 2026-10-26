@@ -130,7 +130,9 @@ export function decide(policy, root, req) {
   }
 
   const rawPath = args.path || args.file_path || args.filePath;
-  if (rawPath) {
+  // Чтение защищённых путей разрешено: R-PROT-1 ограничивает ЗАПИСЬ, иначе агент
+  // не может прочитать даже политику, по которой его же и проверяют.
+  if (rawPath && WRITE_TOOLS.has(tool)) {
     const decision = checkWrite(policy, root, roleName, role, tool, rawPath, req.allowed_files);
     if (decision) return decision;
   }

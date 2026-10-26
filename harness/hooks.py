@@ -68,6 +68,10 @@ def policy_protected_paths(ctx: HookContext) -> Decision:
     assert ctx.policy is not None
     if not ctx.path:
         return allow("R-PROT-1")
+    # защищённые пути ограничивают ЗАПИСЬ: читать политику должна мочь любая роль,
+    # иначе агент не увидит правил, по которым его проверяют
+    if ctx.tool not in WRITE_TOOLS:
+        return allow("R-PROT-1")
     rel = normalize_path(ctx.root, ctx.path)
     if rel == "<outside-root>":
         return deny("R-PROT-1", f"путь вне рабочего корня: {ctx.path!r}")

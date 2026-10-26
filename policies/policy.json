@@ -98,7 +98,12 @@
         "read_file",
         "write_file",
         "bash",
-        "harness"
+        "harness",
+        "subagent",
+        "subagent_fork",
+        "list_agents",
+        "send_message",
+        "interrupt_agent"
       ]
     },
     "verifier": {
