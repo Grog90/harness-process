@@ -20,6 +20,18 @@
       "residual_risk": "Агент с правом писать в свой процесс может подменить переменную окружения; нужна изоляция запуска."
     },
     {
+      "id": "R-ROLE-2",
+      "statement": "Роль выдаётся по агенту и фазе: primary — оркестратор, дочерние во время работы — worker, на проверке — verifier.",
+      "event": "pretooluse",
+      "enforcement": "blocking",
+      "implemented": true,
+      "hook": "scope.write",
+      "positive_test": "primary пишет документацию, но не продукт; на проверке дочерний агент пишет evidence",
+      "negative_test": "оркестратор пишет продукт — R-ORCH-1; проверяющий пишет код — R-VER-1",
+      "owner": "policy",
+      "residual_risk": "Идентификация опирается на agent.id и поле primary в области прав; при отмене задачи дочерний агент без scope распознаётся по exec.parent, а не по идентификатору."
+    },
+    {
       "id": "R-ORCH-1",
       "statement": "Оркестратор не пишет продуктовый код — включая правки через shell, redirect и tee.",
       "event": "pretooluse",

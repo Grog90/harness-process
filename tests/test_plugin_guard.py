@@ -74,11 +74,12 @@ class PluginGuardTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr[:400])
         return json.loads(proc.stdout)
 
-    def _write_scope(self, allowed: list[str]) -> None:
+    def _write_scope(self, allowed: list[str], *, role: str = "worker",
+                     primary: str = "orch-1", phase: str = "running") -> None:
         path = os.path.join(self.root, ".harness", "guard-scope.json")
         with open(path, "w", encoding="utf-8") as fh:
-            json.dump({"task_id": "T-GUARD", "role": "worker", "allowed_files": allowed,
-                       "attempt": 1}, fh)
+            json.dump({"task_id": "T-GUARD", "role": role, "phase": phase,
+                       "primary": primary, "allowed_files": allowed, "attempt": 1}, fh)
 
     def test_missing_policy_allows_read_and_denies_writes(self) -> None:
         """Без политики сессия остаётся осматриваемой, но не даёт менять файлы."""
@@ -126,6 +127,36 @@ class PluginGuardTests(unittest.TestCase):
         self.assertIn("R-ROLE-1", results[0]["deny"])
         self.assertIn("R-ROLE-1", results[1]["deny"])
         self.assertIsNone(results[2]["deny"], "чтение дочернему агенту не запрещено")
+
+    def test_primary_agent_is_orchestrator_during_task(self) -> None:
+        """Оркестратор во время задачи пишет документацию, но не продукт."""
+        self._write_scope(["src/a.py"], primary="orch-1")
+        results = self._probe([
+            {"name": "write", "arguments": {"path": "src/a.py"}, "agent": "orch-1"},
+            {"name": "write", "arguments": {"path": "docs/plan.md"}, "agent": "orch-1"},
+        ])
+        self.assertIn("R-ORCH-1", results[0]["deny"], results[0])
+        self.assertIsNone(results[1]["deny"], results[1])
+
+    def test_worker_agent_is_limited_by_brief(self) -> None:
+        """Воркер — не оркестратор: ему можно ровно то, что в allowed_files."""
+        self._write_scope(["src/a.py"], primary="orch-1")
+        results = self._probe([
+            {"name": "write", "arguments": {"path": "src/a.py"}, "agent": "worker-1"},
+            {"name": "write", "arguments": {"path": "docs/plan.md"}, "agent": "worker-1"},
+        ])
+        self.assertIsNone(results[0]["deny"], results[0])
+        self.assertIn("R-WORK-1", results[1]["deny"], results[1])
+
+    def test_verifier_phase_writes_only_evidence(self) -> None:
+        """На проверке дочерние агенты — verifier: evidence можно, код нельзя."""
+        self._write_scope(["evidence/**"], role="verifier", phase="verifying")
+        results = self._probe([
+            {"name": "write", "arguments": {"path": "evidence/verdict.json"}, "agent": "ver-1"},
+            {"name": "write", "arguments": {"path": "src/a.py"}, "agent": "ver-1"},
+        ])
+        self.assertIsNone(results[0]["deny"], results[0])
+        self.assertIn("R-VER-1", results[1]["deny"], results[1])
 
     def test_child_agent_with_scope_works(self) -> None:
         """Внутри задачи субагент работает по области прав, а не по запрету."""

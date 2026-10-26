@@ -135,7 +135,18 @@ export function apply(ctx, config) {
       const root = resolved.root;
       const policy = readPolicy(root);
       const scope = readScope(root);
-      const role = scope?.role || config?.role || process.env.HARNESS_ROLE || 'human';
+      const agentId = String(exec?.agent?.id || '');
+      // Роль зависит от агента, а не от профиля: оркестратор (primary) не пишет
+      // продукт, дочерние агенты получают роль фазы (worker/verifier).
+      let role = 'human';
+      if (scope) {
+        const primary = String(scope.primary || '');
+        role = agentId && primary && agentId === primary
+          ? 'orchestrator'
+          : String(scope.role || 'worker');
+      } else if (config?.role || process.env.HARNESS_ROLE) {
+        role = config?.role || process.env.HARNESS_ROLE;
+      }
       const allowedFiles = Array.isArray(scope?.allowed_files)
         ? scope.allowed_files
         : config?.allowedFiles || envAllowedFiles();
@@ -146,7 +157,8 @@ export function apply(ctx, config) {
         args: exec?.arguments || {},
         allowed_files: allowedFiles,
         scoped: Boolean(scope),
-        is_child: Boolean(exec?.parent),
+        // без активной задачи дочерний агент не наследует права человека
+        is_child: Boolean(exec?.parent) || (Boolean(scope) && Boolean(agentId) && agentId !== String(scope.primary || '')),
       });
       if (decision.decision === 'deny') {
         return `${decision.rule}: ${decision.reason}`;

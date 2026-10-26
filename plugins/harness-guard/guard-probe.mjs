@@ -44,6 +44,7 @@ const results = (input.calls || []).map((call) => {
     arguments: call.arguments || {},
     // маркер дочернего агента: так проверяется запрет наследовать права человека
     parent: call.parent ? { id: 'child' } : undefined,
+    agent: call.agent ? { id: call.agent } : undefined,
   });
   return { name: call.name, args: call.arguments || {}, deny: reason ?? null };
 });

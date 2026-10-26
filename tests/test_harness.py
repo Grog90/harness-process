@@ -195,6 +195,33 @@ class FsmTests(unittest.TestCase):
             self.eng.apply("T1", "dispatch", {})
         self.assertEqual(ctx.exception.rule, "R-BRIEF-1")
 
+    def test_dispatch_publishes_orchestrator_and_worker_roles(self) -> None:
+        """Роль выдаётся по агенту: primary — оркестратор, остальные — воркер."""
+        from harness import scope
+
+        self.eng.apply("T1", "attach_brief", {"brief": sample_brief()})
+        self.eng.apply("T1", "dispatch", {"worker_id": "w", "primary_agent": "session-1"})
+        data = scope.read_scope(self.root)
+        self.assertEqual(data["primary"], "session-1")
+        self.assertEqual(data["role"], "worker")
+        self.assertEqual(data["phase"], "running")
+        self.assertEqual(scope.role_for(data, "session-1"), ("orchestrator", True))
+        self.assertEqual(scope.role_for(data, "worker-9"), ("worker", True))
+
+    def test_submit_switches_children_to_verifier(self) -> None:
+        """На проверке дочерние агенты получают verifier и только evidence."""
+        from harness import scope
+
+        self.eng.apply("T1", "attach_brief", {"brief": sample_brief()})
+        self.eng.apply("T1", "dispatch", {"worker_id": "w", "primary_agent": "session-1"})
+        self.eng.apply("T1", "submit", {"attempt": 1, "snapshot_id": "snap1"})
+        data = scope.read_scope(self.root)
+        self.assertEqual(data["phase"], "verifying")
+        self.assertEqual(data["role"], "verifier")
+        self.assertEqual(data["allowed_files"], ["evidence/**"])
+        self.assertEqual(data["primary"], "session-1", "primary сохраняется между фазами")
+        self.assertEqual(data["attempt"], 1)
+
     def test_attempts_are_counted_and_capped(self) -> None:
         self.eng.apply("T1", "attach_brief", {"brief": sample_brief()})
         for attempt in (1, 2, 3):

@@ -195,6 +195,24 @@ def c_role_identity_negative(root: str) -> None:
     assert d["decision"] == "deny" and d["rule"] == "R-ROLE-1", d
 
 
+def c_role_per_agent(root: str) -> None:
+    """Роль зависит от агента: primary — оркестратор, остальные — роль фазы."""
+    from . import scope
+
+    eng = _engine(root)
+    eng.store.create_task("T-SELF", policy_version="1.0.0")
+    eng.apply("T-SELF", "attach_brief", {"brief": brief_data()})
+    eng.apply("T-SELF", "dispatch", {"worker_id": "w", "primary_agent": "session-1"})
+    data = scope.read_scope(root)
+    assert scope.role_for(data, "session-1") == ("orchestrator", True), data
+    assert scope.role_for(data, "worker-1") == ("worker", True), data
+    eng.apply("T-SELF", "submit", {"attempt": 1, "snapshot_id": "s1"})
+    data = scope.read_scope(root)
+    assert scope.role_for(data, "ver-1") == ("verifier", True), data
+    assert data["allowed_files"] == ["evidence/**"], data
+    assert scope.role_for(data, "session-1") == ("orchestrator", True), data
+
+
 
 def c_git_destructive_negative(root: str) -> None:
     d = hooks.run("pretooluse", _ctx(root, role="worker", tool="bash", command="git push --force origin main"))
@@ -768,6 +786,7 @@ CHECKS: list[Check] = [
     Check("R-WORK-2", "воркер не диспетчит", c_worker_tool_negative),
     Check("R-PROT-1", "политика защищена от рабочей роли", c_protected_negative),
     Check("R-ROLE-1", "подмена роли отклоняется", c_role_identity_negative),
+    Check("R-ROLE-2", "роль по агенту и фазе", c_role_per_agent),
     Check("R-GIT-1", "force-push без названного дерева отклоняется", c_git_destructive_negative),
     Check("R-GIT-1", "git с названным деревом и обычный git проходят", c_git_destructive_positive),
     Check("R-BRIEF-1", "нет брифа — нет диспетча", c_brief_negative),

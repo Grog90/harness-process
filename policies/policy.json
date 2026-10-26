@@ -121,6 +121,7 @@
       "tools": [
         "read_file",
         "write_file",
+        "bash",
         "bash_readonly",
         "harness"
       ]
@@ -140,7 +141,7 @@
       "tools": [
         "read_file",
         "write_file",
-        "bash_readonly",
+        "bash",
         "harness"
       ]
     },

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -207,8 +208,11 @@ class Engine:
         task_id = task["task_id"]
         fields = {**fields, "state": new_state, "last_event_id": new_id("evt")}
         self.store.update_task(task_id, **fields)
-        # область прав исполнителя живёт ровно столько, сколько длится запуск
-        if new_state != "RUNNING":
+        # Область прав живёт, пока идёт задача, но меняет роль по фазе: на
+        # проверке дочерние агенты становятся verifier и пишут только evidence.
+        if new_state == "VERIFYING":
+            scope_mod.publish_verifying(self.root, task_id=task_id, attempt=task.get("attempt"))
+        elif new_state != "RUNNING":
             scope_mod.clear_scope(self.root)
         self.store.log(task_id, f"{task['state']} -> {new_state} ({event})", attempt=task.get("attempt"))
 
@@ -309,9 +313,15 @@ def _guard_dispatch(engine: Engine, task: dict[str, Any], payload: dict[str, Any
         task["task_id"], deadline_ts=deadline, worker_id=payload.get("worker_id")
     )
     # публикуем активную область прав для плагина-ограждения
+    primary = str(
+        payload.get("primary_agent")
+        or os.environ.get("HARNESS_PRIMARY_AGENT")
+        or os.environ.get("DSH_SESSION_ID")
+        or ""
+    )
     scope_mod.write_scope(
         engine.root, task_id=task["task_id"], role="worker",
-        allowed_files=b.allowed_files, attempt=attempt,
+        allowed_files=b.allowed_files, attempt=attempt, primary=primary,
     )
     payload["_attempt"] = attempt
     payload["_deadline"] = deadline
