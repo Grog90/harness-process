@@ -371,7 +371,11 @@ schemas/            JSON-схемы брифа и вердикта
 templates/          примеры артефактов для людей
 examples/           учебные верификаторы и размеченный набор evals
 tests/              unittest: свойства, а не счастливые пути
-docs/               ANALYSIS, ARCHITECTURE, ROADMAP, RULES_MATRIX (генерируется)
+tools/              вспомогательное: lessons.py, recall.py, pdf_extract.py,
+                    trendshift.py, browser_mcp.py, mcp_stdio.py
+plugins/            host-плагины DSH: harness-guard, voice-ru
+docs/               ANALYSIS, ARCHITECTURE, ROADMAP, RUNNING, PLUGIN, PLUGINS,
+                    LESSONS, RECALL, TRENDSHIFT, BROWSER, XERJ, RULES_MATRIX
 bin/                обёртки harness / harness.cmd
 ```
 

@@ -81,9 +81,10 @@ python -m harness task status --task FEE-101
 | Параллельные задачи не смешивают write-set | `harness lane create/merge` + мьютекс | R-WAVE-1 |
 | Запуск останавливается по бюджету до траты | `cost.check_dispatch` в guard диспетча | R-COST-1 |
 | Правка правил без причины и тестов видна | `harness rule verify` (отпечаток файла) | R-HOOK-1 |
+| Код не коммитится без связанной спеки | `specgate.check` в финализаторе | R-SPEC-1 |
 
-Полный список — `docs/RULES_MATRIX.md` (генерируется). Из 32 правил 28 держим мы
-(у каждого исполняемая проверка в `selftest`), 4 делегированы механизмам рантайма —
+Полный список — `docs/RULES_MATRIX.md` (генерируется). Из 35 правил 32 держим мы
+(у каждого исполняемая проверка в `selftest`), 3 делегированы механизмам рантайма —
 это не «пробел» и не «покрыто нами», а отдельный статус: см. `docs/PLUGINS.md`.
 Это про наличие механизма, а не про его безошибочность: остаточные риски
 перечислены там же.
@@ -95,15 +96,19 @@ harness/          пакет: cli, fsm, state, policy, hooks, brief, verdict, sn
                   gateway (шлюз), finalize (коммит), checks (прогон проверок),
                   lanes (worktree), watchdog, cost, rulechange, scope, run, pluginctl, doctor, findings,
                   rules, evals, selftest, demo
+AGENTS.md         контракт для агента: жёсткие правила и процесс уроков
+journal/          журнал ошибок (ступень 1) — продвигается tools/lessons.py
 policies/         policy.json — полномочия ролей; rules.json — матрица правил
 schemas/          JSON-схемы брифа и вердикта
 templates/        примеры артефактов
 examples/         учебные агент, верификаторы и размеченный набор evals
 plugins/          harness-guard — host-плагин DSH: ограждение на ctx.tools.guard()
 tests/            80 unittest-проверок свойств, включая паритет плагина и ядра
-docs/             ANALYSIS, ARCHITECTURE, ROADMAP, RUNNING, PLUGIN, PLUGINS, RULES_MATRIX
+docs/             ANALYSIS, ARCHITECTURE, ROADMAP, RUNNING, PLUGIN, PLUGINS, LESSONS, RECALL, TRENDSHIFT, BROWSER, XERJ, RULES_MATRIX
 bin/              обёртки harness / harness.cmd
-tools/            вспомогательное: экстрактор текста PDF (для сверки с источником)
+tools/            вспомогательное: экстрактор текста PDF, журнал уроков (lessons.py),
+                  поиск по прошлым сессиям (recall.py), тренды GitHub (trendshift.py),
+                  браузер для агента (browser_mcp.py), MCP-протокол (mcp_stdio.py)
 ```
 
 ## Две формы ограждения
@@ -227,6 +232,15 @@ python -m harness rule change --id R-COST-1 --reason "бюджет провер�
 * [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — состояния, guard'ы, инварианты,
   артефакты, протокол хука.
 * [`docs/ROADMAP.md`](docs/ROADMAP.md) — этапы внедрения и критерии их закрытия.
+* [`docs/LESSONS.md`](docs/LESSONS.md) — как ошибка превращается в правило и проверку.
+* [`docs/RECALL.md`](docs/RECALL.md) — поиск по прошлым сессиям: формат, границы, сравнение с Hindsight.
+* [`docs/FACTS.md`](docs/FACTS.md) — атомарные факты о проекте: корм для памяти агента.
+* [`docs/MEMORY_COMPARE.md`](docs/MEMORY_COMPARE.md) — три прогона сравнения recall и Hindsight, что чинило качество.
+* [`docs/TRENDSHIFT.md`](docs/TRENDSHIFT.md) — тренды GitHub: доступ к данным, MCP-сервер, что брать в контур.
+* [`docs/BROWSER.md`](docs/BROWSER.md) — браузер для агента: moli, MCP-обёртка, границы и запасной путь через Chrome.
+* [`docs/XERJ.md`](docs/XERJ.md) — поиск по коду и докам: установка, индексация, отличие от Hindsight и recall.
+* [`docs/TRENDSHIFT.md`](docs/TRENDSHIFT.md) — тренды GitHub: доступ к данным, MCP-сервер, что брать в контур.
+  Разбор кандидатов живёт отдельным workspace: `..\trend-lab` (очередь, карточки, скилл `trend-triage`).
 * [`docs/RULES_MATRIX.md`](docs/RULES_MATRIX.md) — матрица правил (генерируется).
 
 ## Evals
@@ -239,3 +253,4 @@ python -m harness evals run --cases examples/evals/fee --verifier "python exampl
 Маркерный верификатор пропускает 3 дефекта из 6 (он смотрит на текст, а не на поведение),
 поведенческий — 0 из 6. Это и есть смысл измерения: «верификатор существует» и
 «верификатор работает» — разные утверждения.
+

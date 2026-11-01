@@ -127,6 +127,33 @@ print(result.state, result.commit_sha)
 3. Вернуть `0`, если работа сделана. Любой другой код — инфраструктурный сбой:
    он фиксируется как `ERROR`, а не как дефект кода, и задача уходит в `VERIFY_BLOCKED`.
 
+### Ресурсы лейна
+
+Лейн изолирует не только файлы, но и среду исполнения: при `harness lane create`
+задача получает слот, а из слота считается набор ресурсов.
+
+| Переменная | Что это |
+|---|---|
+| `HARNESS_LANE_INDEX` | номер слота (целое, уникален среди живых лейнов) |
+| `HARNESS_LANE_PORT_BASE` | база портов: `18000 + слот × 10` |
+| `HARNESS_TEST_DB` | `.harness/lanes/<слот>/test.db` |
+| `HARNESS_LANE_TMP` | `.harness/lanes/<слот>/tmp` |
+
+Переменные видят команды проверки (`harness checks run`), а не произвольные процессы:
+они добавляются к белому списку окружения и передаются в контейнер через `-e`.
+Задача без лейна переменных не получает — поведение прежнее.
+
+```powershell
+python -m harness lane create --task FEE-101 --json   # выдаёт слот и набор ресурсов
+python -m harness lane show --task FEE-101            # тот же набор, без создания
+python -m harness lane release --task FEE-101         # освободить слот, worktree оставить
+python -m harness lane remove --task FEE-101          # удалить worktree и слот
+```
+
+Слот живого лейна не выдаётся второй раз; слот лейна, чей worktree исчез, освобождается
+при следующем создании. Если порт базы занят посторонним процессом, берётся следующий
+слот; когда заняты все 50 — отказ `R-WAVE-1` с причиной.
+
 ## Контракт проверяющего
 
 **Вход:** JSON на stdin и переменные окружения.
@@ -201,6 +228,24 @@ git log --oneline -3
 python -m harness task status --task FEE-101 --json     # состояние, попытки, вердикты
 python -m harness --json task status --task FEE-101 | ConvertFrom-Json | Select-Object -ExpandProperty events
 ```
+
+---
+
+## Внешние сервисы и MCP
+
+Прогон `harness` от них не зависит: это инструменты агента, а не части цикла.
+Если сервис лежит, цикл работает как обычно, а инструмент отвечает ошибкой.
+
+| Что | Где | Как проверить |
+|---|---|---|
+| Нода xerj (поиск по коду/докам) | `127.0.0.1:9200`, задача планировщика `xerj-node` | `curl http://127.0.0.1:9200/` |
+| Браузер moli | `.tools/moli/pkg/*/moli.exe` | `moli --version` |
+| MCP-серверы | `~/.dsh/profiles/<profile>/cordis.patch.yml`, блок `- insert:` | `Get-CimInstance Win32_Process \| Where-Object CommandLine -like '*_mcp.py*'` |
+
+Три сервера: `browser` (страницы, скриншоты), `xerj` (поиск), `trendshift` (тренды).
+Индекс обновляется вручную — `xerj autoindex . --prefix harness`; без ноды `xerj_*`
+отвечают ошибкой, а не пустым списком. Почему каталоги данных помечены Low integrity и
+что это значит — в [`XERJ.md`](XERJ.md).
 
 ---
 
