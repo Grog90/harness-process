@@ -602,6 +602,7 @@ def c_sandbox_degrades_honestly(root: str) -> None:
 
 def c_lane_merge(root: str) -> None:
     """Полный цикл в лейне: worktree → коммит финализатором → слияние."""
+    from . import checks as checks_mod
     from . import lanes as lanes_mod
     from .finalize import finalize
 
@@ -616,6 +617,14 @@ def c_lane_merge(root: str) -> None:
         lane = lanes_mod.create(root, store, "T-SELF")
         lane_root = lane["path"]
         assert os.path.isdir(lane_root), lane_root
+
+        # ресурсы лейна: формула сходится, показ совпадает с выдачей
+        resources = lane["resources"]
+        assert resources["port_base"] == lanes_mod.PORT_BASE + resources["slot"] * lanes_mod.PORTS_PER_LANE
+        shown = lanes_mod.show(root, store, "T-SELF")
+        assert shown["slot"] == resources["slot"], shown
+        assert checks_mod.lane_env(resources)["HARNESS_LANE_PORT_BASE"] == str(resources["port_base"])
+        assert checks_mod.lane_env(None) == {}, "задача без лейна не должна получать переменные"
 
         # исполнитель работает только внутри своего worktree
         target = os.path.join(lane_root, "src", "fee.py")
@@ -636,6 +645,52 @@ def c_lane_merge(root: str) -> None:
         with open(os.path.join(root, "src", "fee.py"), encoding="utf-8") as fh:
             assert "0.025" in fh.read(), "слияние не принесло изменение в главное дерево"
         assert lanes_mod.list_lanes(root), "список лейнов пуст"
+
+        # запрещённый случай: слот живой задачи не выдаётся повторно, а после
+        # удаления лейна освобождается
+        assert store.slot_owner(resources["slot"]) == "T-SELF"
+        lanes_mod.remove(root, "T-SELF", store=store)
+        assert store.lane_slot("T-SELF") is None, "слот не освобождён вместе с лейном"
+    finally:
+        store.close()
+
+
+def c_spec_gate(root: str) -> None:
+    """Код без связанного change не коммитится; документы проходят."""
+    from . import specgate
+    from .finalize import FinalizeError, finalize
+
+    _git_setup(root)
+    os.makedirs(os.path.join(root, "openspec", "changes", "add-demo"), exist_ok=True)
+
+    store = Store(os.path.join(root, ".harness", "state.db"))
+    try:
+        eng = Engine(store, Policy.load(root), root)
+        store.create_task("T-SPEC", policy_version="1.0.0")
+        eng.apply("T-SPEC", "attach_brief", {"brief": brief_data("T-SPEC")})
+        eng.apply("T-SPEC", "dispatch", {"worker_id": "w"})
+
+        target = os.path.join(root, "src", "fee.py")
+        with open(target, "w", encoding="utf-8") as fh:
+            fh.write("def calculate_fee(amount):\n    return int(amount * 0.025)\n")
+        snapshot = compute_for_scope(root, "")
+        eng.apply("T-SPEC", "submit", {"attempt": 1, "snapshot_id": snapshot})
+        eng.apply("T-SPEC", "verdict", {"verdict": verdict_data("T-SPEC", snapshot=snapshot)})
+
+        # запрещённый случай: бриф не ссылается на спеку
+        denied = None
+        try:
+            finalize(store, eng, root, "T-SPEC")
+        except FinalizeError as exc:
+            denied = exc
+        assert denied is not None, "код без спеки закоммичен"
+        assert denied.rule == "R-SPEC-1", denied.rule
+
+        # разрешённые случаи: ссылка на существующий change и изменение без кода
+        ok = specgate.check(root, {"spec_version": "openspec:add-demo@1"}, ["harness/cli.py"])
+        assert ok["ok"], ok
+        assert specgate.check(root, {}, ["docs/RUNNING.md"])["ok"], "документам спека не нужна"
+        assert specgate.check(root, {"spec_version": "openspec:missing@1"}, ["harness/cli.py"])["ok"] is False
     finally:
         store.close()
 
@@ -815,6 +870,7 @@ CHECKS: list[Check] = [
     Check("R-TIMEOUT-1", "сторож отзывает просрочку отдельным проходом", c_watchdog_loop),
     Check("R-SANDBOX-1", "изоляция честно помечена", c_sandbox_degrades_honestly),
     Check("R-WAVE-1", "лейн: worktree, коммит, слияние", c_lane_merge),
+    Check("R-SPEC-1", "код без спеки не коммитится", c_spec_gate),
     Check("R-COST-1", "бюджет останавливает запуск до траты", c_cost_gate),
     Check("R-HOOK-1", "изменение правила требует причины и тестов", c_rule_change),
     Check("R-BUDGET-2", "исчерпание бюджета ведёт к эскалации", c_budget_escalates),

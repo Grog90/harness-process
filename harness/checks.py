@@ -32,11 +32,31 @@ SAFE_ENV = {
 }
 
 
-def _env() -> dict[str, str]:
+LANE_ENV_KEYS = (
+    ("HARNESS_LANE_INDEX", "slot"),
+    ("HARNESS_LANE_PORT_BASE", "port_base"),
+    ("HARNESS_TEST_DB", "test_db"),
+    ("HARNESS_LANE_TMP", "tmp"),
+)
+
+
+def lane_env(lane_resources: dict[str, Any] | None) -> dict[str, str]:
+    """Переменные ресурсов лейна. Нет лейна — нет переменных: поведение прежнее."""
+    if not lane_resources:
+        return {}
+    return {
+        key: str(lane_resources[field])
+        for key, field in LANE_ENV_KEYS
+        if lane_resources.get(field) is not None
+    }
+
+
+def _env(lane_resources: dict[str, Any] | None = None) -> dict[str, str]:
     env = dict(SAFE_ENV)
     env["PATH"] = os.environ.get("PATH", "")
     env["HOME"] = os.environ.get("HOME", tempfile.gettempdir())
     env["TMPDIR"] = os.environ.get("TMPDIR", tempfile.gettempdir())
+    env.update(lane_env(lane_resources))  # поверх белого списка, а не вместо него
     return env
 
 
@@ -82,15 +102,21 @@ class CheckError(RuntimeError):
 
 
 def _execute(command: str, tree: str, timeout: int, use_docker: bool,
-             isolation: dict[str, Any]) -> subprocess.CompletedProcess:
+             isolation: dict[str, Any],
+             lane_resources: dict[str, Any] | None = None) -> subprocess.CompletedProcess:
     """Запускает команду в контейнере без сети либо в копии дерева."""
+    extra = lane_env(lane_resources)
     if use_docker:
         docker = shutil.which("docker") or "docker"
+        forwarded: list[str] = []
+        for key, value in extra.items():
+            forwarded += ["-e", f"{key}={value}"]  # контейнер не увидит их иначе
         return subprocess.run(
             [
                 docker, "run", "--rm", "--network", "none",
                 "-v", f"{tree}:/work", "-w", "/work",
                 "-e", "PYTHONUNBUFFERED=1",
+                *forwarded,
                 isolation["image"], "sh", "-lc", command,
             ],
             capture_output=True,
@@ -108,7 +134,7 @@ def _execute(command: str, tree: str, timeout: int, use_docker: bool,
         encoding="utf-8",
         errors="replace",
         timeout=timeout,
-        env=_env(),
+        env=_env(lane_resources),
     )
 
 
@@ -139,6 +165,7 @@ def run(
     evidence_dir: str | None = None,
     keep_workdir: bool = False,
     sandbox: str = "auto",
+    lane_resources: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     root = os.path.abspath(root)
     cmds = collect_commands(brief_data, commands)
@@ -166,7 +193,7 @@ def run(
         started = time.time()
         entry: dict[str, Any] = {"index": index, "command": command}
         try:
-            proc = _execute(command, tree, timeout, use_docker, isolation)
+            proc = _execute(command, tree, timeout, use_docker, isolation, lane_resources)
             entry.update(exit_code=proc.returncode, timed_out=False)
             stdout, stderr = proc.stdout, proc.stderr
         except subprocess.TimeoutExpired as exc:
@@ -198,6 +225,7 @@ def run(
         "all_ok": all(r["ok"] for r in results),
         "any_timeout": any(r["timed_out"] for r in results),
         "isolation": isolation,
+        "lane": lane_env(lane_resources),
         "workdir": workdir if keep_workdir else None,
         "artifacts": art_root,
     }

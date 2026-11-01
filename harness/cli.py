@@ -49,6 +49,25 @@ def _engine(args: argparse.Namespace, store: Store | None = None) -> Engine:
     return Engine(store or _store(args), Policy.load(_control_root(args)), root)
 
 
+def _lane_resources(root: str, task_id: str | None) -> dict[str, Any] | None:
+    """Ресурсы лейна для задачи. Нет задачи, лейна или слота — None, а не выдумка."""
+    if not task_id:
+        return None
+    from . import lanes as lanes_mod
+
+    path = os.path.join(root, ".harness", "state.db")
+    if not os.path.isfile(path):
+        return None
+    store = Store(path)
+    try:
+        slot = store.lane_slot(task_id)
+    finally:
+        store.close()
+    if slot is None:
+        return None
+    return lanes_mod.resources_for(root, slot)
+
+
 def _print(obj: Any, as_json: bool) -> None:
     if as_json:
         print(json.dumps(obj, ensure_ascii=False, indent=2))
@@ -137,6 +156,41 @@ def cmd_brief_check(args: argparse.Namespace) -> int:
             print(brief_mod.render_issues(b.issues))
         print("ИТОГ: " + ("валиден" if b.valid else "НЕВАЛИДЕН"))
     return EXIT_OK if b.valid else EXIT_DENIED
+
+
+def cmd_brief_from_change(args: argparse.Namespace) -> int:
+    """Собирает бриф из OpenSpec-change: сценарии -> критерии, задачи -> границы записи."""
+    from . import specbrief
+
+    root = _root(args)
+    try:
+        brief = specbrief.build(
+            root,
+            args.change,
+            task_id=args.task,
+            base_commit=args.base_commit,
+            check_commands=args.check,
+            attempt_limit=args.attempt_limit,
+            timeout_seconds=args.timeout,
+        )
+    except specbrief.SpecBriefError as exc:
+        print(f"ОТКАЗ [SPEC-BRIEF] {exc}", file=sys.stderr)
+        return EXIT_DENIED
+
+    if args.out:
+        specbrief.write(brief, args.out)
+    if args.json:
+        _print(brief, True)
+    else:
+        print(specbrief.render(brief))
+        if args.out:
+            print(f"записано: {args.out}")
+
+    checked = brief_mod.validate(brief)
+    if not checked.valid:
+        print(brief_mod.render_issues(checked.issues), file=sys.stderr)
+        return EXIT_DENIED
+    return EXIT_OK
 
 
 def cmd_brief_attach(args: argparse.Namespace) -> int:
@@ -277,6 +331,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             commit=args.commit,
             lane=args.lane,
             merge=args.merge,
+            allow_no_spec=getattr(args, "allow_no_spec", None),
             scope_override=args.scope,
             timeout=args.timeout,
             message=args.message,
@@ -389,7 +444,11 @@ def cmd_lane(args: argparse.Namespace) -> int:
         elif args.action == "merge":
             out = lanes_mod.merge(root, store, args.task, message=args.message)
         elif args.action == "remove":
-            out = lanes_mod.remove(root, args.task, force=not args.keep_branch)
+            out = lanes_mod.remove(root, args.task, force=not args.keep_branch, store=store)
+        elif args.action == "show":
+            out = lanes_mod.show(root, store, args.task)
+        elif args.action == "release":
+            out = lanes_mod.release(store, args.task)
         else:
             print(f"неизвестное действие: {args.action}", file=sys.stderr)
             return EXIT_ERROR
@@ -570,7 +629,8 @@ def cmd_finalize(args: argparse.Namespace) -> int:
     try:
         engine = Engine(store, Policy.load(_control_root(args)), root)
         try:
-            out = finalize(store, engine, root, args.task, message=args.message, author=args.author)
+            out = finalize(store, engine, root, args.task, message=args.message, author=args.author,
+                           allow_no_spec=getattr(args, 'allow_no_spec', None))
         except FinalizeError as exc:
             _print(exc.to_dict(), True) if args.json else _deny_text(exc)
             return EXIT_DENIED
@@ -609,6 +669,7 @@ def cmd_checks_run(args: argparse.Namespace) -> int:
         print("нужен --brief или --task", file=sys.stderr)
         return EXIT_ERROR
 
+    lane_resources = _lane_resources(root, args.task or brief_data.get("task_id"))
     try:
         report = checks_mod.run(
             root,
@@ -618,6 +679,7 @@ def cmd_checks_run(args: argparse.Namespace) -> int:
             timeout=args.timeout,
             keep_workdir=args.keep,
             sandbox=args.sandbox,
+            lane_resources=lane_resources,
         )
     except checks_mod.CheckError as exc:
         print(f"ОШИБКА: {exc}", file=sys.stderr)
@@ -690,6 +752,16 @@ def build_parser() -> argparse.ArgumentParser:
     ba.add_argument("file")
     ba.add_argument("--event-id", default=None)
     ba.set_defaults(func=cmd_brief_attach)
+    bf = bsub.add_parser("from-change", help="собрать бриф из OpenSpec-change")
+    bf.add_argument("--change", required=True, help="имя change в openspec/changes")
+    bf.add_argument("--task", default=None, help="task_id брифа (по умолчанию имя change)")
+    bf.add_argument("--out", default=None, help="куда записать JSON брифа")
+    bf.add_argument("--check", action="append", default=None, help="команда проверки (можно несколько)")
+    bf.add_argument("--base-commit", default=None)
+    bf.add_argument("--attempt-limit", type=int, default=3)
+    bf.add_argument("--timeout", type=int, default=3600)
+    bf.add_argument("--json", action="store_true")
+    bf.set_defaults(func=cmd_brief_from_change)
 
     d = sub.add_parser("dispatch", help="запустить исполнителя (нужен валидный бриф)")
     d.add_argument("--task", required=True)
@@ -742,7 +814,7 @@ def build_parser() -> argparse.ArgumentParser:
     sb.set_defaults(func=cmd_sandbox)
 
     ln = sub.add_parser("lane", help="параллельные лейны в git worktree")
-    ln.add_argument("action", choices=["create", "list", "merge", "remove"])
+    ln.add_argument("action", choices=["create", "list", "merge", "remove", "show", "release"])
     ln.add_argument("--task", default=None)
     ln.add_argument("--base", default="HEAD")
     ln.add_argument("--message", default=None)
@@ -782,6 +854,7 @@ def build_parser() -> argparse.ArgumentParser:
     rn.add_argument("--commit", action="store_true", help="закоммитить принятый результат финализатором")
     rn.add_argument("--lane", action="store_true", help="работать в отдельном worktree")
     rn.add_argument("--merge", action="store_true", help="слить лейн в главное дерево после коммита")
+    rn.add_argument("--allow-no-spec", default=None, metavar="ПРИЧИНА", help="коммит кода без спеки: причина попадёт в журнал (R-SPEC-1)")
     rn.add_argument("--scope", default=None, help="область снимка относительно корня лейна")
     rn.add_argument("--timeout", type=int, default=None)
     rn.add_argument("--message", default=None)
@@ -845,6 +918,7 @@ def build_parser() -> argparse.ArgumentParser:
     fn.add_argument("--task", required=True)
     fn.add_argument("--message", default=None)
     fn.add_argument("--author", default="harness")
+    fn.add_argument("--allow-no-spec", default=None, metavar="ПРИЧИНА", help="обход R-SPEC-1 с причиной в журнале")
     fn.set_defaults(func=cmd_finalize)
 
     ck = sub.add_parser("checks", help="изолированный прогон проверок из брифа")

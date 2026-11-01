@@ -57,6 +57,7 @@ class RunConfig:
     commit: bool = False
     lane: bool = False
     merge: bool = False
+    allow_no_spec: str | None = None
     scope_override: str | None = None
     timeout: int | None = None
     message: str | None = None
@@ -225,6 +226,7 @@ class Runner:
                         done = finalize(
                             self.store, self.engine, work_root, cfg.task_id,
                             message=cfg.message, ignore_paths=self._ignore_paths(work_root),
+                            allow_no_spec=cfg.allow_no_spec,
                         )
                     except FinalizeError as exc:
                         return self._finish(out.state, verdicts, f"[{exc.rule}] {exc}", ok_override=False)

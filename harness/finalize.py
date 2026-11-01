@@ -22,6 +22,7 @@ from .fsm import Engine
 from .policy import normalize_path
 from .snapshot import compute_for_scope
 from .state import Store
+from . import specgate
 
 
 class FinalizeError(RuntimeError):
@@ -99,6 +100,7 @@ def finalize(
     message: str | None = None,
     author: str = "harness",
     ignore_paths: list[str] | None = None,
+    allow_no_spec: str | None = None,
 ) -> dict[str, Any]:
     root = os.path.abspath(root)
     task = store.get_task(task_id)
@@ -133,6 +135,14 @@ def finalize(
             unexpected=unexpected,
             allowed=allowed,
         )
+
+    # R-SPEC-1: код коммитится только со связанным change. Обход — явной причиной.
+    gate = specgate.check(root, _brief_data(task), changed)
+    if not gate["ok"]:
+        if not (allow_no_spec or "").strip():
+            raise FinalizeError(gate["rule"], gate["reason"],
+                                **{k: v for k, v in gate.items() if k not in ("ok", "rule", "reason")})
+        store.log(task_id, f"обход {gate['rule']}: {allow_no_spec.strip()}")
 
     # 1. Журнал пишется до коммита и едет в нём же (log first).
     _write_pipeline_log(store, root, task_id)
@@ -201,6 +211,12 @@ def _goal(task: dict[str, Any]) -> str:
     if not task.get("brief_json"):
         return "задача без брифа"
     return str(json.loads(task["brief_json"]).get("goal", ""))[:72]
+
+
+def _brief_data(task: dict[str, Any]) -> dict[str, Any]:
+    if not task.get("brief_json"):
+        return {}
+    return json.loads(task["brief_json"])
 
 
 def _within(path: str, allowed: list[str]) -> bool:

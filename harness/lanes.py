@@ -59,6 +59,76 @@ def branch_name(task_id: str) -> str:
     return f"harness/{safe}"
 
 
+# ------------------------------------------------------------------ ресурсы
+
+PORT_BASE = 18000
+PORTS_PER_LANE = 10
+MAX_LANES = 50
+
+
+def resources_for(root: str, slot: int) -> dict[str, Any]:
+    """Ресурсы слота: формула, а не конфиг — значения можно пересчитать и объяснить."""
+    base = os.path.abspath(root)
+    return {
+        "slot": slot,
+        "port_base": PORT_BASE + slot * PORTS_PER_LANE,
+        "test_db": os.path.join(base, ".harness", "lanes", str(slot), "test.db"),
+        "tmp": os.path.join(base, ".harness", "lanes", str(slot), "tmp"),
+    }
+
+
+def port_free(port: int) -> bool:
+    """Свободен ли порт на loopback. Чужой процесс рядом — повод взять другой слот."""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+    return True
+
+
+def _alive(root: str, task_id: str) -> bool:
+    return os.path.isdir(lane_path(root, task_id))
+
+
+def reserve_slot(store: Store, root: str, task_id: str) -> int:
+    """Первый слот, у которого свободен порт и нет живого владельца.
+
+    Слот исчезнувшего лейна освобождается здесь же: отдельный сборщик не нужен.
+    """
+    for slot in range(MAX_LANES):
+        if not port_free(PORT_BASE + slot * PORTS_PER_LANE):
+            continue
+        owner = store.slot_owner(slot)
+        if owner is not None:
+            if owner != task_id and _alive(root, owner):
+                continue
+            store.release_lane_slot(owner)
+        if store.reserve_lane_slot(task_id, slot):
+            return slot
+    raise LaneError("R-WAVE-1", f"свободных слотов нет: заняты все {MAX_LANES}")
+
+
+def show(root: str, store: Store, task_id: str) -> dict[str, Any]:
+    slot = store.lane_slot(task_id)
+    if slot is None:
+        raise LaneError("R-WAVE-1", f"у задачи {task_id} нет лейна: ресурсы не выдавались")
+    data = resources_for(root, slot)
+    data.update(ok=True, task_id=task_id, lane=branch_name(task_id), path=lane_path(root, task_id))
+    return data
+
+
+def release(store: Store, task_id: str) -> dict[str, Any]:
+    slot = store.lane_slot(task_id)
+    if slot is None:
+        raise LaneError("R-WAVE-1", f"у задачи {task_id} нет слота: освобождать нечего")
+    store.release_lane_slot(task_id)
+    return {"ok": True, "task_id": task_id, "slot": slot, "released": True}
+
+
 # --------------------------------------------------------------------- мьютекс
 
 
@@ -112,14 +182,21 @@ def create(root: str, store: Store, task_id: str, *, base: str = "HEAD") -> dict
     if proc.returncode != 0:
         raise LaneError("R-WAVE-1", f"git worktree add не удался: {proc.stderr.strip()[:300]}")
 
+    try:
+        slot = reserve_slot(store, root, task_id)
+    except LaneError:
+        _git(root, "worktree", "remove", "--force", path)  # не оставляем лейн без ресурсов
+        raise
+
     store.update_task(task_id, lane=branch)
-    store.log(task_id, f"создан лейн {branch} в {os.path.relpath(path, root)}")
+    store.log(task_id, f"создан лейн {branch} в {os.path.relpath(path, root)}, слот {slot}")
     return {
         "ok": True,
         "task_id": task_id,
         "lane": branch,
         "path": path,
         "base": base,
+        "resources": resources_for(root, slot),
         "hint": "агент работает с --root внутри worktree; коммитит финализатор в нём же",
     }
 
@@ -206,7 +283,7 @@ def merge(root: str, store: Store, task_id: str, *, message: str | None = None,
     return {"ok": True, "task_id": task_id, "merge_commit": head, "tree": tree}
 
 
-def remove(root: str, task_id: str, *, force: bool = True) -> dict[str, Any]:
+def remove(root: str, task_id: str, *, force: bool = True, store: Store | None = None) -> dict[str, Any]:
     root = os.path.abspath(root)
     path = lane_path(root, task_id)
     if not os.path.exists(path):
@@ -218,7 +295,13 @@ def remove(root: str, task_id: str, *, force: bool = True) -> dict[str, Any]:
     if proc.returncode != 0:
         shutil.rmtree(path, ignore_errors=True)
         _git(root, "worktree", "prune")
-    return {"ok": True, "task_id": task_id, "removed": path}
+    released = None
+    if store is not None:
+        slot = store.lane_slot(task_id)
+        if slot is not None:
+            store.release_lane_slot(task_id)
+            released = slot
+    return {"ok": True, "task_id": task_id, "removed": path, "released_slot": released}
 
 
 def _paths(porcelain: bytes | str) -> list[str]:
@@ -234,4 +317,5 @@ def _paths(porcelain: bytes | str) -> list[str]:
 CONTROL_POINTS = {
     "lanes.merge": merge,
     "lanes.lock": merge_lock,
+    "lanes.slot": reserve_slot,
 }

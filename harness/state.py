@@ -145,6 +145,12 @@ CREATE TABLE IF NOT EXISTS rule_changes (
     author       TEXT,
     created_at   REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS lane_resources (
+    slot       INTEGER PRIMARY KEY,
+    task_id    TEXT NOT NULL UNIQUE,
+    created_at REAL NOT NULL
+);
 """
 
 
@@ -242,6 +248,38 @@ class Store:
             if cur.rowcount == 0:
                 raise StoreError(f"задача не найдена: {task_id}")
         return self.get_task(task_id)
+
+    # ------------------------------------------------------------- ресурсы лейнов
+    def reserve_lane_slot(self, task_id: str, slot: int) -> bool:
+        """Занимает слот одной транзакцией: коллизия — False, а не совпавшие ресурсы."""
+        try:
+            with self.transaction() as c:
+                c.execute(
+                    "INSERT INTO lane_resources(slot, task_id, created_at) VALUES(?,?,?)",
+                    (slot, task_id, now()),
+                )
+        except sqlite3.IntegrityError:
+            return False
+        return True
+
+    def lane_slot(self, task_id: str) -> int | None:
+        row = self.conn.execute("SELECT slot FROM lane_resources WHERE task_id = ?", (task_id,)).fetchone()
+        return int(row["slot"]) if row else None
+
+    def slot_owner(self, slot: int) -> str | None:
+        row = self.conn.execute("SELECT task_id FROM lane_resources WHERE slot = ?", (slot,)).fetchone()
+        return str(row["task_id"]) if row else None
+
+    def lane_slots(self) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT slot, task_id, created_at FROM lane_resources ORDER BY slot"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def release_lane_slot(self, task_id: str) -> bool:
+        with self.transaction() as c:
+            cur = c.execute("DELETE FROM lane_resources WHERE task_id = ?", (task_id,))
+            return cur.rowcount > 0
 
     # ------------------------------------------------------------------ события
     def append_event(self, event_id: str, task_id: str | None, type_: str, payload: dict[str, Any] | None = None,
