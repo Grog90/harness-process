@@ -1,0 +1,17 @@
+[Unit]
+Description=netmon — панель обращений и ошибок (роутер Keenetic)
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+Environment=ROUTER_API=http://127.0.0.1:2222
+Environment=BLACKBOX=http://127.0.0.1:9115
+Environment=LISTEN_ADDR=0.0.0.0:8080
+ExecStart=/usr/bin/python3 /home/deploy/netmon/netmon.py
+Restart=always
+RestartSec=5
+MemoryMax=200M
+
+[Install]
+WantedBy=multi-user.target

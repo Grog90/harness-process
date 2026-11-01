@@ -1,0 +1,7 @@
+{
+  "case_id": "good_2",
+  "expected": "PASS",
+  "candidate_dir": "candidate",
+  "brief_file": "../../access-brief.json",
+  "note": "explicit: явный список разрешений"
+}

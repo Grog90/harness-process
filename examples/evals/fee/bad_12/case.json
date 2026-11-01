@@ -1,0 +1,7 @@
+{
+  "case_id": "bad_12",
+  "expected": "FAIL",
+  "candidate_dir": "candidate",
+  "brief_file": "../../fee-brief.json",
+  "note": "подмена формулы: x/40 даёт ту же ставку, но округляет по-банковски (fee(20) = 0)"
+}

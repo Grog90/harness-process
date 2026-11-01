@@ -1,0 +1,35 @@
+{
+  "task_id": "EVAL-ACCESS",
+  "brief_version": 1,
+  "base_commit": "9f3c1de",
+  "spec_version": "spec-access-1",
+  "goal": "check_access: матрица доступа по роли и уровню секретности",
+  "expected_behavior": "admin видит public и private; viewer — только public; неизвестная роль — ValueError('ACCESS_UNKNOWN_ROLE')",
+  "scope": {
+    "in_scope": ["src/access.py"],
+    "out_of_scope": []
+  },
+  "allowed_read": ["src/**"],
+  "allowed_files": ["src/access.py"],
+  "contract": {
+    "names": ["check_access"],
+    "types": {"check_access": "(role: str, secret_level: str) -> bool"},
+    "required_fields": ["role", "secret_level"],
+    "error_codes": ["ACCESS_UNKNOWN_ROLE"],
+    "units": "логическое значение",
+    "boundary_rules": "role вне {admin, viewer} -> ValueError('ACCESS_UNKNOWN_ROLE'); отказ — False, а не исключение"
+  },
+  "acceptance": {
+    "criteria": [
+      {"id": "AC-1", "statement": "admin видит private", "mandatory": true, "check": "call"},
+      {"id": "AC-2", "statement": "viewer не видит private", "mandatory": true, "check": "call"},
+      {"id": "AC-3", "statement": "неизвестная роль даёт ACCESS_UNKNOWN_ROLE", "mandatory": true, "check": "call"}
+    ],
+    "check_commands": ["python examples/verifiers/access_verifier.py"]
+  },
+  "control": {
+    "attempt_limit": 3,
+    "open_questions": [],
+    "escalation_route": "человек-владелец доступов"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "case_id": "bad_d2",
+  "expected": "FAIL",
+  "candidate_dir": "candidate",
+  "brief_file": "../../duration-brief.json",
+  "note": "empty_is_zero: пустая строка и мусор дают 0 вместо ошибки"
+}

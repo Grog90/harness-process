@@ -1,0 +1,12 @@
+# Русский распознаватель встаёт рядом с SenseVoice и становится выбором по умолчанию.
+# `speech-to-text` уже вставлен бандлом голосового ввода; config заменяется целиком,
+# поэтому перечисляем все поля строки, а не только изменённое.
+- id: speech-to-text
+  config:
+    defaultProvider: gigaam-ru
+    language: ru
+- insert:
+    - id: speech-to-text-gigaam
+      name: '@local/dsh-speech-to-text-gigaam'
+      config:
+        dataRoot: !!js dshHomePath('speech-to-text', 'gigaam')

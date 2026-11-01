@@ -1,0 +1,7 @@
+{
+  "case_id": "bad_d5",
+  "expected": "FAIL",
+  "candidate_dir": "candidate",
+  "brief_file": "../../duration-brief.json",
+  "note": "negative_allowed: отрицательное значение принимается как -300"
+}

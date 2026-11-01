@@ -1,0 +1,7 @@
+{
+  "case_id": "bad_10",
+  "expected": "FAIL",
+  "candidate_dir": "candidate",
+  "brief_file": "../../fee-brief.json",
+  "note": "hardcoded: игра под тест: частный случай вместо общего правила"
+}

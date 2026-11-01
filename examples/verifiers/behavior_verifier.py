@@ -79,6 +79,17 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         add("AC-2", False, f"модуль не загрузился: {type(exc).__name__}: {exc}")
 
+    # AC-3: ровная половина округляется вверх.
+    # 20 * 0.025 = 0.5 — единственный вход, где round() и «половина вверх» расходятся:
+    # на 20000 и 12345 банковское округление совпадает с обычным.
+    try:
+        mod = load_module(target)
+        fee = getattr(mod, "calculate_fee")
+        got = fee(20)
+        add("AC-3", got == 1, f"calculate_fee(20) -> {got!r} (ожидалось 1: 0.5 округляется вверх)")
+    except Exception as exc:  # noqa: BLE001
+        add("AC-3", False, f"вызов calculate_fee(20) упал: {type(exc).__name__}: {exc}")
+
     kind = "PASS" if all(c["result"] == "pass" for c in criteria) else "FAIL"
     verdict = {
         "verdict_id": f"v-{case_id}",

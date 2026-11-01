@@ -1,0 +1,7 @@
+{
+  "case_id": "bad_d1",
+  "expected": "FAIL",
+  "candidate_dir": "candidate",
+  "brief_file": "../../duration-brief.json",
+  "note": "unknown_unit_ignored: неизвестная единица и минус молча пропускаются: 10x -> 10, -5m -> 300"
+}

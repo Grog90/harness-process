@@ -1,0 +1,7 @@
+{
+  "case_id": "good_8",
+  "expected": "PASS",
+  "candidate_dir": "candidate",
+  "brief_file": "../../fee-brief.json",
+  "note": "guarded: явная граница нуля и округление вверх"
+}

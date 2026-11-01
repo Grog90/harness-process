@@ -1,0 +1,7 @@
+{
+  "case_id": "good_6",
+  "expected": "PASS",
+  "candidate_dir": "candidate",
+  "brief_file": "../../fee-brief.json",
+  "note": "explicit: Decimal с явным правилом округления"
+}

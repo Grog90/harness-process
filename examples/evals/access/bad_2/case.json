@@ -1,0 +1,7 @@
+{
+  "case_id": "bad_2",
+  "expected": "FAIL",
+  "candidate_dir": "candidate",
+  "brief_file": "../../access-brief.json",
+  "note": "silent_false: неизвестная роль молча получает отказ вместо ошибки"
+}

@@ -1,0 +1,37 @@
+{
+  "task_id": "EVAL-DURATION",
+  "brief_version": 1,
+  "base_commit": "9f3c1de",
+  "spec_version": "spec-duration-1",
+  "goal": "parse_duration: строка вида 1h30m в секунды",
+  "expected_behavior": "1h30m -> 5400; 45m -> 2700; неизвестная единица, пустая строка и отрицательное значение -> ValueError('DURATION_INVALID')",
+  "scope": {
+    "in_scope": ["src/duration.py"],
+    "out_of_scope": []
+  },
+  "allowed_read": ["src/**"],
+  "allowed_files": ["src/duration.py"],
+  "contract": {
+    "names": ["parse_duration"],
+    "types": {"parse_duration": "(text: str) -> int"},
+    "required_fields": ["text"],
+    "error_codes": ["DURATION_INVALID"],
+    "units": "секунды",
+    "boundary_rules": "единицы h/m/s; порядок произвольный; пустая строка, неизвестная единица и '-' -> ValueError('DURATION_INVALID'); результат — int"
+  },
+  "acceptance": {
+    "criteria": [
+      {"id": "AC-1", "statement": "1h30m -> 5400, int", "mandatory": true, "check": "call"},
+      {"id": "AC-2", "statement": "45m -> 2700", "mandatory": true, "check": "call"},
+      {"id": "AC-3", "statement": "неизвестная единица -> DURATION_INVALID", "mandatory": true, "check": "call"},
+      {"id": "AC-4", "statement": "пустая строка -> DURATION_INVALID, а не 0", "mandatory": true, "check": "call"},
+      {"id": "AC-5", "statement": "отрицательное значение -> DURATION_INVALID", "mandatory": true, "check": "call"}
+    ],
+    "check_commands": ["python examples/verifiers/duration_verifier.py"]
+  },
+  "control": {
+    "attempt_limit": 3,
+    "open_questions": [],
+    "escalation_route": "человек-владелец тарифов"
+  }
+}

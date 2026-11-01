@@ -1,0 +1,7 @@
+{
+  "case_id": "bad_11",
+  "expected": "FAIL",
+  "candidate_dir": "candidate",
+  "brief_file": "../../fee-brief.json",
+  "note": "floor: отсечение вместо округления: 12345 -> 308, ожидалось 309"
+}

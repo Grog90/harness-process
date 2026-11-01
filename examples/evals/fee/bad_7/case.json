@@ -1,0 +1,7 @@
+{
+  "case_id": "bad_7",
+  "expected": "FAIL",
+  "candidate_dir": "candidate",
+  "brief_file": "../../fee-brief.json",
+  "note": "float: подмена типа: возвращается float вместо int"
+}

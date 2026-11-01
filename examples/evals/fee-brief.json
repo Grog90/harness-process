@@ -28,7 +28,7 @@
       "FEE_NEGATIVE"
     ],
     "units": "minor currency units",
-    "boundary_rules": "amount_minor < 0 -> ValueError('FEE_NEGATIVE')"
+    "boundary_rules": "amount_minor < 0 -> ValueError('FEE_NEGATIVE'); округление половины вверх: calculate_fee(20) = 1, а не 0"
   },
   "acceptance": {
     "criteria": [
@@ -41,6 +41,12 @@
       {
         "id": "AC-2",
         "statement": "отрицательная сумма отвергается FEE_NEGATIVE",
+        "mandatory": true,
+        "check": "call"
+      },
+      {
+        "id": "AC-3",
+        "statement": "ровная половина округляется вверх: 20 -> 1",
         "mandatory": true,
         "check": "call"
       }

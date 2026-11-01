@@ -1,0 +1,7 @@
+{
+  "case_id": "bad_4",
+  "expected": "FAIL",
+  "candidate_dir": "candidate",
+  "brief_file": "../../access-brief.json",
+  "note": "always_true: разрешение всего: проверка уровня не выполняется"
+}

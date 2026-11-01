@@ -1,0 +1,140 @@
+global:
+  scrape_interval: 30s
+  scrape_timeout: 15s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ['127.0.0.1:9090']
+
+  # --- ICMP: качество канала до провайдера и до VPS ---
+  - job_name: blackbox_icmp
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    static_configs:
+      - targets: ['1.1.1.1']
+        labels:
+          name: wan_cloudflare
+          path: wan
+      - targets: ['8.8.8.8']
+        labels:
+          name: wan_google
+          path: wan
+      - targets: ['177.177.230.47']
+        labels:
+          name: vps
+          path: wan
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+
+  # --- HTTP напрямую: быстрый контроль канала провайдера ---
+  # Instagram сюда не входит: он заблокирован у провайдера, проба висит 10 с.
+  - job_name: blackbox_http_direct
+    metrics_path: /probe
+    params:
+      module: [http_direct]
+    static_configs:
+      - targets: ['https://www.google.com/generate_204']
+        labels:
+          name: google_direct
+          path: direct
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+
+  # --- Instagram напрямую: информационно, редко (он заблокирован) ---
+  - job_name: blackbox_http_direct_ig
+    scrape_interval: 5m
+    metrics_path: /probe
+    params:
+      module: [http_direct]
+    static_configs:
+      - targets: ['https://www.instagram.com/']
+        labels:
+          name: instagram_direct
+          path: direct
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+
+  # --- HTTP через Hysteria: основной контроль туннеля ---
+  - job_name: blackbox_http_vpn
+    metrics_path: /probe
+    params:
+      module: [http_vpn]
+    static_configs:
+      - targets: ['https://www.google.com/generate_204']
+        labels:
+          name: google_vpn
+          path: vpn
+      - targets: ['https://t.me/']
+        labels:
+          name: telegram_vpn
+          path: vpn
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+
+  # --- Instagram через VPN: реже, чтобы не ловить собственный 429 ---
+  - job_name: blackbox_http_vpn_ig
+    scrape_interval: 5m
+    metrics_path: /probe
+    params:
+      module: [http_vpn_ig]
+    static_configs:
+      - targets: ['https://www.instagram.com/']
+        labels:
+          name: instagram_vpn
+          path: vpn
+
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+
+  # --- API-хост Instagram (лента и рекомендации): строгий модуль, 429 = провал ---
+  - job_name: blackbox_http_vpn_api
+    scrape_interval: 5m
+    metrics_path: /probe
+    params:
+      module: [http_vpn_strict]
+    static_configs:
+      - targets: ['https://i.instagram.com/api/v1/accounts/current_user/']
+        labels:
+          name: instagram_api_vpn
+          path: vpn
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+
+  # --- Реальные потоки устройств с роутера (экспортёр на 9116) ---
+  - job_name: router_flows
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['127.0.0.1:9116']

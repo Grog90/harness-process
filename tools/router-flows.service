@@ -1,0 +1,16 @@
+[Unit]
+Description=Router flows exporter (реальные потоки Keenetic -> Prometheus)
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+Environment=ROUTER_API=http://127.0.0.1:2222
+Environment=POLL_INTERVAL=15
+Environment=LISTEN_ADDR=127.0.0.1:9116
+ExecStart=/usr/bin/python3 /home/deploy/router-flows/collector.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

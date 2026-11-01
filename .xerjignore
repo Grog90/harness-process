@@ -1,0 +1,24 @@
+# XERJ-only excludes for this workspace (синтаксис .gitignore).
+# Мусор от прошлых экспериментов: не часть проекта, в индекс не идёт.
+probe_a/
+probe_b/
+probe2/
+torchinductor_Grog/
+pip-build-tracker-*/
+pip-ephem-wheel-cache-*/
+pip-install-*/
+
+# состояние прогонов и внешние бинарники (в .gitignore уже есть, но индекс
+# читает не только git)
+evidence/
+pipeline-log/
+.harness/
+.tools/
+.browser/
+.recall/
+.hindsight/
+
+# Тестовая фикстура: внутри tools/memory_facts_bench.py лежит копия 15 фактов,
+# и она перебивает docs/FACTS.md в поиске «что мы знаем». Источник правды —
+# docs/FACTS.md, поэтому фикстуру из индекса убираем.
+tools/memory_facts_bench.py

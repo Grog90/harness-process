@@ -1,0 +1,7 @@
+{
+  "case_id": "bad_d3",
+  "expected": "FAIL",
+  "candidate_dir": "candidate",
+  "brief_file": "../../duration-brief.json",
+  "note": "hours_dropped: часы теряются: 1h30m -> 1800, мусор даёт 0"
+}

@@ -1,0 +1,7 @@
+{
+  "case_id": "good_d1",
+  "expected": "PASS",
+  "candidate_dir": "candidate",
+  "brief_file": "../../duration-brief.json",
+  "note": "regex_fullmatch: полное совпадение с шаблоном, мусор отвергается"
+}

@@ -1,0 +1,7 @@
+{
+  "case_id": "bad_d4",
+  "expected": "FAIL",
+  "candidate_dir": "candidate",
+  "brief_file": "../../duration-brief.json",
+  "note": "float_result: подмена типа: 5400.0 вместо int"
+}

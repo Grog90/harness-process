@@ -1,0 +1,7 @@
+{
+  "case_id": "good_1",
+  "expected": "PASS",
+  "candidate_dir": "candidate",
+  "brief_file": "../../access-brief.json",
+  "note": "plain: корректная матрица доступа"
+}

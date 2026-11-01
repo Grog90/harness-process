@@ -1,0 +1,7 @@
+{
+  "case_id": "good_d3",
+  "expected": "PASS",
+  "candidate_dir": "candidate",
+  "brief_file": "../../duration-brief.json",
+  "note": "explicit_units: явная проверка единицы и нулевого результата"
+}
