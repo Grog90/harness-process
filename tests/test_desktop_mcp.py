@@ -442,6 +442,14 @@ class DocsTests(unittest.TestCase):
         for needle in ("snapshot", "ref", "retry", "set_value"):
             self.assertIn(needle, skill, f"в SKILL.md нет {needle!r}")
 
+    def test_doc_names_working_binary_path(self):
+        """Документация требует короткий ASCII-путь и переменную DESKTOP_BIN."""
+        doc = (PROJECT_ROOT / "docs" / "DESKTOP.md").read_text(encoding="utf-8")
+        self.assertIn(r"C:\Tools\agent-desktop", doc)
+        self.assertIn("DESKTOP_BIN", doc)
+        self.assertIn("кириллиц", doc.lower())
+        self.assertNotIn("распаковать в .tools/agent-desktop/pkg/v1.0.1/", doc)
+
     def test_no_network_modules(self):
         source = (PROJECT_ROOT / "tools" / "desktop_mcp.py").read_text(encoding="utf-8")
         for forbidden in ("urllib", "requests", "httpx", "socket"):

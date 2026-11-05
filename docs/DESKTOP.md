@@ -1,6 +1,6 @@
 # Десктоп для агента: agent-desktop
 
-Проверено 2026-11-01 на Windows x64 (agent-desktop 1.0.1). Здесь: зачем десктоп,
+Проверено 2026-11-05 на Windows x64 (agent-desktop 1.0.1). Здесь: зачем десктоп,
 почему именно эта программа, как она подключена, где её границы и что делать,
 когда она отказывает.
 
@@ -15,10 +15,13 @@
 
 | Что | Где | Версия |
 |---|---|---|
-| бинарник | `.tools/agent-desktop/pkg/v1.0.1/agent-desktop.exe` | 1.0.1 |
-| бинарник (сломан) | `.tools/agent-desktop/pkg/v1.0.2/agent-desktop.exe` | 1.0.2 — оставлен для разбора |
+| бинарник | `C:\Tools\agent-desktop\v1.0.1\agent-desktop.exe` | 1.0.1 |
+| копия (не использовать) | `.tools/agent-desktop/pkg/v1.0.1`, `.../v1.0.2` | 1.0.1, 1.0.2 |
 | обёртка | `tools/desktop_mcp.py` | 1.0.0 |
 | запись MCP | `cordis.patch.yml` профиля DSH | — |
+
+Рабочая копия лежит **вне проекта**, на коротком пути без кириллицы. Это не
+косметика: см. § 3.
 
 ### Установка закреплённой версии
 
@@ -32,25 +35,42 @@ curl -fL -o checksums.txt https://github.com/vercel-labs/agent-desktop/releases/
 # 2. сверить sha256 с checksums.txt — глазами, до распаковки
 Get-FileHash ad.tgz -Algorithm SHA256
 
-# 3. распаковать в .tools/agent-desktop/pkg/v1.0.1/ и проверить запуск
-tar -xzf ad.tgz -C .tools/agent-desktop/pkg/v1.0.1
-.\.tools\agent-desktop\pkg\v1.0.1\agent-desktop.exe status
+# 3. распаковать на короткий путь и проверить запуск
+New-Item -ItemType Directory -Force -Path C:\Tools\agent-desktop\v1.0.1 | Out-Null
+tar -xzf ad.tgz -C C:\Tools\agent-desktop\v1.0.1
+C:\Tools\agent-desktop\v1.0.1\agent-desktop.exe status
 ```
 
-Ожидаемый `status`: `"accessibility": {"state": "granted"}`. Путь можно
-переопределить переменной `DESKTOP_BIN`.
+Ожидаемый `status`: `"accessibility": {"state": "granted"}`. Путь к бинарнику
+можно переопределить переменной `DESKTOP_BIN` — обёртка смотрит её первой.
+
+## 3. Правило пути (дорого выученное)
+
+Бинарник **нельзя** держать в папке проекта, если путь длинный и с кириллицей.
+Проверено 2026-11-05 одним и тем же файлом (sha256 `e2551cbd…`) в одну секунду:
+
+| Путь к exe | `snapshot` |
+|---|---|
+| `C:\Tools\agent-desktop\v1.0.1\agent-desktop.exe` | ok, 195 элементов |
+| `…\OneDrive\Документы\deepseek-harness\default-workspace\probe.exe` | `lock directory is not trustworthy: Отказано в доступе. (os error 5)` либо `WINDOW_NOT_FOUND` |
+
+Разложено по частям: кириллица при коротком пути — ок; латиница при длинном
+пути — ок; длинный путь **и** кириллица — падает. Сообщение про «каталог
+блокировки» — ложный след: `io_untrusted()` в
+`crates/windows/src/system/interaction_lease/directory.rs` склеивает любую
+`io::Error` в один текст.
+
+**Поэтому:** агентские бинарники ставить на короткий ASCII-путь
+(`C:\Tools\…`), а `DESKTOP_BIN` держать в профиле.
 
 ### Почему закреплена 1.0.1, а не 1.0.2
 
-На этой машине 1.0.2 не работает: `launch` отвечает
-`INTERNAL: lock directory is not trustworthy: Отказано в доступе. (os error 5)`,
-`list-apps` — `INTERNAL: a window-owning process is absent from the process snapshot`,
-`snapshot` — `os error 5`, а `app_name` у всех окон пустой. При этом UI Automation
-доступен: те же окна читаются из PowerShell через `System.Windows.Automation`.
-Проверка 1.0.1 на том же рабочем столе проходит полностью. Поэтому обёртка ищет
-только `v1.0.1` явным путём и **не** перебирает каталоги версий.
+Отдельно от пути: 1.0.2 на этой машине отвечала `INTERNAL: lock directory is not
+trustworthy`, `INTERNAL: a window-owning process is absent from the process
+snapshot` и не отдавала имена приложений ни для одного окна. 1.0.1 в тех же
+условиях работает. Разбирать 1.0.2 отдельно; понижение до 1.0.1 — сознательное.
 
-## 3. Инструменты
+## 4. Инструменты
 
 | Инструмент | Что делает |
 |---|---|
@@ -65,7 +85,7 @@ tar -xzf ad.tgz -C .tools/agent-desktop/pkg/v1.0.1
 
 Цикл: `snapshot` или `find` → `act` по `ref` → снова `snapshot`.
 
-## 4. Правила, которые обёртка держит сама
+## 5. Правила, которые обёртка держит сама
 
 - **Физический ввод запрещён.** `--headed` не передаётся никогда. `type`,
   `right-click`, `double-click`, `hover`, `drag`, `focus` и мышиные команды
@@ -78,7 +98,7 @@ tar -xzf ad.tgz -C .tools/agent-desktop/pkg/v1.0.1
 - **Данные не логируются.** Значения полей, буфер обмена и текст окон не
   пишутся в файлы; в stderr уходит только диагностика запуска.
 
-## 5. Границы и известные ляпы
+## 6. Границы и известные ляпы
 
 - **Права.** Работает только в интерактивном сеансе пользователя. Окна с
   повышением прав (UAC), secure desktop и заблокированный экран не видны:
@@ -86,19 +106,19 @@ tar -xzf ad.tgz -C .tools/agent-desktop/pkg/v1.0.1
 - **Подпись.** Бинарник не подписан — SmartScreen и антивирус могут ругаться;
   контрольная сумма проверяется только вручную, при установке.
 - **Свёрнутые окна** не оживают: сначала `restore`, потом снимок.
+- **`list_apps` и UWP.** У упакованных приложений (Калькулятор) `list_apps`
+  показывает `ApplicationFrameHost.exe`, а окно принадлежит `CalculatorApp.exe`.
+  Бери имя из `list_windows`, а не из `list_apps`.
 - **`snapshot --app X` при незапущенном приложении** отвечает
   «running but no matching window» — сообщение врёт, процесс не запущен.
-  Проверяй `list_apps`.
 - **`SNAPSHOT_NOT_FOUND`.** Снимки и ref живут в состоянии бинарника
   (`~/.agent-desktop` по умолчанию, переопределяется `AGENT_DESKTOP_HOME`).
   Если снимок сделан при одном состоянии, а действие выполняется при другом —
   ref не найдётся. Обёртка всегда работает с одним состоянием.
-- **`app_name` в `list_windows`** у части окон пустой; фильтр `--app` идёт по
-  имени процесса, поэтому бери имя из `list_apps`.
 
-## 6. Регистрация в профиле
+## 7. Регистрация в профиле
 
-Одна запись в `cordis.patch.yml` профиля DSH, в существующем списке MCP-серверов:
+Одна запись в `cordis.patch.yml` профиля DSH, в общем списке MCP-серверов:
 
 ```yaml
     - id: mcp-desktop
@@ -110,27 +130,26 @@ tar -xzf ad.tgz -C .tools/agent-desktop/pkg/v1.0.1
         args:
           - 'C:\Users\ownag\OneDrive\Документы\deepseek-harness\default-workspace\tools\desktop_mcp.py'
         cwd: 'C:\Users\ownag\OneDrive\Документы\deepseek-harness\default-workspace'
+        env:
+          DESKTOP_BIN: 'C:\Tools\agent-desktop\v1.0.1\agent-desktop.exe'
         toolCallTimeoutMs: 90000
+        failOnStartupError: false
 ```
 
-После правки — перезапуск приложения: инструменты читаются при старте профиля.
+`DESKTOP_BIN` обязателен: без него обёртка ищет бинарник в `.tools/…` внутри
+проекта, то есть на том самом длинном пути с кириллицей. После правки —
+перезапуск приложения: инструменты читаются при старте профиля.
 
-## 7. Проверка без перезапуска
+## 8. Проверка
+
+Без перезапуска:
 
 ```powershell
 '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python tools/desktop_mcp.py
 ```
 
-Ответ — строка JSON с восемью инструментами. Полный живой прогон (нужен
-открытый Блокнот):
+Ответ — строка JSON с восемью инструментами.
 
-```powershell
-'{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"snapshot","arguments":{"app":"Notepad.exe","max_nodes":50}}}' | python tools/desktop_mcp.py
-```
-
-- **Состояние на 2026-11-05.** На этой машине бинарник начал отвечать
-  INTERNAL: lock directory is not trustworthy: Отказано в доступе. (os error 5)
-  и INTERNAL: a window-owning process is absent from the process snapshot —
-  одинаково у 1.0.1 и 1.0.2, при доступном UI Automation из PowerShell и
-  пересозданном state_root. Обёртка такие ответы отдаёт как есть, с кодом и
-  etry; это дефект бинарника, а не обёртки. Разбор — отдельной задачей.
+Живой прогон (2026-11-05, Калькулятор): `snapshot` отдал 56 элементов с русскими
+именами, `act click` по кнопке «Семь» вернул `delivered_unverified`, повторный
+`snapshot` показал дисплей `7` вместо `0` — нажатие подтверждено перечитыванием.
