@@ -33,6 +33,36 @@ CHROME_CANDIDATES = [
 
 DEFAULT_PORT = 9224
 DEFAULT_WAIT = 12.0
+
+#: Постоянный профиль Chrome. Если задан, браузер не headless и не удаляется
+#: после закрытия: остаются куки, история и вход в Google. Без переменной —
+#: прежнее поведение (одноразовый пустой профиль, headless).
+PROFILE_ENV = "DSH_CHROME_PROFILE"
+#: "1" — показывать окно браузера (нужно для профиля с куками: Google
+#: не любит headless даже с валидной сессией).
+HEADFUL_ENV = "DSH_CHROME_HEADFUL"
+#: Файл настроек, если переменные окружения не заданы (правка без перезапуска
+#: MCP-сервера): {".browser/chrome.json": {"headful": true, "profile": "..."}}
+CONFIG_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".browser", "chrome.json"
+)
+
+
+def _settings() -> dict[str, Any]:
+    """Режим браузера: env важнее файла, файл важнее прежнего поведения."""
+    cfg: dict[str, Any] = {}
+    try:
+        with open(os.environ.get("DSH_CHROME_CONFIG") or CONFIG_PATH, encoding="utf-8") as fh:
+            cfg = json.load(fh) or {}
+    except (OSError, ValueError):
+        cfg = {}
+    headful = os.environ.get(HEADFUL_ENV)
+    if headful is None:
+        headful = cfg.get("headful", False)
+    return {
+        "headful": str(headful).strip().lower() in ("1", "true", "yes", "on"),
+        "profile": os.environ.get(PROFILE_ENV) or str(cfg.get("profile") or ""),
+    }
 SHOT_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".browser"
 )
@@ -124,21 +154,25 @@ class Chrome:
         self.exe = next((p for p in CHROME_CANDIDATES if os.path.exists(p)), None)
         if not self.exe:
             raise RuntimeError("Chrome или Edge не найден в стандартных путях")
-        self.profile = tempfile.mkdtemp(prefix="cdp-mcp-")
+        opts = _settings()
+        self.profile = opts["profile"] or tempfile.mkdtemp(prefix="cdp-mcp-")
+        self._owns_profile = not opts["profile"]
+        headful = opts["headful"]
+        args = [
+            self.exe,
+            "--no-first-run",
+            "--disable-session-crashed-bubble",
+            "--hide-crash-restore-bubble",
+            "--disable-features=Translate,OptimizationHints",
+            f"--remote-debugging-port={port}",
+            f"--user-data-dir={self.profile}",
+        ]
+        if not headful:
+            args[1:1] = ["--headless=new", "--disable-gpu", "--no-sandbox",
+                         "--disable-extensions", "--hide-scrollbars"]
+        args.append("about:blank")
         self.proc = subprocess.Popen(
-            [
-                self.exe,
-                "--headless=new",
-                "--disable-gpu",
-                "--no-sandbox",
-                "--no-first-run",
-                "--disable-extensions",
-                "--hide-scrollbars",
-                "--disable-features=Translate,OptimizationHints",
-                f"--remote-debugging-port={port}",
-                f"--user-data-dir={self.profile}",
-                "about:blank",
-            ],
+            args,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -204,7 +238,8 @@ class Chrome:
                 pass
         if self.ws:
             self.ws.close()
-        shutil.rmtree(self.profile, ignore_errors=True)
+        if self._owns_profile:
+            shutil.rmtree(self.profile, ignore_errors=True)
 
 
 def _slug(text: str) -> str:
