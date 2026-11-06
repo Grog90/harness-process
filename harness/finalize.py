@@ -117,7 +117,7 @@ def finalize(
     if current != task.get("accepted_snapshot"):
         raise FinalizeError(
             "R-SNAPSHOT-1",
-            "кандидат изменился после PASS: коммит запрещён, требуется повторная проверка",
+            "кандидат изменился после PASS: коммит запрещён, требуется повторная проверка (файлы задачи не менялись — `harness event --task <id> --event recheck`; менялись — invalidate)",
             accepted=task.get("accepted_snapshot"),
             current=current,
         )

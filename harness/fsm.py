@@ -16,6 +16,7 @@ from typing import Any, Callable
 from . import brief as brief_mod
 from . import cost as cost_mod
 from . import scope as scope_mod
+from . import snapshot as snapshot_mod
 from . import verdict as verdict_mod
 from .policy import Decision, Policy, deny, normalize_path
 from .state import Store, StoreError, new_id, now
@@ -70,6 +71,7 @@ TRANSITIONS: dict[tuple[str, str], str] = {
     ("REWORK_READY", "escalate"): "ESCALATED",
     ("REWORK_READY", "cancel"): "CANCELLED",
     ("ACCEPTED", "commit"): "COMMITTED",
+    ("ACCEPTED", "recheck"): "VERIFYING",
     ("ACCEPTED", "invalidate"): "REWORK_READY",
     ("ACCEPTED", "escalate"): "ESCALATED",
     ("TIMED_OUT", "requeue"): "REWORK_READY",
@@ -197,6 +199,10 @@ class Engine:
             fields["snapshot_scope"] = payload.get("_scope", "")
         if new_state == "ACCEPTED":
             fields["accepted_snapshot"] = task.get("verifying_snapshot") or payload.get("_snapshot")
+            # опись самих файлов задачи: по ней recheck отличит чужую правку от переделки
+            fields["accepted_files_snapshot"] = snapshot_mod.files_snapshot(
+                self.root, _brief_allowed(self, task)
+            )
             v = payload.get("verdict") or {}
             fields["verdict_id"] = v.get("verdict_id")
         if new_state in ("REWORK_READY", "ESCALATED", "COMMITTED", "CANCELLED"):
@@ -457,6 +463,42 @@ def _guard_invalidate(engine: Engine, task: dict[str, Any], payload: dict[str, A
         raise TransitionError("R-BUDGET-2", "бюджет исчерпан: инвалидация ведёт к эскалации, не к доработке")
 
 
+def _brief_allowed(engine: Engine, task: dict[str, Any]) -> list[str]:
+    b = engine._brief(task)
+    return list(b.allowed_files) if b else []
+
+
+def _guard_recheck_after_accept(engine: Engine, task: dict[str, Any], payload: dict[str, Any]) -> None:
+    """Повторная проверка после PASS без расхода попытки.
+
+    Разрешена только тогда, когда файлы самого кандидата остались байт в байт теми же,
+    что прошли проверку: сдвиг снимка дал кто-то посторонний (владелец закоммитил свои
+    файлы, обновился сгенерированный артефакт). Если изменился файл из allowed_files —
+    это переделка, и она обязана идти через invalidate с новой попыткой.
+    """
+    baseline = task.get("accepted_files_snapshot")
+    if not baseline:
+        raise TransitionError(
+            "R-SNAPSHOT-1",
+            "нет описи файлов кандидата на момент PASS: повторная проверка невозможна, "
+            "кандидата надо переделать через invalidate",
+        )
+    now_files = snapshot_mod.files_snapshot(engine.root, _brief_allowed(engine, task))
+    if now_files != baseline:
+        raise TransitionError(
+            "R-SNAPSHOT-1",
+            "файлы кандидата изменились после PASS: это переделка, а не чужая правка — "
+            "нужен invalidate и новая попытка",
+            accepted_files=baseline,
+            current_files=now_files,
+        )
+    scope = task.get("snapshot_scope") or ""
+    current = snapshot_mod.compute_for_scope(engine.root, scope)
+    payload["_snapshot"] = current
+    payload["_scope"] = scope
+    # прежний PASS относится к прошлому снимку: держим только вердикт нового снимка
+    engine.store.mark_verdicts_stale(task["task_id"], keep_snapshot=current)
+
 GUARDS: dict[tuple[str, str], Callable[[Engine, dict[str, Any], dict[str, Any]], None]] = {
     ("CLAIMED", "attach_brief"): _guard_attach_brief,
     ("CLAIMED", "dispatch"): _guard_no_brief,
@@ -469,6 +511,7 @@ GUARDS: dict[tuple[str, str], Callable[[Engine, dict[str, Any], dict[str, Any]],
     ("ACCEPTED", "commit"): _guard_commit,
     ("TIMED_OUT", "requeue"): _guard_requeue,
     ("ACCEPTED", "invalidate"): _guard_invalidate,
+    ("ACCEPTED", "recheck"): _guard_recheck_after_accept,
 }
 
 

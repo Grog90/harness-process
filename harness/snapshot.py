@@ -105,3 +105,19 @@ def scope_of(root: str, path: str) -> str:
         raise ValueError(f"область снимка вне корня проекта: {path!r}")
     return rel
 
+def files_snapshot(root: str, paths: "Iterable[str]") -> str:
+    """Хеш только перечисленных файлов: доказательство, что сам кандидат не менялся.
+
+    Зачем: снимок дерева ловит любую правку, включая чужие файлы, которые владелец
+    закоммитил уже после PASS. Такой сдвиг не переделывает кандидата, и повторная
+    проверка (recheck) должна это доказать, а не поверить на слово. Отсутствующий
+    файл учитывается отдельной меткой: иначе создание или удаление файла из набора
+    не изменило бы хеш.
+    """
+    entries = []
+    for rel in sorted({str(p).replace("\\", "/") for p in paths}):
+        full = os.path.join(root, rel)
+        digest = file_hash(full) if os.path.isfile(full) else "missing"
+        entries.append({"path": rel, "sha256": digest})
+    payload = json.dumps(entries, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return "files_" + hashlib.sha256(payload.encode("utf-8")).hexdigest()

@@ -529,6 +529,63 @@ def c_finalize_ok(root: str) -> None:
     assert snapshot2 != snapshot
 
 
+def _git_commit(root: str, message: str, paths: list[str] | None = None) -> None:
+    """Коммит в тестовом репозитории: владелец сохранил свои файлы, не трогая кандидата."""
+    import subprocess
+
+    add = ["git", "-C", root, "add"] + (paths or ["-A"])
+    subprocess.run(add, capture_output=True, text=True, check=True)
+    subprocess.run(
+        ["git", "-C", root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", message],
+        capture_output=True, text=True, check=True,
+    )
+
+
+def c_recheck_after_foreign_commit(root: str) -> None:
+    """Чужой коммит сдвинул дерево: кандидат тот же — перепроверка, а не новая попытка."""
+    from .finalize import FinalizeError, finalize
+
+    _git_setup(root)
+    with open(os.path.join(root, "src", "fee.py"), "w", encoding="utf-8") as fh:
+        fh.write("def calculate_fee(amount):\n    return int(amount * 0.025)\n")
+    eng = _engine(root)
+    accepted = _accepted_task(eng, root)
+
+    stray = os.path.join(root, "tools", "note.py")
+    os.makedirs(os.path.dirname(stray), exist_ok=True)
+    with open(stray, "w", encoding="utf-8") as fh:
+        fh.write("x = 1\n")
+    _git_commit(root, "tools: свой файл", ["tools/note.py"])
+    assert compute_for_scope(root, "") != accepted
+
+    try:
+        finalize(eng.store, eng, root, "T-GIT")
+    except FinalizeError as exc:
+        assert exc.rule == "R-SNAPSHOT-1", f"{exc.rule}: {exc}"
+    else:
+        raise AssertionError("коммит на сдвинутом снимке прошёл без повторной проверки")
+
+    attempt = int(eng.store.get_task("T-GIT")["attempt"])
+    eng.apply("T-GIT", "recheck", {})
+    task = eng.store.get_task("T-GIT")
+    assert task["state"] == "VERIFYING", task["state"]
+    assert int(task["attempt"]) == attempt, (task["attempt"], attempt)
+    current = compute_for_scope(root, "")
+    eng.apply("T-GIT", "verdict", {"verdict": verdict_data("T-GIT", attempt=attempt, snapshot=current)})
+    out = finalize(eng.store, eng, root, "T-GIT", message="fee: 2.5%")
+    assert out["ok"], out
+
+
+def c_recheck_denied_after_candidate_edit(root: str) -> None:
+    """Правка файла кандидата после PASS — переделка: recheck обязан отказать."""
+    _git_setup(root)
+    eng = _engine(root)
+    _accepted_task(eng, root)
+    with open(os.path.join(root, "src", "fee.py"), "w", encoding="utf-8") as fh:
+        fh.write("def calculate_fee(amount):\n    return 999\n")
+    _expect_deny(lambda: eng.apply("T-GIT", "recheck", {}), "R-SNAPSHOT-1")
+    assert eng.store.get_task("T-GIT")["state"] == "ACCEPTED"
+
 def c_checks_isolated(root: str) -> None:
     from . import checks as checks_mod
 
@@ -854,6 +911,8 @@ CHECKS: list[Check] = [
     Check("R-BUDGET-1", "три попытки и эскалация", c_budget_negative),
     Check("R-VERIFY-1", "коммит без вердикта невозможен", c_commit_without_verdict),
     Check("R-SNAPSHOT-1", "правка после PASS инвалидирует вердикт", c_stale_pass),
+    Check("R-SNAPSHOT-1", "чужой коммит после PASS — перепроверка без новой попытки", c_recheck_after_foreign_commit),
+    Check("R-SNAPSHOT-1", "правка файла кандидата после PASS — recheck запрещён", c_recheck_denied_after_candidate_edit),
     Check("R-VERIFY-1", "PASS на неизменённом снимке ведёт к коммиту", c_commit_positive),
     Check("R-COMMIT-1", "PASS без покрытия критериев — не PASS", c_pass_without_criteria),
     Check("R-ADV-1", "адверсальный PASS без сценария запрещён", c_adversarial_without_scenario),

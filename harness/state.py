@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     candidate_snapshot TEXT,
     verifying_snapshot TEXT,
     accepted_snapshot  TEXT,
+    accepted_files_snapshot TEXT,
     verdict_id        TEXT,
     policy_version    TEXT,
     escalated_reason  TEXT,
@@ -187,6 +188,8 @@ class Store:
             self.conn.execute("ALTER TABLE tasks ADD COLUMN snapshot_scope TEXT NOT NULL DEFAULT ''")
         if "commit_sha" not in cols:
             self.conn.execute("ALTER TABLE tasks ADD COLUMN commit_sha TEXT")
+        if "accepted_files_snapshot" not in cols:
+            self.conn.execute("ALTER TABLE tasks ADD COLUMN accepted_files_snapshot TEXT")
 
     # ------------------------------------------------------------------ транзакции
     @contextmanager
