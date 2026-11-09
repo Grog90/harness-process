@@ -25,7 +25,7 @@ MARKER = "<!-- lessons:auto -->"
 SECTION = "## Уроки"
 LESSON_LINE_RE = re.compile(r"^- \[(?P<id>L-\d{8}-\d{2})\]\s*(?P<text>.+)$")
 
-TYPES = ("среда", "домен", "поведение")
+TYPES = ("среда", "домен", "поведение", "диагностика")
 REQUIRED = ("Тип", "Дата", "Триггер", "Симптом", "Правило", "Область")
 SECRET_WORDS = ("password", "secret", "api_key", "apikey", "token", "passwd", "-----begin")
 
@@ -483,7 +483,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     new = sub.add_parser("new", help="записать случай в журнал")
     new.add_argument("--slug", required=True)
-    new.add_argument("--type", required=True, dest="type", help="среда | домен | поведение")
+    new.add_argument("--type", required=True, dest="type", help="среда | домен | поведение | диагностика")
     new.add_argument("--trigger", required=True)
     new.add_argument("--symptom", required=True)
     new.add_argument("--rule", required=True)

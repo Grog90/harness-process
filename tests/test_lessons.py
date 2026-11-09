@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 
 TOOL = Path(__file__).resolve().parents[1] / "tools" / "lessons.py"
+REPO_ROOT = TOOL.parents[1]
 _spec = importlib.util.spec_from_file_location("lessons_tool", TOOL)
 lessons = importlib.util.module_from_spec(_spec)
 sys.modules["lessons_tool"] = lessons  # нужен dataclasses: ищет модуль по __module__
@@ -221,6 +222,47 @@ class LessonsTest(unittest.TestCase):
         code, out = self.run_tool("check")
         self.assertEqual(code, 2)
         self.assertIn("повтор id", out)
+
+    # ------------------------------------------------- типы: «диагностика»
+
+    def test_diagnostics_type_is_allowed(self) -> None:
+        """AC-7 (часть): тип «диагностика» — допустимый, иначе запись не создать."""
+        code, out = self.run_tool(
+            "new", "--slug", "instagram-slow-is-rtt",
+            "--type", "диагностика",
+            "--trigger", "жалоба «медленно»",
+            "--symptom", "субъективно медленно, провалов нет",
+            "--rule", "сначала мерить RTT и поток",
+            "--scope", "Keenetic, hysteria2",
+            "--date", "2026-10-29",
+        )
+        self.assertEqual(code, 0, out)
+        text = (self.root / "journal" / "2026-10.md").read_text(encoding="utf-8")
+        self.assertIn("**Тип:** диагностика", text)
+
+    def test_unknown_type_is_still_rejected(self) -> None:
+        code, out = self.run_tool(
+            "new", "--slug", "x", "--type", "магия",
+            "--trigger", "t", "--symptom", "s", "--rule", "r", "--scope", "z",
+        )
+        self.assertEqual(code, 2)
+        self.assertIn("диагностика", out)  # подсказка называет допустимые типы
+
+    # ------------------------------------------------- проверка на репозитории
+
+    def test_repository_journal_check_is_green(self) -> None:
+        """AC-7: `python tools/lessons.py check` на настоящем журнале возвращает 0."""
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+            code = lessons.main(["--root", str(REPO_ROOT), "check"])
+        self.assertEqual(code, 0, buffer.getvalue())
+        self.assertIn("OK", buffer.getvalue())
+
+    def test_repository_journal_types_are_known(self) -> None:
+        journal = lessons.load_journal(REPO_ROOT)
+        self.assertTrue(journal.entries, "в journal/ нет ни одной записи")
+        unknown = sorted({entry.get("Тип") for entry in journal.entries if entry.get("Тип") not in lessons.TYPES})
+        self.assertEqual(unknown, [], f"типы вне TYPES: {', '.join(unknown)}")
 
 
 if __name__ == "__main__":
