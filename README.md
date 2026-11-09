@@ -104,7 +104,7 @@ templates/        примеры артефактов
 examples/         учебные агент, верификаторы и размеченный набор evals
 plugins/          harness-guard — host-плагин DSH: ограждение на ctx.tools.guard()
 tests/            80 unittest-проверок свойств, включая паритет плагина и ядра
-docs/             ANALYSIS, ARCHITECTURE, ROADMAP, RUNNING, PLUGIN, PLUGINS, LESSONS, SKILLS, RECALL, TRENDSHIFT, BROWSER, XERJ, RULES_MATRIX
+docs/             ANALYSIS, ARCHITECTURE, ROADMAP, RUNNING, PLUGIN, PLUGINS, LESSONS, SKILLS, PROMPT-DEFENSE, RECALL, TRENDSHIFT, BROWSER, XERJ, RULES_MATRIX
 bin/              обёртки harness / harness.cmd
 tools/            вспомогательное: экстрактор текста PDF, журнал уроков (lessons.py),
                   поиск по прошлым сессиям (recall.py), тренды GitHub (trendshift.py),
@@ -234,6 +234,7 @@ python -m harness rule change --id R-COST-1 --reason "бюджет провер�
 * [`docs/ROADMAP.md`](docs/ROADMAP.md) — этапы внедрения и критерии их закрытия.
 * [`docs/LESSONS.md`](docs/LESSONS.md) — как ошибка превращается в правило и проверку.
 * [`docs/SKILLS.md`](docs/SKILLS.md) — как писать скиллы и агентские инструкции: цена строки, иерархия, критерий готовности, контракт фронтматтера.
+* [`docs/PROMPT-DEFENSE.md`](docs/PROMPT-DEFENSE.md) — что считать подозрительным в чужом тексте: признаки и порядок действий.
 * [`docs/RECALL.md`](docs/RECALL.md) — поиск по прошлым сессиям: формат, границы, сравнение с Hindsight.
 * [`docs/FACTS.md`](docs/FACTS.md) — атомарные факты о проекте: корм для памяти агента.
 * [`docs/MEMORY_COMPARE.md`](docs/MEMORY_COMPARE.md) — три прогона сравнения recall и Hindsight, что чинило качество.
