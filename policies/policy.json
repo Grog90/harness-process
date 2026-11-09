@@ -61,7 +61,9 @@
         "commit",
         "harness",
         "git_read",
-        "bash_readonly"
+        "bash_readonly",
+        "subagent",
+        "workflow"
       ]
     },
     "briefer": {

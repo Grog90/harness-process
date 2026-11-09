@@ -69,6 +69,11 @@ CASES: list[dict] = [
     {"role": "orchestrator", "tool": "bash", "args": {"command": "echo hi >> src/a.py"}},
     {"role": "orchestrator", "tool": "bash", "args": {"command": "sed -i 's/a/b/' src/a.py"}},
     {"role": "orchestrator", "tool": "bash", "args": {"command": "echo hi >> docs/plan.md"}},
+    # делегирование: оркестратор раздаёт работу, исполнитель и проверяющий — нет
+    {"role": "orchestrator", "tool": "subagent"},
+    {"role": "orchestrator", "tool": "workflow"},
+    {"role": "worker", "tool": "subagent"},
+    {"role": "verifier", "tool": "workflow"},
 ]
 
 
