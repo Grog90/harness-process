@@ -1,0 +1,119 @@
+{
+  "task_id": "INSTINCTS-1",
+  "brief_version": 1,
+  "base_commit": "ac482a0",
+  "spec_version": "openspec:add-instincts@755b58a0",
+  "goal": "Запись о привычке с условием, весом и доказательством: формат, проверка, поиск и расчёт уверенности. Плюс тип «диагностика» становится допустимым, чтобы проверка журнала была зелёной.",
+  "expected_behavior": "1) docs/INSTINCTS.md описывает поля записи, формулу уверенности и порог показа 0,5. 2) docs/instincts/I-20261029-03.md содержит запись про Keenetic с доказательством journal:L-20261029-03. 3) tools/instincts.py умеет check (валидация и разрешение ссылок), match (поиск по тексту задачи), explain (расчёт уверенности) без внешних зависимостей. 4) tools/lessons.py принимает тип «диагностика», и python tools/lessons.py check возвращает 0. 5) tests/test_instincts.py и tests/test_lessons.py покрывают все критерии приёмки.",
+  "scope": {
+    "in_scope": [
+      "docs/INSTINCTS.md",
+      "docs/instincts/I-20261029-03.md",
+      "tools/instincts.py",
+      "tools/lessons.py",
+      "tests/test_instincts.py",
+      "tests/test_lessons.py",
+      "AGENTS.md",
+      "openspec/changes/add-instincts/**"
+    ],
+    "out_of_scope": [
+      "harness/**",
+      "policies/**",
+      "plugins/**"
+    ]
+  },
+  "allowed_read": [
+    "harness/**",
+    "tests/**",
+    "docs/**",
+    "openspec/**",
+    "journal/**"
+  ],
+  "allowed_files": [
+    "tools/instincts.py",
+    "tools/lessons.py",
+    "tests/test_instincts.py",
+    "tests/test_lessons.py",
+    "docs/INSTINCTS.md",
+    "docs/instincts/I-20261029-03.md",
+    "AGENTS.md",
+    "openspec/changes/add-instincts/proposal.md",
+    "openspec/changes/add-instincts/tasks.md",
+    "openspec/changes/add-instincts/specs/instincts/spec.md",
+    "briefs/INSTINCTS-1.json"
+  ],
+  "contract": {
+    "names": [
+      "check",
+      "pkill",
+      "match",
+      "explain",
+      "instincts",
+      "lessons"
+    ]
+  },
+  "acceptance": {
+    "criteria": [
+      {
+        "id": "AC-1",
+        "statement": "когда у записи пустой список «Доказательства» — тогда `python tools/instincts.py check` отказывает и называет файл",
+        "mandatory": true,
+        "check": "python -m unittest tests.test_instincts tests.test_lessons -v"
+      },
+      {
+        "id": "AC-2",
+        "statement": "когда запись ссылается на `journal:L-20260101-99`, которого нет в журнале — тогда проверка отказывает и называет ссылку",
+        "mandatory": true,
+        "check": "python -m unittest tests.test_instincts tests.test_lessons -v"
+      },
+      {
+        "id": "AC-3",
+        "statement": "когда у двух записей одинаковые поля, но у первой подтверждений больше — тогда уверенность первой выше",
+        "mandatory": true,
+        "check": "python -m unittest tests.test_instincts tests.test_lessons -v"
+      },
+      {
+        "id": "AC-4",
+        "statement": "когда «Последнее» старше 180 дней — тогда уверенность ниже, чем у такой же свежей записи",
+        "mandatory": true,
+        "check": "python -m unittest tests.test_instincts tests.test_lessons -v"
+      },
+      {
+        "id": "AC-5",
+        "statement": "когда запрос «перезапустить сервис на роутере» — тогда в выводе есть `I-20261029-03`",
+        "mandatory": true,
+        "check": "python -m unittest tests.test_instincts tests.test_lessons -v"
+      },
+      {
+        "id": "AC-6",
+        "statement": "когда запрос «собрать релиз» — тогда в выводе нет `I-20261029-03`",
+        "mandatory": true,
+        "check": "python -m unittest tests.test_instincts tests.test_lessons -v"
+      },
+      {
+        "id": "AC-7",
+        "statement": "когда запускается `python tools/lessons.py check` — тогда код возврата 0, отказов нет",
+        "mandatory": true,
+        "check": "python -m unittest tests.test_instincts tests.test_lessons -v"
+      }
+    ],
+    "check_commands": [
+      "python -m unittest tests.test_instincts tests.test_lessons -v"
+    ],
+    "required_scenarios": [
+      "Запись без доказательства отвергается",
+      "Ссылка на несуществующий случай отвергается",
+      "Подтверждения поднимают уверенность",
+      "Давняя запись теряет вес",
+      "Находит привычку про роутер",
+      "Не находит на чужую задачу",
+      "Проверка журнала проходит"
+    ]
+  },
+  "control": {
+    "attempt_limit": 3,
+    "timeout_seconds": 1800,
+    "open_questions": [],
+    "escalation_route": "человек-владелец change"
+  }
+}
