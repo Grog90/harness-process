@@ -1,0 +1,61 @@
+{
+  "task_id": "G-ORCH-DELEGATE-1",
+  "brief_version": 1,
+  "base_commit": "1731d6e",
+  "spec_version": "manual: guard-delegation",
+  "goal": "Оркестратор должен уметь раздавать работу субагентам. Сейчас в политике ему разрешён dispatch, но в DSH инструменты называются subagent и workflow — защита их не узнаёт и отказывает. Из-за этого цикл нельзя вести из одного чата: оркестратор не может ни поручить работу, ни запустить проверку.",
+  "expected_behavior": "оркестратору разрешены subagent и workflow; worker и verifier по-прежнему не могут делегировать; паритет решателей JS и Python подтверждён тестом на тех же случаях.",
+  "scope": {
+    "in_scope": [
+      "policies/policy.json",
+      "tests/test_parity.py"
+    ],
+    "out_of_scope": [
+      "harness/**",
+      "plugins/**"
+    ]
+  },
+  "allowed_read": [
+    "policies/**",
+    "tests/**",
+    "harness/**",
+    "plugins/**"
+  ],
+  "allowed_files": [
+    "policies/policy.json",
+    "tests/test_parity.py"
+  ],
+  "contract": {
+    "names": []
+  },
+  "acceptance": {
+    "criteria": [
+      {
+        "id": "AC-1",
+        "statement": "оркестратору разрешены инструменты subagent и workflow",
+        "mandatory": true,
+        "check": "python -m unittest tests.test_parity -v"
+      },
+      {
+        "id": "AC-2",
+        "statement": "worker и verifier делегировать не могут: политика не даёт им dispatch, subagent или workflow",
+        "mandatory": true,
+        "check": "python -m unittest tests.test_parity -v"
+      }
+    ],
+    "check_commands": [
+      "python -m unittest tests.test_parity -v"
+    ],
+    "required_scenarios": [
+      "Оркестратор зовёт субагента — разрешено",
+      "Исполнитель зовёт субагента — отказано",
+      "Проверяющий запускает workflow — отказано"
+    ]
+  },
+  "control": {
+    "attempt_limit": 2,
+    "timeout_seconds": 1800,
+    "open_questions": [],
+    "escalation_route": "человек-владелец политики"
+  }
+}
