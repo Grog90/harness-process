@@ -1,0 +1,82 @@
+{
+  "task_id": "PROMPT-DEFENSE-1",
+  "brief_version": 1,
+  "base_commit": "1731d6e",
+  "spec_version": "openspec:add-prompt-defense@599fba34",
+  "goal": "Дать агенту список признаков подозрительного текста и порядок действий: машинные проверки видят действия, но не смысл чужого документа.",
+  "expected_behavior": "Документ docs/PROMPT-DEFENSE.md называет восемь признаков, порядок действий и границу «это памятка, а не проверка»; AGENTS.md и README.md ссылаются на него; тест проверяет разделы, число признаков, указатель и ловит синтетический дефект.",
+  "scope": {
+    "in_scope": [
+      "docs/PROMPT-DEFENSE.md",
+      "AGENTS.md",
+      "README.md",
+      "tests/test_docs_prompt_defense.py",
+      "openspec/changes/add-prompt-defense/**"
+    ],
+    "out_of_scope": [
+      "harness/**",
+      "policies/**"
+    ]
+  },
+  "allowed_read": [
+    "harness/**",
+    "tests/**",
+    "docs/**",
+    "openspec/**"
+  ],
+  "allowed_files": [
+    "docs/PROMPT-DEFENSE.md",
+    "AGENTS.md",
+    "README.md",
+    "tests/test_docs_prompt_defense.py",
+    "openspec/changes/add-prompt-defense/proposal.md",
+    "openspec/changes/add-prompt-defense/tasks.md",
+    "openspec/changes/add-prompt-defense/specs/prompt-defense/spec.md"
+  ],
+  "contract": {
+    "names": []
+  },
+  "acceptance": {
+    "criteria": [
+      {
+        "id": "AC-1",
+        "statement": "когда в документе меньше шести пунктов списка признаков — тогда проверка падает с числом найденных пунктов",
+        "mandatory": true,
+        "check": "python -m unittest tests.test_docs_prompt_defense -v"
+      },
+      {
+        "id": "AC-2",
+        "statement": "когда в документе нет раздела «Что делать» — тогда проверка падает",
+        "mandatory": true,
+        "check": "python -m unittest tests.test_docs_prompt_defense -v"
+      },
+      {
+        "id": "AC-3",
+        "statement": "когда в документе нет раздела «Границы» или слова о том, что он не заменяет проверки — тогда проверка падает",
+        "mandatory": true,
+        "check": "python -m unittest tests.test_docs_prompt_defense -v"
+      },
+      {
+        "id": "AC-4",
+        "statement": "когда в `AGENTS.md` нет строки с путём `docs/PROMPT-DEFENSE.md` — тогда проверка падает",
+        "mandatory": true,
+        "check": "python -m unittest tests.test_docs_prompt_defense -v"
+      }
+    ],
+    "check_commands": [
+      "python -m unittest tests.test_docs_prompt_defense -v"
+    ],
+    "required_scenarios": [
+      "Документ короче шести признаков отвергается",
+      "Раздел «Что делать» отсутствует",
+      "Граница названа",
+      "Указатель потерян"
+    ]
+  },
+  "control": {
+    "attempt_limit": 3,
+    "timeout_seconds": 3600,
+    "open_questions": [],
+    "escalation_route": "человек-владелец change"
+  }
+}
