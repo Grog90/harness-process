@@ -22,7 +22,7 @@ from . import verdict as verdict_mod
 from .fsm import Engine, TransitionError, check_watchdog
 from .hooks import HookContext, run as run_hooks
 from .policy import Policy
-from .snapshot import compute_for_scope, compute_snapshot, scope_of
+from .snapshot import compute_for_scope, compute_snapshot, scope_of, snapshot_for_task
 from .state import Store, StoreError
 
 EXIT_OK = 0
@@ -444,7 +444,8 @@ def cmd_submit(args: argparse.Namespace) -> int:
     if not snapshot:
         if args.snapshot:
             scope = scope_of(_root(args), args.snapshot)
-        snapshot = compute_for_scope(_root(args), scope)
+        task = eng.store.get_task(args.task)
+        snapshot = snapshot_for_task(_root(args), task, scope)
     return _apply(
         eng,
         args,
@@ -466,7 +467,8 @@ def cmd_commit(args: argparse.Namespace) -> int:
     payload: dict[str, Any] = {}
     if args.snapshot or not args.skip_snapshot_check:
         scope = args.scope or (scope_of(_root(args), args.snapshot) if args.snapshot else "")
-        payload["snapshot_id"] = compute_for_scope(_root(args), scope)
+        task = eng.store.get_task(args.task)
+        payload["snapshot_id"] = snapshot_for_task(_root(args), task, scope)
     return _apply(eng, args, "commit", payload, event_id=args.event_id)
 
 

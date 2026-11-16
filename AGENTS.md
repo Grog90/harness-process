@@ -15,7 +15,7 @@
 
 ```powershell
 python -m harness selftest                       # исполняемые проверки правил
-python -m unittest discover -s tests -v          # 420 unittest-проверки свойств
+python -m unittest discover -s tests -v          # 423 unittest-проверки свойств
 python -m harness coverage                       # покрытие правил, пробелы
 python -m harness rule verify                    # правила менялись без записи?
 python tools/lessons.py check                    # дисциплина этого файла и журнала

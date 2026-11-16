@@ -532,7 +532,7 @@ def _guard_recheck_after_accept(engine: Engine, task: dict[str, Any], payload: d
             current_files=now_files,
         )
     scope = task.get("snapshot_scope") or ""
-    current = snapshot_mod.compute_for_scope(engine.root, scope)
+    current = snapshot_mod.snapshot_for_task(engine.root, task)
     payload["_snapshot"] = current
     payload["_scope"] = scope
     # прежний PASS относится к прошлому снимку: держим только вердикт нового снимка

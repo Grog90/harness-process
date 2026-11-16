@@ -622,6 +622,81 @@ class FinalizeTests(unittest.TestCase):
     def tearDown(self) -> None:
         shutil.rmtree(self.root, ignore_errors=True)
 
+    def test_snapshot_includes_writable_service_only(self) -> None:
+        from harness import snapshot
+
+        service = tempfile.mkdtemp(prefix="svc-", dir=os.path.dirname(self.root))
+        self.addCleanup(shutil.rmtree, service, True)
+        os.makedirs(os.path.join(service, "src"), exist_ok=True)
+        path = os.path.join(service, "src", "a.py")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("one")
+        services = [{"name": "api", "path": service, "write": True}]
+        task = {"brief_json": json.dumps({"services": services})}
+        first = snapshot.snapshot_for_task(self.root, task)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("two")
+        second = snapshot.snapshot_for_task(self.root, task)
+        self.assertNotEqual(first, second)
+
+        readonly = {"brief_json": json.dumps({"services": [
+            {"name": "api", "path": service, "write": False}]})}
+        before = snapshot.snapshot_for_task(self.root, readonly)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("three")
+        after = snapshot.snapshot_for_task(self.root, readonly)
+        self.assertEqual(before, after)
+
+    def test_in_root_service_allowed_paths_are_main_relative(self) -> None:
+        from harness.finalize import _main_allowed, _own_service_roots
+
+        os.makedirs(os.path.join(self.root, "services", "api", "src"), exist_ok=True)
+        task = {"brief_json": json.dumps({
+            "services": [{"name": "api", "path": "services/api", "write": True}],
+            "allowed_files": ["service:api/src/a.py"],
+        })}
+        self.assertEqual(_main_allowed(self.root, task), ["services/api/src/a.py"])
+        self.assertEqual(_own_service_roots(self.root, task), [])
+
+    def test_commit_services_commits_and_rejects_unexpected(self) -> None:
+        from harness.finalize import FinalizeError, commit_services
+
+        service = tempfile.mkdtemp(prefix="svc-", dir=os.path.dirname(self.root))
+        self.addCleanup(shutil.rmtree, service, True)
+        subprocess_git(service, "init", "-q", service)
+        os.makedirs(os.path.join(service, "src"), exist_ok=True)
+        with open(os.path.join(service, "src", "base.py"), "w", encoding="utf-8") as fh:
+            fh.write("base\n")
+        subprocess_git(service, "-C", service, "add", "-A")
+        subprocess_git(service, "-C", service, "-c", "user.name=t", "-c", "user.email=t@t",
+                       "commit", "-q", "-m", "base")
+
+        store = Store(os.path.join(self.root, ".harness", "state.db"))
+        try:
+            task = {
+                "task_id": "T-SVC",
+                "brief_json": json.dumps({
+                    "services": [{"name": "api", "path": service, "write": True}],
+                    "allowed_files": ["service:api/src/a.py"],
+                }),
+            }
+            with open(os.path.join(service, "src", "a.py"), "w", encoding="utf-8") as fh:
+                fh.write("one\n")
+            records = commit_services(store, self.root, task, "snap", "T-SVC")
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0]["name"], "api")
+            self.assertEqual(records[0]["commit_sha"],
+                             subprocess_git(service, "-C", service, "rev-parse", "HEAD").strip())
+            self.assertEqual(subprocess_git(service, "-C", service, "status", "--porcelain").strip(), "")
+
+            with open(os.path.join(service, "src", "b.py"), "w", encoding="utf-8") as fh:
+                fh.write("two\n")
+            with self.assertRaises(FinalizeError) as ctx:
+                commit_services(store, self.root, task, "snap", "T-SVC")
+            self.assertEqual(ctx.exception.rule, "R-WRITESET-1")
+        finally:
+            store.close()
+
     def test_write_set_ignores_control_plane(self) -> None:
         from harness.finalize import write_set
 

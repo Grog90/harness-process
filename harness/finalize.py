@@ -19,8 +19,8 @@ import subprocess
 from typing import Any
 
 from .fsm import Engine
-from .policy import normalize_path
-from .snapshot import compute_for_scope
+from .policy import normalize_path, service_base
+from .snapshot import snapshot_for_task
 from .state import Store
 from . import specgate
 
@@ -91,6 +91,120 @@ def pipeline_log_path(task_id: str) -> str:
     return f"pipeline-log/{task_id}.jsonl"
 
 
+def _writable_services(task: dict[str, Any]) -> list[dict[str, Any]]:
+    return [s for s in (_brief_data(task).get("services") or [])
+            if isinstance(s, dict) and s.get("name") and s.get("write")]
+
+
+def _own_git_repo(path: str) -> bool:
+    """Сервис — самостоятельный git-репозиторий, а не подкаталог главного."""
+    proc = _git(path, "rev-parse", "--show-toplevel")
+    return proc.returncode == 0 and os.path.normcase(os.path.realpath(proc.stdout.strip())) == \
+        os.path.normcase(os.path.realpath(path))
+
+
+def _main_allowed(root: str, task: dict[str, Any]) -> list[str]:
+    """allowed_files в путях главного репозитория.
+
+    In-root сервис без своего git коммитится главным репозиторием: его
+    `service:<name>/<rel>` разворачивается в обычный относительный путь.
+    """
+    allowed: list[str] = []
+    root_abs = os.path.abspath(root)
+    for item in _allowed_files(task):
+        if not item.startswith("service:"):
+            allowed.append(normalize_path(root, item))
+            continue
+        rest = item[len("service:"):]
+        name, inner = (rest.split("/", 1) + [""])[:2]
+        service = next((s for s in _writable_services(task) if str(s.get("name")) == name), None)
+        if service is None:
+            allowed.append(item)
+            continue
+        base = os.path.abspath(service_base(root, service))
+        if not _own_git_repo(base) and os.path.normcase(base).startswith(
+                os.path.normcase(root_abs) + os.sep):
+            rel_base = os.path.relpath(base, root_abs).replace("\\", "/")
+            allowed.append(os.path.join(rel_base, inner).replace("\\", "/"))
+        else:
+            allowed.append(item)
+    return allowed
+
+
+def _own_service_roots(root: str, task: dict[str, Any]) -> list[str]:
+    """Относительные корни вложенных git-сервисов: их не коммитит главный репозиторий."""
+    root_abs = os.path.abspath(root)
+    roots: list[str] = []
+    for service in _writable_services(task):
+        base = os.path.abspath(service_base(root, service))
+        if _own_git_repo(base) and os.path.normcase(base).startswith(
+                os.path.normcase(root_abs) + os.sep):
+            roots.append(os.path.relpath(base, root_abs).replace("\\", "/"))
+    return roots
+
+
+def _service_allowed(task: dict[str, Any], name: str) -> list[str]:
+    prefix = f"service:{name}/"
+    return [p[len(prefix):] for p in _allowed_files(task) if p.startswith(prefix)]
+
+
+def commit_services(store: Store, root: str, task: dict[str, Any], snapshot_id: str,
+                    message: str, author: str = "harness") -> list[dict[str, Any]]:
+    """Коммитит каждый writable-сервис отдельно, с write-set-проверкой.
+
+    Сервисный репозиторий обязан существовать: молча пропустить коммит нельзя,
+    иначе evidence соврёт о том, что изменение зафиксировано.
+    """
+    records: list[dict[str, Any]] = []
+    for service in _writable_services(task):
+        name = str(service.get("name"))
+        base = service_base(root, service)
+        if not os.path.isdir(base):
+            raise FinalizeError("R-FINAL-1", f"сервис {name!r} не найден: {base}")
+        root_abs = os.path.abspath(root)
+        inside_main = os.path.normcase(base).startswith(os.path.normcase(root_abs) + os.sep)
+        if inside_main and not _own_git_repo(base):
+            # Вложенный сервис без своего git: файлы уедут главным коммитом.
+            records.append({"name": name, "path": base, "commit_sha": None, "paths": [],
+                            "mode": "main"})
+            continue
+        if not is_git_repo(base):
+            raise FinalizeError("R-FINAL-1", f"сервис {name!r} не git-репозиторий: {base}")
+        allowed = _service_allowed(task, name)
+        changed = write_set(base)
+        unexpected = [p for p in changed if not _within(p, allowed)]
+        if unexpected:
+            raise FinalizeError(
+                "R-WRITESET-1",
+                f"в сервисе {name!r} изменены файлы вне allowed_files",
+                service=name, unexpected=unexpected, allowed=allowed,
+            )
+        if not changed:
+            continue
+        paths = [p for p in changed if _within(p, allowed)]
+        add = _git(base, "add", "--", *paths)
+        if add.returncode != 0:
+            raise FinalizeError("R-FINAL-1", f"git add сервиса {name!r} не удался: {add.stderr.strip()[:200]}")
+        msg = f"{message} [{name}]"
+        commit = _git(
+            base, "-c", f"user.name={author}", "-c", f"user.email={author}@harness.local",
+            "commit", "-m", msg,
+        )
+        if commit.returncode != 0:
+            raise FinalizeError("R-FINAL-1", f"git commit сервиса {name!r} не удался: {commit.stderr.strip()[:300]}")
+        sha = _git(base, "rev-parse", "HEAD").stdout.strip()
+        leftover = write_set(base)
+        if leftover:
+            raise FinalizeError(
+                "R-FINAL-1", f"после коммита сервиса {name!r} остались изменения",
+                service=name, leftover=leftover, commit=sha,
+            )
+        store.record_commit(commit_sha=sha, task_id=task["task_id"], snapshot_id=snapshot_id,
+                            message=msg, finalizer=author)
+        records.append({"name": name, "path": base, "commit_sha": sha, "paths": paths})
+    return records
+
+
 def finalize(
     store: Store,
     engine: Engine,
@@ -113,7 +227,7 @@ def finalize(
         raise FinalizeError("R-FINAL-1", "корень не является git-репозиторием")
 
     scope = task.get("snapshot_scope") or ""
-    current = compute_for_scope(root, scope)
+    current = snapshot_for_task(root, task, scope)
     if current != task.get("accepted_snapshot"):
         raise FinalizeError(
             "R-SNAPSHOT-1",
@@ -122,11 +236,16 @@ def finalize(
             current=current,
         )
 
-    allowed = [normalize_path(root, p) for p in _allowed_files(task)]
+    allowed = _main_allowed(root, task)
     log_path = pipeline_log_path(task_id)
     # бриф и служебные файлы не продукт: они не должны блокировать коммит
     ignored = {normalize_path(root, p) for p in (ignore_paths or [])}
-    changed = [p for p in write_set(root) if p not in ignored]
+    nested = _own_service_roots(root, task)
+
+    def _in_nested(path: str) -> bool:
+        return any(path == base or path.startswith(base + "/") for base in nested)
+
+    changed = [p for p in write_set(root) if p not in ignored and not _in_nested(p)]
     unexpected = [p for p in changed if p != log_path and not _within(p, allowed)]
     if unexpected:
         raise FinalizeError(
@@ -144,6 +263,11 @@ def finalize(
                                 **{k: v for k, v in gate.items() if k not in ("ok", "rule", "reason")})
         store.log(task_id, f"обход {gate['rule']}: {allow_no_spec.strip()}")
 
+    msg = message or f"{task_id}: {_goal(task)}"
+    # 0. Сервисные репозитории коммитятся до главного: главный SHA остаётся
+    # последним в tasks.commit_sha, а сервисные уже записаны в commits.
+    service_records = commit_services(store, root, task, current, msg, author)
+
     # 1. Журнал пишется до коммита и едет в нём же (log first).
     _write_pipeline_log(store, root, task_id)
     if log_path not in changed:
@@ -151,14 +275,14 @@ def finalize(
 
     # 2. Коммит содержит только разрешённые пути и журнал.
     paths_to_commit = [p for p in write_set(root)
-                       if p not in ignored and (p == log_path or _within(p, allowed))]
+                       if p not in ignored and not _in_nested(p)
+                       and (p == log_path or _within(p, allowed))]
     if not paths_to_commit:
         raise FinalizeError("R-FINAL-1", "нет изменений для коммита")
     add = _git(root, "add", "--", *paths_to_commit)
     if add.returncode != 0:
         raise FinalizeError("R-FINAL-1", f"git add не удался: {add.stderr.strip()[:200]}")
 
-    msg = message or f"{task_id}: {_goal(task)}"
     commit = _git(
         root, "-c", f"user.name={author}", "-c", f"user.email={author}@harness.local",
         "commit", "-m", msg,
@@ -167,10 +291,14 @@ def finalize(
         raise FinalizeError("R-FINAL-1", f"git commit не удался: {commit.stderr.strip()[:300]}")
 
     sha = _git(root, "rev-parse", "HEAD").stdout.strip()
+    for rec in service_records:
+        if rec.get("mode") == "main":
+            rec["commit_sha"] = sha
 
     # 3. После коммита ничего из разрешённой области не должно остаться грязным.
     leftover = [p for p in write_set(root)
-                if p not in ignored and (p == log_path or _within(p, allowed))]
+                if p not in ignored and not _in_nested(p)
+                and (p == log_path or _within(p, allowed))]
     if leftover:
         raise FinalizeError(
             "R-FINAL-1", "после коммита остались незакоммиченные изменения разрешённых файлов",
@@ -197,6 +325,7 @@ def finalize(
         "message": msg,
         "paths": paths_to_commit,
         "log": log_path,
+        "service_commits": service_records,
     }
 
 
@@ -252,4 +381,5 @@ def _write_pipeline_log(store: Store, root: str, task_id: str) -> str:
 CONTROL_POINTS = {
     "finalize.write_set": write_set,
     "finalize.commit": finalize,
+    "finalize.commit_services": commit_services,
 }

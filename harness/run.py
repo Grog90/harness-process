@@ -38,7 +38,7 @@ from . import verdict as verdict_mod
 from .finalize import FinalizeError, finalize
 from .fsm import Engine, TransitionError
 from .policy import Policy
-from .snapshot import compute_for_scope, scope_of
+from .snapshot import scope_of, snapshot_for_task
 from .state import Store, now
 
 
@@ -190,7 +190,7 @@ class Runner:
             # область снимка задаётся относительно корня работы: и главное дерево,
             # и worktree считаются от своего корня, иначе путь лейна удваивается
             scope = cfg.scope_override or ""
-            snapshot = compute_for_scope(work_root, scope)
+            snapshot = snapshot_for_task(work_root, self._task(), scope)
             try:
                 self.engine.apply(
                     cfg.task_id, "submit",
@@ -369,7 +369,7 @@ class Runner:
         scope = self.cfg.scope_override if self.cfg.scope_override is not None else ""
         state = self._task()["state"]
         if state == "RUNNING":
-            snapshot = compute_for_scope(work_root, scope)
+            snapshot = snapshot_for_task(work_root, self._task(), scope)
             try:
                 self.engine.apply(
                     self.cfg.task_id, "submit",

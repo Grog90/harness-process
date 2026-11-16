@@ -698,6 +698,12 @@ class Store:
             c.execute("UPDATE tasks SET commit_sha = ? WHERE task_id = ?", (commit_sha, task_id))
         return self.get_commit(commit_sha)
 
+    def commits_for(self, task_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT * FROM commits WHERE task_id = ? ORDER BY created_at", (task_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_commit(self, commit_sha: str) -> dict[str, Any]:
         row = self.conn.execute("SELECT * FROM commits WHERE commit_sha = ?", (commit_sha,)).fetchone()
         if row is None:

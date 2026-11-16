@@ -728,12 +728,14 @@ def write_evidence(store: Store, root: str, change_id: str) -> dict[str, Any]:
             "bytes": len(payload),
             "copy": os.path.relpath(dest, root_abs).replace("\\", "/"),
         })
+    tasks = store.tasks_for_change(change_id)
     manifest = {
         "change_id": change_id,
         "revision": store.get_change(change_id)["revision"],
         "spec_ref": store.get_change(change_id)["spec_ref"],
         "created_at": _iso(),
         "files": files,
+        "task_commits": {t["task_id"]: store.commits_for(t["task_id"]) for t in tasks},
     }
     path = os.path.join(target, "manifest.json")
     with open(path, "w", encoding="utf-8", newline="\n") as fh:

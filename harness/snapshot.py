@@ -96,6 +96,41 @@ def compute_for_scope(root: str, scope: str = "") -> str:
     return compute_snapshot(base, exclude=excludes)
 
 
+def writable_services(task: dict) -> list[dict]:
+    """Сервисы задачи, открытые на запись: только они входят в кандидата."""
+    try:
+        brief = json.loads(task.get("brief_json") or "{}")
+    except (TypeError, ValueError):
+        return []
+    return [s for s in (brief.get("services") or [])
+            if isinstance(s, dict) and s.get("name") and s.get("write")]
+
+
+def compute_tree(root: str, services: list[dict], scope: str = "") -> str:
+    """Снимок главного дерева и деревьев writable-сервисов.
+
+    Read-only сервисы не входят: их правка не кандидат, её запрещает policy.
+    """
+    parts: list[dict] = [{"root": "main", "snapshot": compute_for_scope(root, scope)}]
+    for service in services:
+        name = str(service.get("name") or "")
+        base = service_base(root, service)
+        if not name or not os.path.isdir(base):
+            raise ValueError(f"сервис {name!r} недоступен для снимка: {base}")
+        parts.append({"service": name, "path": str(service.get("path") or ""),
+                      "snapshot": compute_for_scope(base)})
+    payload = json.dumps(parts, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return "tree_" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def snapshot_for_task(root: str, task: dict, scope: str = "") -> str:
+    """Единая точка снимка задачи: главное дерево плюс writable-сервисы."""
+    services = writable_services(task)
+    if not services:
+        return compute_for_scope(root, scope)
+    return compute_tree(root, services, scope)
+
+
 def scope_of(root: str, path: str) -> str:
     """Нормализует область снимка: относительный путь внутри корня или '' для корня."""
     if not path:

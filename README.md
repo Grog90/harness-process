@@ -188,8 +188,9 @@ python -m harness --json change new --change add-x --owner human `
 совпадать с главным корнем или быть его предком; если сервис лежит внутри проекта,
 его файлы дополнительно проверяются по главному пути (`policies/**` и protected не
 обходятся). Shell-запись в сервис (`>>`, `sed -i`) не открывается: писать надо
-`write_file`. Snapshot файлов понимает `service:`-ключи; commit сервисного
-репозитория остаётся отдельным действием, это ограничение v1.
+`write_file`. Снимок задачи и `finalize` понимают `service:`-ключи: `snapshot`
+считает деревья writable-сервисов, а финализатор коммитит каждый сервисный репозиторий
+отдельно и пишет SHA в evidence. Push/PR в сервисный репозиторий остаётся вне процесса.
 
 ## Доска, метрики и CI
 
@@ -266,7 +267,7 @@ schemas/          JSON-схемы брифа и вердикта
 templates/        примеры артефактов
 examples/         учебные агент, верификаторы и размеченный набор evals
 plugins/          harness-guard — host-плагин DSH: ограждение на ctx.tools.guard()
-tests/            420 unittest-проверки свойств, включая паритет плагина и ядра
+tests/            423 unittest-проверки свойств, включая паритет плагина и ядра
 docs/             ANALYSIS, ARCHITECTURE, PROCESS, ROADMAP, RUNNING, PLUGIN, PLUGINS, LESSONS, SKILLS, PROMPT-DEFENSE, RECALL, TRENDSHIFT, BROWSER, XERJ, RULES_MATRIX
 bin/              обёртки harness / harness.cmd
 tools/            вспомогательное: экстрактор текста PDF, журнал уроков (lessons.py),
