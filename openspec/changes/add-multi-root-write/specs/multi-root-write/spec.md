@@ -66,8 +66,13 @@ Guard и gateway ДОЛЖНЫ (MUST) отклонять путь вне объя
 
 #### Scenario: [CASE-WRITE-3-5] Shell-запись
 
-- **WHEN** агент делает `echo x >> ../svc/config.yaml`
+- **WHEN** агент делает `echo x >> ../svc/config.yaml` или `>> services/api/config.yaml`
 - **THEN** hook отклоняет команду с R-PROT-1
+
+#### Scenario: [CASE-WRITE-3-6] Сервис внутри главного корня
+
+- **WHEN** сервисный корень лежит внутри проекта и путь попадает в `policies/**`
+- **THEN** service-запись отклоняется с R-PROT-1, как обычный protected-путь
 
 ### Requirement: [REQ-WRITE-4] Права сервиса берутся из change, а не из брифа
 
@@ -79,10 +84,10 @@ Guard и gateway ДОЛЖНЫ (MUST) отклонять путь вне объя
 - **WHEN** change объявил сервис write=false, а бриф — write=true
 - **THEN** диспетч отклоняется с R-CHG-1
 
-#### Scenario: [CASE-WRITE-4-2] Сервис внутри главного корня
+#### Scenario: [CASE-WRITE-4-2] Сервис содержит главный корень
 
-- **WHEN** сервисный корень лежит внутри проекта и путь попадает в `policies/**`
-- **THEN** service-запись отклоняется с R-PROT-1, как обычный protected-путь
+- **WHEN** сервисный root — предок проекта (`path=..`)
+- **THEN** `change new` отклоняет такую декларацию, а policy всё равно проверяет target по главному пути
 
 ## Out of Scope
 

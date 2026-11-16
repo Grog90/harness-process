@@ -154,9 +154,11 @@ def bash_write_bypass(ctx: HookContext) -> Decision:
     for cand in candidates:
         if cand.startswith("-") or "$" in cand:
             continue
-        rel = normalize_path(ctx.root, cand)
+        rel = resolve_target(ctx.root, cand, ctx.services)
         if rel == "<outside-root>":
             return deny("R-PROT-1", f"запись вне корня через shell: {cand!r}")
+        if rel.startswith("service:"):
+            return deny("R-PROT-1", f"shell-запись в сервис не открыта: {cand!r}")
         if ctx.policy.is_product(rel):
             d = ctx.policy.check_write(ctx.role, rel, allowed_files=ctx.allowed_files,
                                        services=ctx.services)

@@ -65,7 +65,7 @@
       "positive_test": "участник пишет в путь из allowed_files — разрешено",
       "negative_test": "участник пишет в путь вне allowed_files — deny",
       "owner": "policy",
-      "residual_risk": "Симлинки не разыменовываются: запись через ссылку вне allowed_files технически возможна."
+      "residual_risk": "Guard/gateway делают realpath; остаётся TOCTOU между проверкой и записью, а shell-обход контролируется эвристикой."
     },
     {
       "id": "R-WORK-2",
@@ -430,7 +430,7 @@
     },
     {
       "id": "R-CHG-1",
-      "statement": "Задача по зарегистрированному change диспетчится только из READY/IN_PROGRESS; первый диспетч переводит change в IN_PROGRESS отдельным событием.",
+      "statement": "Задача по зарегистрированному change диспетчится только из READY/IN_PROGRESS; первый диспетч переводит change в IN_PROGRESS отдельным событием; services брифа совпадают с change по имени, пути и write.",
       "event": "predispatch",
       "enforcement": "blocking",
       "implemented": true,

@@ -92,6 +92,13 @@ CASES: list[dict] = [
     {"role": "worker", "tool": "write_file", "args": {"path": "../other/src/a.py"},
      "allowed_files": ["service:api/src/a.py"],
      "services": [{"name": "api", "path": "../svc", "write": True}]},
+    # in-root сервис: protected и read-only не обходятся service-ключом/путём
+    {"role": "worker", "tool": "write_file", "args": {"path": "service:root/policies/policy.json"},
+     "allowed_files": ["service:root/policies/policy.json"],
+     "services": [{"name": "root", "path": ".", "write": True}]},
+    {"role": "worker", "tool": "write_file", "args": {"path": "services/api/src/a.py"},
+     "allowed_files": ["service:api/src/a.py"],
+     "services": [{"name": "api", "path": "services/api", "write": False}]},
     # привилегированные инструменты: человеку можно, рабочим — нет
     {"role": "worker", "tool": "plugin_manager"},
     {"role": "verifier", "tool": "plugin_manager"},

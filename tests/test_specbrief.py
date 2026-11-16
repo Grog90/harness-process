@@ -184,6 +184,14 @@ class BuildTest(unittest.TestCase):
         checked = brief_mod.validate(brief)
         self.assertFalse(checked.valid)
 
+        brief["allowed_files"] = ["C:/x/a.py"]
+        checked = brief_mod.validate(brief)
+        self.assertFalse(checked.valid)
+
+        brief["allowed_files"] = ["service:api/C:/a.py"]
+        checked = brief_mod.validate(brief)
+        self.assertFalse(checked.valid)
+
 
 if __name__ == "__main__":
     unittest.main()

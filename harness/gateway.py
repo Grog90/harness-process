@@ -19,7 +19,7 @@ from typing import Any
 
 from . import hooks
 from .hooks import HookContext
-from .policy import Policy, deny, normalize_path, resolve_target, service_base
+from .policy import Policy, deny, resolve_target, service_base
 from .snapshot import compute_for_scope
 from .state import Store, now
 
@@ -54,7 +54,14 @@ class Gateway:
 
     # ------------------------------------------------------------------ обработка
     def handle(self, request: dict[str, Any]) -> dict[str, Any]:
-        role = str(request.get("role") or os.environ.get("HARNESS_ROLE") or "")
+        env_role = os.environ.get("HARNESS_ROLE")
+        requested_role = request.get("role")
+        role = str(env_role or requested_role or "")
+        claimed_role = (
+            str(requested_role)
+            if env_role and requested_role and str(requested_role) != str(env_role)
+            else request.get("claimed_role")
+        )
         task_id = request.get("task_id") or os.environ.get("HARNESS_TASK_ID")
         tool = str(request.get("tool") or "")
         args = request.get("args") or {}
@@ -78,7 +85,7 @@ class Gateway:
             event="pretooluse",
             tool=tool if tool != "run_command" else "bash",
             role=role,
-            claimed_role=request.get("claimed_role"),
+            claimed_role=claimed_role,
             task_id=task_id,
             path=path,
             command=args.get("command"),

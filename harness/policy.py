@@ -99,8 +99,9 @@ def resolve_target(root: str, path: str, services: Iterable[dict[str, Any]] | No
     сервисными корнями. Если сервис не объявлен — путь остаётся outside-root.
     """
     rel = normalize_path(root, path)
-    if rel != "<outside-root>":
+    if rel.startswith("service:"):
         return rel
+    root_real = os.path.realpath(root)
     target = os.path.realpath(
         os.path.abspath(path) if os.path.isabs(path) else os.path.join(root, path)
     )
@@ -109,9 +110,15 @@ def resolve_target(root: str, path: str, services: Iterable[dict[str, Any]] | No
         if not name:
             continue
         base = os.path.realpath(service_base(root, service))
+        # корень-сервис, совпадающий с проектом, не должен переименовывать все пути:
+        # иначе R-PROT-1 проверялся бы только через service-ключ
+        if base == root_real:
+            continue
         if target == base or target.startswith(base + os.sep):
             inner = os.path.relpath(target, base).replace("\\", "/")
             return f"service:{name}/{inner}" if inner != "." else f"service:{name}/"
+    if rel != "<outside-root>":
+        return rel
     return "<outside-root>"
 
 
@@ -257,7 +264,10 @@ class Policy:
             base = os.path.realpath(service_base(self.root, service))
             root_real = os.path.realpath(self.root)
             target = os.path.realpath(os.path.join(base, inner))
-            if base == root_real or base.startswith(root_real + os.sep):
+            # Проверяем главные правила для любого target внутри проекта, даже если
+            # сервисный корень — предок проекта (path='..'): иначе service-ключ
+            # становится вторым именем для policies/** и обходит R-PROT-1.
+            if target == root_real or target.startswith(root_real + os.sep):
                 main_rel = os.path.relpath(target, root_real).replace("\\", "/")
                 if main_rel not in ("", ".") and not main_rel.startswith(".."):
                     if (self.is_spec(main_rel) and role_name not in ("human", "system")

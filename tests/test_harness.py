@@ -404,6 +404,25 @@ class GatewayTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["rule"], "R-STATE-1")
 
+    def test_request_role_cannot_override_environment_role(self) -> None:
+        from harness.gateway import Gateway
+
+        self._running()
+        old = os.environ.get("HARNESS_ROLE")
+        os.environ["HARNESS_ROLE"] = "verifier"
+        try:
+            result = Gateway(self.root, Policy.load(self.root), self.store).handle({
+                "role": "worker", "task_id": "T1", "tool": "write_file",
+                "args": {"path": "src/a.py", "content": "x"},
+            })
+        finally:
+            if old is None:
+                os.environ.pop("HARNESS_ROLE", None)
+            else:
+                os.environ["HARNESS_ROLE"] = old
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["rule"], "R-ROLE-1")
+
     def test_path_traversal_denied(self) -> None:
         from harness.gateway import Gateway
 
@@ -433,6 +452,12 @@ class GatewayTests(unittest.TestCase):
         })
         self.assertTrue(result["ok"], result)
         self.assertTrue(os.path.isfile(os.path.join(service, "src", "a.py")))
+
+        key_form = gateway.handle({
+            "role": "worker", "task_id": "T1", "tool": "write_file",
+            "args": {"path": "service:api/src/a.py", "content": "y"},
+        })
+        self.assertTrue(key_form["ok"], key_form)
 
         other = gateway.handle({
             "role": "worker", "task_id": "T1", "tool": "write_file",
@@ -504,7 +529,74 @@ class GatewayTests(unittest.TestCase):
             "args": {"path": os.path.join(service, "link", "a.py"), "content": "x"},
         })
         self.assertFalse(result["ok"])
-        self.assertIn(result["rule"], ("R-PROT-1", "R-WORK-1"))
+        self.assertEqual(result["rule"], "R-PROT-1")
+
+    def test_in_root_service_path_is_recognized(self) -> None:
+        from harness.gateway import Gateway
+        from harness.policy import Policy as PolicyClass
+
+        in_root = os.path.join(self.root, "services", "api")
+        os.makedirs(os.path.join(in_root, "src"), exist_ok=True)
+        brief = sample_brief()
+        brief["services"] = [{"name": "api", "path": "services/api",
+                              "base_commit": "a" * 40, "write": True}]
+        brief["allowed_files"] = ["service:api/src/a.py"]
+        self.eng.apply("T1", "attach_brief", {"brief": brief})
+        self.eng.apply("T1", "dispatch", {"worker_id": "w"})
+        result = Gateway(self.root, PolicyClass.load(self.root), self.store).handle({
+            "role": "worker", "task_id": "T1", "tool": "write_file",
+            "args": {"path": os.path.join(in_root, "src", "a.py"), "content": "x"},
+        })
+        self.assertTrue(result["ok"], result)
+
+        read_only = PolicyClass.load(self.root).check_write(
+            "worker", os.path.join(in_root, "src", "a.py"),
+            allowed_files=["service:api/src/a.py"],
+            services=[{"name": "api", "path": "services/api", "write": False}],
+        )
+        self.assertFalse(read_only.allowed)
+        self.assertEqual(read_only.rule, "R-PROT-1")
+
+    def test_shell_write_to_in_root_service_is_denied(self) -> None:
+        from harness.hooks import HookContext, run as run_hooks
+
+        os.makedirs(os.path.join(self.root, "services", "api"), exist_ok=True)
+        ctx = HookContext(
+            event="pretooluse", tool="bash", role="worker",
+            command="echo x >> services/api/config.yaml",
+            allowed_files=["service:api/config.yaml"],
+            services=[{"name": "api", "path": "services/api", "write": True}],
+            policy=Policy.load(self.root), root=self.root,
+        )
+        result = run_hooks("pretooluse", ctx)
+        self.assertEqual(result["decision"], "deny")
+        self.assertEqual(result["rule"], "R-PROT-1")
+
+    def test_ancestor_service_cannot_rename_main_protected_paths(self) -> None:
+        policy = Policy.load(self.root)
+        parent = os.path.dirname(self.root)
+        services = [{"name": "up", "path": "..", "write": True}]
+        key = f"service:up/{os.path.basename(self.root)}/policies/policy.json"
+        decision = policy.check_write(
+            "worker", os.path.join(self.root, "policies", "policy.json"),
+            allowed_files=[key], services=services,
+        )
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.rule, "R-PROT-1")
+
+    def test_change_services_parser_requires_explicit_write(self) -> None:
+        from harness.cli import _parse_change_services
+
+        service = tempfile.mkdtemp(prefix="svc-", dir=os.path.dirname(self.root))
+        self.addCleanup(shutil.rmtree, service, True)
+        parsed = _parse_change_services(self.root, [f"api={service}"], ["api"])
+        self.assertTrue(parsed[0]["write"])
+        with self.assertRaises(ValueError):
+            _parse_change_services(self.root, [f"api={service}"], ["other"])
+        with self.assertRaises(ValueError):
+            _parse_change_services(self.root, [f"api={self.root}"], ["api"])
+        with self.assertRaises(ValueError):
+            _parse_change_services(self.root, [f"up={os.path.dirname(self.root)}"], ["up"])
 
     def test_service_files_snapshot_tracks_service_file(self) -> None:
         from harness import snapshot

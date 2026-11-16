@@ -13,6 +13,8 @@ import json
 import os
 from typing import Iterable
 
+from .policy import service_base
+
 DEFAULT_EXCLUDES = (
     ".git/**",
     ".harness/**",
@@ -105,11 +107,6 @@ def scope_of(root: str, path: str) -> str:
         raise ValueError(f"область снимка вне корня проекта: {path!r}")
     return rel
 
-def _service_base(root: str, service: dict) -> str:
-    raw = str(service.get("path") or "")
-    return os.path.abspath(raw if os.path.isabs(raw) else os.path.join(root, raw))
-
-
 def files_snapshot(root: str, paths: "Iterable[str]", services: "Iterable[dict] | None" = None) -> str:
     """Хеш только перечисленных файлов: доказательство, что сам кандидат не менялся.
 
@@ -127,7 +124,7 @@ def files_snapshot(root: str, paths: "Iterable[str]", services: "Iterable[dict] 
             name = rest.split("/", 1)[0]
             inner = rest.split("/", 1)[1] if "/" in rest else ""
             service = next((s for s in services if str(s.get("name")) == name), None)
-            full = os.path.join(_service_base(root, service), inner) if service else ""
+            full = os.path.join(service_base(root, service), inner) if service else ""
         else:
             full = os.path.join(root, rel)
         digest = file_hash(full) if full and os.path.isfile(full) else "missing"

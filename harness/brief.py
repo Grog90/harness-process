@@ -197,10 +197,11 @@ def validate(data: dict[str, Any], max_attempts: int = 3) -> Brief:
                 elif not service.get("write", False):
                     issues.append(Issue("E_CONTRADICTION", "allowed_files",
                                         f"сервис {name!r} не открыт для записи (write=false)"))
-                elif not inner or inner.startswith("/") or ".." in inner.split("/"):
+                elif not inner or inner.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", inner) \
+                        or ".." in inner.split("/"):
                     issues.append(Issue("E_CONTRADICTION", "allowed_files",
                                         f"недопустимый путь внутри сервиса: {glob!r}"))
-            elif glob.startswith("/") or ".." in glob:
+            elif glob.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", glob) or ".." in glob:
                 issues.append(
                     Issue("E_CONTRADICTION", "allowed_files", f"абсолютный путь или '..' в allowed_files: {glob!r}")
                 )

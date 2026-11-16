@@ -184,10 +184,12 @@ python -m harness --json change new --change add-x --owner human `
 ```
 
 В брифе тогда допустим `allowed_files = ["service:api/src/a.py"]`; worker пишет
-только этот файл, остальные роли и сервисы — отказ. Shell-запись в сервис
-(`>>`, `sed -i`) не открывается: писать надо `write_file`. Snapshot/commit/finalize
-по-прежнему работают с главным корнем — коммит сервисного репозитория остаётся
-отдельным действием, это ограничение v1.
+только этот файл, остальные роли и сервисы — отказ. Сервисный корень не может
+совпадать с главным корнем или быть его предком; если сервис лежит внутри проекта,
+его файлы дополнительно проверяются по главному пути (`policies/**` и protected не
+обходятся). Shell-запись в сервис (`>>`, `sed -i`) не открывается: писать надо
+`write_file`. Snapshot файлов понимает `service:`-ключи; commit сервисного
+репозитория остаётся отдельным действием, это ограничение v1.
 
 ## Доска, метрики и CI
 
@@ -264,7 +266,7 @@ schemas/          JSON-схемы брифа и вердикта
 templates/        примеры артефактов
 examples/         учебные агент, верификаторы и размеченный набор evals
 plugins/          harness-guard — host-плагин DSH: ограждение на ctx.tools.guard()
-tests/            415 unittest-проверки свойств, включая паритет плагина и ядра
+tests/            420 unittest-проверки свойств, включая паритет плагина и ядра
 docs/             ANALYSIS, ARCHITECTURE, PROCESS, ROADMAP, RUNNING, PLUGIN, PLUGINS, LESSONS, SKILLS, PROMPT-DEFENSE, RECALL, TRENDSHIFT, BROWSER, XERJ, RULES_MATRIX
 bin/              обёртки harness / harness.cmd
 tools/            вспомогательное: экстрактор текста PDF, журнал уроков (lessons.py),

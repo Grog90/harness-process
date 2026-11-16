@@ -66,15 +66,19 @@ export function normalizePath(root, raw) {
   return normalized === '' ? '.' : normalized;
 }
 
-/** realpath с fallback на существующего родителя (для ещё не созданного файла). */
+/** realpath с fallback на ближайшего существующего предка (для несуществующих файлов). */
 function realish(p) {
-  try {
-    return fs.realpathSync(p);
-  } catch {
+  let current = path.resolve(p);
+  const tail = [];
+  for (;;) {
     try {
-      return path.join(fs.realpathSync(path.dirname(p)), path.basename(p));
+      const real = fs.realpathSync(current);
+      return tail.length ? path.join(real, ...tail) : real;
     } catch {
-      return p;
+      const parent = path.dirname(current);
+      if (parent === current) return path.resolve(p);
+      tail.unshift(path.basename(current));
+      current = parent;
     }
   }
 }
@@ -86,19 +90,21 @@ function realish(p) {
  */
 export function normalizeTarget(root, raw, services) {
   const rel = normalizePath(root, raw);
-  if (rel !== '<outside-root>') return rel;
+  if (rel.startsWith('service:')) return rel;
+  const rootReal = realish(path.resolve(root));
   const target = realish(path.resolve(root, String(raw)));
   for (const service of services || []) {
     const name = String(service.name || '');
     if (!name) continue;
     const base = realish(path.resolve(root, String(service.path || '')));
+    if (base === rootReal) continue;
     const inner = path.relative(base, target).replace(/\\/g, '/');
     if (inner === '') return `service:${name}/`;
     if (!inner.startsWith('../') && inner !== '..' && !path.isAbsolute(inner)) {
       return `service:${name}/${inner}`;
     }
   }
-  return '<outside-root>';
+  return rel;
 }
 
 /** Сопоставление с глобами: '*' захватывает '/', регистр не важен (как в Python). */
@@ -228,8 +234,8 @@ function checkWrite(policy, root, roleName, role, tool, rawPath, allowedFiles, s
     // правила проверяются по главному относительному пути.
     const rootReal = realish(path.resolve(root));
     const baseReal = realish(path.resolve(root, String(service.path || '')));
-    if (baseReal === rootReal || baseReal.startsWith(rootReal + path.sep)) {
-      const targetReal = realish(path.join(baseReal, inner));
+    const targetReal = realish(path.join(baseReal, inner));
+    if (targetReal === rootReal || targetReal.startsWith(rootReal + path.sep)) {
       const mainRel = path.relative(rootReal, targetReal).replace(/\\/g, '/');
       if (mainRel && !mainRel.startsWith('..') && !path.isAbsolute(mainRel)) {
         if (matchesAny(mainRel, policy.spec_globs || []) && roleName !== 'human'
@@ -335,10 +341,14 @@ function checkBash(policy, root, roleName, role, req) {
 
   for (const cand of candidates) {
     if (!cand || cand.startsWith('-') || cand.includes('$')) continue;
-    const rel = normalizePath(root, cand);
+    const rel = normalizeTarget(root, cand, req.services || []);
     if (rel === '<outside-root>') return deny('R-PROT-1', `запись вне корня через shell: '${cand}'`);
+    if (rel.startsWith('service:')) {
+      return deny('R-PROT-1', `shell-запись в сервис не открыта: '${cand}'`);
+    }
     if (matchesAny(rel, policy.product_globs || [])) {
-      const decision = checkWrite(policy, root, roleName, role, 'write_file', rel, req.allowed_files);
+      const decision = checkWrite(policy, root, roleName, role, 'write_file', rel,
+                                  req.allowed_files, req.services || []);
       if (decision) return deny(decision.rule, `обход через shell в ${rel}: ${decision.reason}`);
     }
   }

@@ -308,14 +308,15 @@ headless в CI требует `DEEPSEEK_API_KEY` в окружении job (кл
 * policy/guard/gateway резолвят путь под сервисный корень с realpath, требуют
   `can_write_services` (только worker) и `allowed_files`;
 * parity-тесты JS↔Python, gateway пишет в сервис и отклоняет чужой файл/корень;
-* shell-запись в сервис и snapshot/commit сервиса сознательно не открыты.
+* shell-запись в сервис не открыта; мультикорневой tree-snapshot/commit сервиса — нет,
+  но `files_snapshot` понимает `service:`-ключи для recheck.
 
 Критерий готовности: запись в открытый сервис проходит, в чужой корень/чужой файл/
 read-only сервис — отказ; verifier не пишет сервис. Подтверждение:
 `tests/test_parity.py`, `tests/test_harness.py` (GatewayTests).
 
-**Остаток:** мультикорневой snapshot/commit и автоматический коммит сервисов; shell-
-запись; merge order как исполнение.
+**Остаток:** мультикорневой tree-snapshot/commit и автоматический коммит сервисов;
+shell-запись в сервис; merge order как исполнение.
 
 ## Ближайшие три шага
 
@@ -327,7 +328,7 @@ read-only сервис — отказ; verifier не пишет сервис. П
 ## Как проверять, что этап закрыт
 
 ```powershell
-python -m unittest discover -s tests -v      # 415 проверок свойств
+python -m unittest discover -s tests -v      # 420 проверок свойств
 python -m harness selftest                   # 61 исполняемая проверка
 python -m harness demo                       # 50 сквозных проверок
 python -m harness coverage                   # покрытие и наличие тестов

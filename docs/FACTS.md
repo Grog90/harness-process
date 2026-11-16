@@ -26,7 +26,7 @@
 - Ready-гейт требует review-записи BA, SA, DEV и QA по актуальным хешам proposal/specs/design/tasks, полную трассировку REQ-CASE-task и отсутствие блокирующих GAP (правила R-REV-1, R-REV-2, R-TRACE-2).
 - spec_ref в брифе — полный Git SHA плана (40 hex); specgate принимает только живой change и сверяет digest спеки с spec_version (правило R-SPEC-1).
 - Схема состояния версии 4: таблицы changes, change_events, change_reviews и колонка tasks.change_id; review-записи дублируются файлами в openspec/changes/<id>/reviews/.
-- В матрице 47 правил: 44 наших покрытых, 3 делегированы рантайму; selftest содержит 61 исполняемую проверку, unittest — 415.
+- В матрице 47 правил: 44 наших покрытых, 3 делегированы рантайму; selftest содержит 61 исполняемую проверку, unittest — 420.
 - harness metrics считает очередь, lead time Ready → Accept, rework, review, verification, evidence и находки из SQLite и файлов change; harness board --out рендерит самодостаточный HTML со снимком.
 - harness ci выполняет selftest, покрытие, метрики и (с --run-tests) unittest, пишет evidence/ci-<ts>/report.json с Git HEAD и возвращает 0/2.
 - harness board --serve поднимает локальную HTTP-доску (/, /metrics.json, /healthz) с автообновлением; harness otel отдаёт OTLP/HTTP JSON с метриками процесса.
@@ -34,7 +34,7 @@
 - Change может объявлять сервисы: change new --service name=PATH[@SHA]; сервисы попадают в бриф с base_commit и валидируются (относительный путь без .., полный SHA).
 - Verification поддерживает несколько сервисов: прогоны пишутся по ключам service:mode, --cwd задаёт каталог сервиса, для каждого объявленного сервиса нужны baseline и candidate.
 - Порядок объявления сервисов в change — merge order: release/acceptance обязаны сохранить его, merge_order пишется в записи и evidence; другой порядок отклоняется.
-- Мультикорневая запись открыта явно: change new --service-write NAME ставит write=true, бриф использует allowed_files service:<name>/<rel>; policy/guard/gateway требуют can_write_services (worker), write=true и realpath-проверку. Shell-запись в сервис и snapshot/commit сервиса не открыты.
+- Мультикорневая запись открыта явно: change new --service-write NAME ставит write=true, бриф использует allowed_files service:<name>/<rel>; policy/guard/gateway требуют can_write_services (worker), write=true и realpath-проверку. Shell-запись в сервис и мультикорневой tree-snapshot/commit сервиса не открыты; files_snapshot понимает service-ключи.
 - verification.json хранит два прогона (baseline/candidate) с ref, runner, окружением, версиями сервисов и diff падений; нулевой прогон и новые падения блокируют VERIFIED (правила R-QA-1, R-QA-2).
 - Для VERIFIED→RELEASED→ACCEPTED→ARCHIVED нужны release.json, acceptance.json, closing.json и evidence/change-<id>/manifest.json с sha256; для L2 by_role и accepted_by_role обязаны быть human (правила R-ACCEPT-1, R-ACCEPT-2).
 - harness verification run|show делает baseline/candidate, harness change release|accept|close|evidence записывает выпуск, приёмку и пакет доказательств.
