@@ -32,7 +32,8 @@
         "properties": {
           "name": { "type": "string", "minLength": 1 },
           "path": { "type": "string", "minLength": 1 },
-          "base_commit": { "type": "string" }
+          "base_commit": { "type": "string" },
+          "write": { "type": "boolean" }
         }
       }
     },

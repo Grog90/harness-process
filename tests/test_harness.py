@@ -441,6 +441,87 @@ class GatewayTests(unittest.TestCase):
         self.assertFalse(other["ok"])
         self.assertEqual(other["rule"], "R-WORK-1")
 
+    def test_read_only_service_and_in_root_protected_are_denied(self) -> None:
+        policy = Policy.load(self.root)
+        read_only = [{"name": "api", "path": "../svc", "write": False}]
+        decision = policy.check_write(
+            "worker", "../svc/src/a.py",
+            allowed_files=["service:api/src/a.py"], services=read_only,
+        )
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.rule, "R-PROT-1")
+
+        in_root = [{"name": "root", "path": ".", "write": True}]
+        decision = policy.check_write(
+            "worker", "service:root/policies/policy.json",
+            allowed_files=["service:root/policies/policy.json"], services=in_root,
+        )
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.rule, "R-PROT-1")
+
+    def test_shell_write_to_service_is_denied(self) -> None:
+        from harness.hooks import HookContext, run as run_hooks
+
+        ctx = HookContext(
+            event="pretooluse", tool="bash", role="worker",
+            command="echo x >> ../svc/config.yaml",
+            allowed_files=["service:api/config.yaml"],
+            services=[{"name": "api", "path": "../svc", "write": True}],
+            policy=Policy.load(self.root), root=self.root,
+        )
+        result = run_hooks("pretooluse", ctx)
+        self.assertEqual(result["decision"], "deny")
+        self.assertEqual(result["rule"], "R-PROT-1")
+
+    def test_service_symlink_escape_is_denied_by_gateway(self) -> None:
+        from harness.gateway import Gateway
+
+        service = tempfile.mkdtemp(prefix="svc-", dir=os.path.dirname(self.root))
+        outside = tempfile.mkdtemp(prefix="outside-", dir=os.path.dirname(self.root))
+        self.addCleanup(shutil.rmtree, service, True)
+        self.addCleanup(shutil.rmtree, outside, True)
+        try:
+            os.symlink(outside, os.path.join(service, "link"), target_is_directory=True)
+        except (OSError, NotImplementedError):
+            # Windows без привилегий: junction не требует admin и тоже является
+            # reparse point — проверяем побег через него.
+            import subprocess
+
+            proc = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", os.path.join(service, "link"), outside],
+                capture_output=True, text=True,
+            )
+            if proc.returncode != 0:
+                self.skipTest("symlink и junction недоступны")
+        brief = sample_brief()
+        brief["services"] = [{"name": "api", "path": service,
+                              "base_commit": "a" * 40, "write": True}]
+        brief["allowed_files"] = ["service:api/link/a.py"]
+        self.eng.apply("T1", "attach_brief", {"brief": brief})
+        self.eng.apply("T1", "dispatch", {"worker_id": "w"})
+        result = Gateway(self.root, Policy.load(self.root), self.store).handle({
+            "role": "worker", "task_id": "T1", "tool": "write_file",
+            "args": {"path": os.path.join(service, "link", "a.py"), "content": "x"},
+        })
+        self.assertFalse(result["ok"])
+        self.assertIn(result["rule"], ("R-PROT-1", "R-WORK-1"))
+
+    def test_service_files_snapshot_tracks_service_file(self) -> None:
+        from harness import snapshot
+
+        service = tempfile.mkdtemp(prefix="svc-", dir=os.path.dirname(self.root))
+        self.addCleanup(shutil.rmtree, service, True)
+        os.makedirs(os.path.join(service, "src"), exist_ok=True)
+        path = os.path.join(service, "src", "a.py")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("one")
+        services = [{"name": "api", "path": service, "write": True}]
+        first = snapshot.files_snapshot(self.root, ["service:api/src/a.py"], services)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("two")
+        second = snapshot.files_snapshot(self.root, ["service:api/src/a.py"], services)
+        self.assertNotEqual(first, second)
+
 
 class FinalizeTests(unittest.TestCase):
     def setUp(self) -> None:

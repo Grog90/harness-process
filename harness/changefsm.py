@@ -231,6 +231,36 @@ def gate_dispatch(store: Store, root: str, brief: dict[str, Any]) -> dict[str, A
     check = check_spec_ref(change, brief)
     if not check["ok"]:
         return check
+
+    # R-CHG-1: права на сервисы берутся из change, а не из брифа. Иначе правка
+    # брифа руками открывала бы write=true для сервиса, который change не открывал.
+    declared = [s for s in (change.get("payload") or {}).get("services") or [] if isinstance(s, dict)]
+    brief_services = [s for s in brief.get("services") or [] if isinstance(s, dict)]
+
+    def svc_key(service: dict[str, Any]) -> tuple[str, str, bool]:
+        raw = str(service.get("path") or "")
+        path_abs = os.path.realpath(
+            raw if os.path.isabs(raw) else os.path.join(root, raw)
+        )
+        return (str(service.get("name") or ""), os.path.normcase(path_abs),
+                bool(service.get("write", False)))
+
+    if declared:
+        if not brief_services:
+            return {
+                "ok": False, "rule": "R-CHG-1",
+                "reason": "change объявляет сервисы, а бриф их не содержит: права на сервисы не подтверждены",
+            }
+        if sorted(map(svc_key, declared)) != sorted(map(svc_key, brief_services)):
+            return {
+                "ok": False, "rule": "R-CHG-1",
+                "reason": "services брифа не совпадают с change (имя, путь или write): правка брифа не открывает сервис",
+            }
+    elif brief_services:
+        return {
+            "ok": False, "rule": "R-CHG-1",
+            "reason": "бриф объявляет сервисы, которых нет в change: сначала `change new --service`",
+        }
     started = False
     if change["status"] == "READY":
         _apply_transition(store, change_id, "start", {"by": "dispatch"})

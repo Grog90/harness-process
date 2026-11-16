@@ -263,6 +263,8 @@ def _parse_change_services(root: str, raw: list[str] | None,
         path = os.path.abspath(path_spec if os.path.isabs(path_spec) else os.path.join(root, path_spec))
         if not os.path.isdir(path):
             raise ValueError(f"каталог сервиса не найден: {path}")
+        if os.path.normcase(os.path.abspath(path)) == os.path.normcase(os.path.abspath(root)):
+            raise ValueError("сервис не может совпадать с главным корнем: write=true обошёл бы R-PROT-1")
         if not base:
             base = verification._git(path, "rev-parse", "HEAD") or ""
         if base and len(base) != 40:

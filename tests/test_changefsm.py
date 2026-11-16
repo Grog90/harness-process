@@ -295,6 +295,25 @@ class DispatchGateTest(unittest.TestCase):
         data.update(over)
         return data
 
+    def test_brief_cannot_open_service_not_opened_by_change(self) -> None:
+        change = self.store.get_change(CHANGE)
+        body = dict(change.get("payload") or {})
+        body["services"] = [{"name": "api", "path": "services/api", "base_commit": SPEC_REF,
+                             "write": True}]
+        self.store.update_change(CHANGE, payload=body, status="READY", spec_ref=SPEC_REF)
+        brief = self._brief(services=[{"name": "api", "path": "services/api",
+                                       "base_commit": SPEC_REF, "write": False}])
+        result = changefsm.gate_dispatch(self.store, self.root, brief)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["rule"], "R-CHG-1")
+        self.assertIn("write", result["reason"])
+
+        brief["services"][0]["write"] = True
+        brief["services"][0]["path"] = "."
+        result = changefsm.gate_dispatch(self.store, self.root, brief)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["rule"], "R-CHG-1")
+
     def test_dispatch_before_ready_is_denied(self) -> None:
         result = changefsm.gate_dispatch(self.store, self.root, self._brief())
         self.assertFalse(result["ok"])

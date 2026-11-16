@@ -292,9 +292,9 @@ headless в CI требует `DEEPSEEK_API_KEY` в окружении job (кл
 приёмка содержит несколько SHA и merge order. Подтверждение: `tests/test_verification.py`,
 `tests/test_changefsm.py`, trace мультисервисной спеки.
 
-**Остаток:** guard/gateway остаются однокорневыми — запись в чужие репозитории не
-открыта; исполнение merge order и e2e-среда — следующий шаг. Мультикорневой write
-требует отдельной модели прав, а не флага.
+**Остаток:** мультикорневой commit сервисов, автоматический коммит сервисов,
+исполнение merge order и e2e-среда. Запись в сервисы закрыта явным
+`--service-write` и realpath-проверкой (Этап 12).
 
 ## Этап 12. Мультикорневая запись ✅ (v1)
 
@@ -327,7 +327,7 @@ read-only сервис — отказ; verifier не пишет сервис. П
 ## Как проверять, что этап закрыт
 
 ```powershell
-python -m unittest discover -s tests -v      # 409 проверок свойств
+python -m unittest discover -s tests -v      # 415 проверок свойств
 python -m harness selftest                   # 61 исполняемая проверка
 python -m harness demo                       # 50 сквозных проверок
 python -m harness coverage                   # покрытие и наличие тестов

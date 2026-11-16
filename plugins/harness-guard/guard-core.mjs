@@ -66,6 +66,19 @@ export function normalizePath(root, raw) {
   return normalized === '' ? '.' : normalized;
 }
 
+/** realpath с fallback на существующего родителя (для ещё не созданного файла). */
+function realish(p) {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    try {
+      return path.join(fs.realpathSync(path.dirname(p)), path.basename(p));
+    } catch {
+      return p;
+    }
+  }
+}
+
 /**
  * Путь с учётом сервисных корней: `service:<name>/<rel>` или обычный rel.
  * Абсолютный путь вне главного корня не прощается — он должен лежать под
@@ -74,17 +87,6 @@ export function normalizePath(root, raw) {
 export function normalizeTarget(root, raw, services) {
   const rel = normalizePath(root, raw);
   if (rel !== '<outside-root>') return rel;
-  const realish = (p) => {
-    try {
-      return fs.realpathSync(p);
-    } catch {
-      try {
-        return path.join(fs.realpathSync(path.dirname(p)), path.basename(p));
-      } catch {
-        return p;
-      }
-    }
-  };
   const target = realish(path.resolve(root, String(raw)));
   for (const service of services || []) {
     const name = String(service.name || '');
@@ -206,7 +208,8 @@ function checkWrite(policy, root, roleName, role, tool, rawPath, allowedFiles, s
     const service = (services || []).find((s) => String(s.name) === name);
     if (!service) return deny('R-PROT-1', `сервис '${name}' не объявлен в change`);
     if (!role.can_write_services) {
-      return deny('R-PROT-1', `${rel} — код сервиса; роль '${roleName}' не пишет в сервисы`);
+      const rule = roleName === 'verifier' ? 'R-VER-1' : 'R-PROT-1';
+      return deny(rule, `${rel} — код сервиса; роль '${roleName}' не пишет в сервисы`);
     }
     if (!service.write) {
       return deny('R-PROT-1', `сервис '${name}' не открыт для записи (read-only)`);
@@ -220,6 +223,28 @@ function checkWrite(policy, root, roleName, role, tool, rawPath, allowedFiles, s
     }
     if (!matchesAny(rel, scope)) {
       return deny('R-WORK-1', `${rel} вне allowed_files брифа`);
+    }
+    // Сервис внутри главного корня не обходит protected/spec/product: те же
+    // правила проверяются по главному относительному пути.
+    const rootReal = realish(path.resolve(root));
+    const baseReal = realish(path.resolve(root, String(service.path || '')));
+    if (baseReal === rootReal || baseReal.startsWith(rootReal + path.sep)) {
+      const targetReal = realish(path.join(baseReal, inner));
+      const mainRel = path.relative(rootReal, targetReal).replace(/\\/g, '/');
+      if (mainRel && !mainRel.startsWith('..') && !path.isAbsolute(mainRel)) {
+        if (matchesAny(mainRel, policy.spec_globs || []) && roleName !== 'human'
+            && roleName !== 'system' && !role.can_write_specs) {
+          return deny('R-WORK-3', `${mainRel} — каталог спеки; роль '${roleName}' не пишет план`);
+        }
+        if (matchesAny(mainRel, policy.protected_globs || []) && roleName !== 'system'
+            && !matchesAny(mainRel, role.can_write || [])) {
+          return deny('R-PROT-1', `${mainRel} — защищённый путь, запись ролью '${roleName}' запрещена`);
+        }
+        if (matchesAny(mainRel, policy.product_globs || []) && !role.can_write_product
+            && !matchesAny(mainRel, role.product_write_globs || [])) {
+          return deny('R-PROT-1', `${mainRel} — продуктовый код; роль '${roleName}' не имеет права записи`);
+        }
+      }
     }
     return null;
   }

@@ -82,6 +82,7 @@ def publish_verifying(root: str, *, task_id: str, attempt: int | None = None,
         attempt=attempt if attempt is not None else current.get("attempt"),
         primary=(primary or current.get("primary") or "") or None,
         phase=PHASE_VERIFYING,
+        services=list(current.get("services") or []),
     )
 
 

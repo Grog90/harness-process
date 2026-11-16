@@ -234,7 +234,8 @@ class Policy:
             if service is None:
                 return deny("R-PROT-1", f"сервис {name!r} не объявлен в change", path=rel)
             if not role.get("can_write_services", False):
-                return deny("R-PROT-1",
+                rule = "R-VER-1" if role_name == "verifier" else "R-PROT-1"
+                return deny(rule,
                             f"{rel} — код сервиса; роль {role_name!r} не пишет в сервисы",
                             path=rel, role=role_name)
             if not service.get("write", False):
@@ -249,6 +250,25 @@ class Policy:
             if not matches_any(rel, scope):
                 return deny("R-WORK-1", f"{rel} вне allowed_files брифа", path=rel,
                             allowed_files=scope)
+
+            # Сервис может лежать внутри главного корня (monorepo). Тогда его файлы
+            # не получают «вторую жизнь»: те же protected/spec/product-правила
+            # проверяются по главному относительному пути, а не только по ключу.
+            base = os.path.realpath(service_base(self.root, service))
+            root_real = os.path.realpath(self.root)
+            target = os.path.realpath(os.path.join(base, inner))
+            if base == root_real or base.startswith(root_real + os.sep):
+                main_rel = os.path.relpath(target, root_real).replace("\\", "/")
+                if main_rel not in ("", ".") and not main_rel.startswith(".."):
+                    if (self.is_spec(main_rel) and role_name not in ("human", "system")
+                            and not role.get("can_write_specs", False)):
+                        return deny("R-WORK-3", f"{main_rel} — каталог спеки", path=rel)
+                    if (self.is_protected(main_rel) and role_name != "system"
+                            and not matches_any(main_rel, role.get("can_write", []))):
+                        return deny("R-PROT-1", f"{main_rel} — защищённый путь", path=rel)
+                    if (self.is_product(main_rel) and not role.get("can_write_product", False)
+                            and not matches_any(main_rel, role.get("product_write_globs", []))):
+                        return deny("R-PROT-1", f"{main_rel} — продуктовый код", path=rel)
             return allow("R-WORK-1")
 
         # R-WORK-3: спеку плана пишут BA/SA (analyst) и QA-кейсы, а не рабочий код.

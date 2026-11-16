@@ -202,7 +202,7 @@ class Engine:
             fields["accepted_snapshot"] = task.get("verifying_snapshot") or payload.get("_snapshot")
             # опись самих файлов задачи: по ней recheck отличит чужую правку от переделки
             fields["accepted_files_snapshot"] = snapshot_mod.files_snapshot(
-                self.root, _brief_allowed(self, task)
+                self.root, _brief_allowed(self, task), _brief_services(self, task)
             )
             v = payload.get("verdict") or {}
             fields["verdict_id"] = v.get("verdict_id")
@@ -501,6 +501,11 @@ def _brief_allowed(engine: Engine, task: dict[str, Any]) -> list[str]:
     return list(b.allowed_files) if b else []
 
 
+def _brief_services(engine: Engine, task: dict[str, Any]) -> list[dict[str, Any]]:
+    b = engine._brief(task)
+    return list((b.data.get("services") if b else None) or [])
+
+
 def _guard_recheck_after_accept(engine: Engine, task: dict[str, Any], payload: dict[str, Any]) -> None:
     """Повторная проверка после PASS без расхода попытки.
 
@@ -516,7 +521,8 @@ def _guard_recheck_after_accept(engine: Engine, task: dict[str, Any], payload: d
             "нет описи файлов кандидата на момент PASS: повторная проверка невозможна, "
             "кандидата надо переделать через invalidate",
         )
-    now_files = snapshot_mod.files_snapshot(engine.root, _brief_allowed(engine, task))
+    now_files = snapshot_mod.files_snapshot(engine.root, _brief_allowed(engine, task),
+                                            _brief_services(engine, task))
     if now_files != baseline:
         raise TransitionError(
             "R-SNAPSHOT-1",

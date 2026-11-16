@@ -50,6 +50,22 @@ class ScopeTests(unittest.TestCase):
                          ["tests/test_scope.py", "evidence/verdict.json"])
         self.assertEqual(data["attempt"], 2)
 
+    def test_services_are_published_and_survive_verifying(self) -> None:
+        services = [{"name": "api", "path": "../api", "base_commit": "a" * 40, "write": True}]
+        scope.write_scope(self.root, task_id="T-SVC", role="worker",
+                          allowed_files=["service:api/src/a.py"], attempt=1,
+                          services=services)
+        data = scope.read_scope(self.root)
+        assert data is not None
+        self.assertEqual(data["services"], services)
+
+        scope.publish_verifying(self.root, task_id="T-SVC", attempt=1)
+        data = scope.read_scope(self.root)
+        assert data is not None
+        self.assertEqual(data["role"], "verifier")
+        self.assertEqual(data["services"], services)
+        self.assertEqual(data["allowed_files"], ["evidence/**"])
+
     def test_clear_removes_file_and_read_returns_none(self) -> None:
         """Очистка удаляет файл; после неё чтение возвращает None."""
         scope.write_scope(self.root, task_id="T-2", role="worker",
