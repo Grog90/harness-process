@@ -5,7 +5,8 @@
 После `add-multi-root-write` worker может писать в явно открытый сервис, но:
 
 - verification-снимок считается только по главному корню, поэтому правка сервисного
-  файла не меняет `candidate_snapshot` и не видна recheck;
+  файла не меняет `candidate_snapshot`; recheck видит её как переделку через
+  `files_snapshot`, но полноценный tree-снимок кандидата её не включает;
 - `finalize` проверяет write-set и коммитит только главный репозиторий; сервисные
   изменения остаются грязными и не попадают в evidence;
 - `R-WRITESET-1` не видит чужие правки в сервисном репозитории.
@@ -24,7 +25,7 @@
 
 - Класс риска: **L1** (коммит в чужие репозитории).
 - Меняются `harness/snapshot.py`, `harness/finalize.py`, `harness/fsm.py`,
-  `harness/cli.py`, `harness/state.py`, `harness/changefsm.py`, тесты.
+  `harness/cli.py`, `harness/run.py`, `harness/state.py`, `harness/changefsm.py`, тесты.
 - Merge order и автоматический push не входят.
 
 ## Out of Scope

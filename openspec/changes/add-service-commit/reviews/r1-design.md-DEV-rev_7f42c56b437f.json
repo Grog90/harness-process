@@ -1,0 +1,23 @@
+{
+  "review_id": "rev_7f42c56b437f",
+  "change_id": "add-service-commit",
+  "revision": 1,
+  "artifact": "design.md",
+  "artifact_hash": "sha256:b9ec8316a9e7999aa732bc1de52b1117d47d096a861e7ef7f8212e446d3c1d4e",
+  "reviewer_id": "rev-dev",
+  "reviewer_role": "DEV",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "scope в fsm recheck исправлен; отсутствующий сервис → R-FINAL-1",
+    "in-root main-коммит и границы push/merge названы"
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "text": "частичный коммит не перечисляет уже созданные сервисные SHA в ошибке"
+    }
+  ],
+  "created_at": 1794838642.8959885,
+  "created_at_iso": "2026-11-16T17:17:22+0300"
+}

@@ -1,0 +1,17 @@
+{
+  "review_id": "rev_9bcf57773df5",
+  "change_id": "add-session-adapter",
+  "revision": 1,
+  "artifact": "tasks.md",
+  "artifact_hash": "sha256:07fb5011c27bbcbdf54c8489fcd3edb2b2677e3b5c058e190708539f03913199",
+  "reviewer_id": "rev-dev",
+  "reviewer_role": "DEV",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "resolveHarnessRoot, index/core тесты и документация соответствуют коду"
+  ],
+  "findings": [],
+  "created_at": 1794838642.9209914,
+  "created_at_iso": "2026-11-16T17:17:22+0300"
+}

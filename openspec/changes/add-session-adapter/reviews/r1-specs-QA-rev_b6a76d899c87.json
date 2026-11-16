@@ -1,0 +1,17 @@
+{
+  "review_id": "rev_b6a76d899c87",
+  "change_id": "add-session-adapter",
+  "revision": 1,
+  "artifact": "specs",
+  "artifact_hash": "sha256:f4748fd715b3d8a0d04e40ea251cb68e4610cf2e839d7c80087dcdd3839ac344",
+  "reviewer_id": "rev-qa",
+  "reviewer_role": "QA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "CASE-1/2/3 проверяемы; контракт {ok,status}/{ok:false,error} и пустой блок зафиксированы"
+  ],
+  "findings": [],
+  "created_at": 1794838642.910988,
+  "created_at_iso": "2026-11-16T17:17:22+0300"
+}

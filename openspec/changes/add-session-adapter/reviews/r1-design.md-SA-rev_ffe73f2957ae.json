@@ -1,0 +1,22 @@
+{
+  "review_id": "rev_ffe73f2957ae",
+  "change_id": "add-session-adapter",
+  "revision": 1,
+  "artifact": "design.md",
+  "artifact_hash": "sha256:cdb952ff266c39543ea17619f29f81ae058ea8bfb8c33a51ffae81aa273af2e8",
+  "reviewer_id": "rev-sa",
+  "reviewer_role": "SA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "команда с --root, пустой контекст без scope, read-only чужой task_id, установка"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "spawnSync не вынесен в Risks; fallback {ok:true,raw} шире контракта"
+    }
+  ],
+  "created_at": 1794838642.912988,
+  "created_at_iso": "2026-11-16T17:17:22+0300"
+}

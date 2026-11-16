@@ -58,6 +58,17 @@ export function readScope(root) {
   }
 }
 
+/** Единственное действие инструмента: расширение набора — отдельное решение. */
+export const TASK_TOOL_ACTIONS = Object.freeze(['status']);
+
+/** Какой task_id читать; ошибки те же, что у инструмента. */
+export function resolveStatusTask({ root, scope, taskId = '' } = {}) {
+  if (!root) return { ok: false, error: 'harness root не найден (config.root/HARNESS_ROOT/~/.dsh/harness-root)' };
+  const id = String(taskId || scope?.task_id || '');
+  if (!id) return { ok: false, error: 'нет активной задачи и task_id не передан' };
+  return { ok: true, taskId: id };
+}
+
 /** Текст системного контекста. null — задачи нет, контекст не добавляется. */
 export function taskContext(scope) {
   if (!scope || !scope.task_id) return null;

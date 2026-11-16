@@ -227,7 +227,10 @@ def finalize(
         raise FinalizeError("R-FINAL-1", "корень не является git-репозиторием")
 
     scope = task.get("snapshot_scope") or ""
-    current = snapshot_for_task(root, task, scope)
+    try:
+        current = snapshot_for_task(root, task, scope)
+    except ValueError as exc:
+        raise FinalizeError("R-FINAL-1", str(exc)) from exc
     if current != task.get("accepted_snapshot"):
         raise FinalizeError(
             "R-SNAPSHOT-1",

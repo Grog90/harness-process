@@ -1,0 +1,23 @@
+{
+  "review_id": "rev_93307cc4a768",
+  "change_id": "add-service-commit",
+  "revision": 1,
+  "artifact": "specs",
+  "artifact_hash": "sha256:404fdef1f0cb350a287164fdec1c3a493fdc591fa8831c93634006dae1645806",
+  "reviewer_id": "rev-qa",
+  "reviewer_role": "QA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "CASE-2-1 = service_commits, CASE-2-3 in-root mode=main, REQ-COMMIT-3 покрыт тестом",
+    "сценарии проверяемы и согласованы с snapshot.py/finalize.py"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "CASE-2-2 на уровне finalize не проверен; CASE-2-3 mode=main без e2e"
+    }
+  ],
+  "created_at": 1794838642.889987,
+  "created_at_iso": "2026-11-16T17:17:22+0300"
+}

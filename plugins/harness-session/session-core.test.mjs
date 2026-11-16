@@ -8,8 +8,10 @@ import {
   buildStatusArgs,
   readScope,
   resolveHarnessRoot,
+  resolveStatusTask,
   taskContext,
 } from './session-core.mjs';
+import { actions } from './index.js';
 
 function tempRoot() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-session-'));
@@ -37,14 +39,27 @@ test('taskContext содержит задачу, роль и allowed_files', () 
   });
   assert.match(text, /task_id: T-1/);
   assert.match(text, /role: worker/);
+  assert.match(text, /phase: work/);
+  assert.match(text, /attempt: 2/);
   assert.match(text, /src\/a\.py/);
   assert.match(text, /api \(write\)/);
   assert.match(text, /primary_agent: lead/);
 });
 
-test('без задачи контекст не добавляется', () => {
+test('без задачи контекст не добавляется и readScope молчит', () => {
   assert.equal(taskContext(null), null);
   assert.equal(taskContext({}), null);
+  assert.equal(readScope(tempRoot()), null);
+  assert.equal(readScope(null), null);
+});
+
+test('инструмент имеет только действие status', () => {
+  assert.deepEqual(actions, ['status']);
+  assert.deepEqual(resolveStatusTask({ root: '/work', scope: null, taskId: 'T-4' }),
+    { ok: true, taskId: 'T-4' });
+  assert.equal(resolveStatusTask({ root: '', scope: null }).ok, false);
+  assert.equal(resolveStatusTask({ root: '/work', scope: null }).ok, false);
+  assert.equal(resolveStatusTask({ root: '/work', scope: { task_id: 'T-5' } }).taskId, 'T-5');
 });
 
 test('readScope читает guard-scope.json', () => {

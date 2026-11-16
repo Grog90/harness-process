@@ -1,0 +1,17 @@
+{
+  "review_id": "rev_7edac8ceb1b2",
+  "change_id": "add-session-adapter",
+  "revision": 1,
+  "artifact": "proposal.md",
+  "artifact_hash": "sha256:9e8a6672057eb3c240fe0083a4fdb89579dd3319d87ca9ffddee565127536f80",
+  "reviewer_id": "rev-ba",
+  "reviewer_role": "BA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "установка в desktop зафиксирована; автодиспетч/вердикт/коммит вне scope"
+  ],
+  "findings": [],
+  "created_at": 1794838642.9049878,
+  "created_at_iso": "2026-11-16T17:17:22+0300"
+}

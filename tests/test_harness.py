@@ -658,6 +658,66 @@ class FinalizeTests(unittest.TestCase):
         self.assertEqual(_main_allowed(self.root, task), ["services/api/src/a.py"])
         self.assertEqual(_own_service_roots(self.root, task), [])
 
+    def test_finalize_commits_service_end_to_end(self) -> None:
+        from harness.finalize import finalize
+        from harness.snapshot import snapshot_for_task
+
+        subprocess_git(self.root, "init", "-q", self.root)
+        subprocess_git(self.root, "-C", self.root, "add", "-A")
+        subprocess_git(self.root, "-C", self.root, "-c", "user.name=t", "-c", "user.email=t@t",
+                       "commit", "-q", "-m", "base")
+        service = tempfile.mkdtemp(prefix="svc-", dir=os.path.dirname(self.root))
+        self.addCleanup(shutil.rmtree, service, True)
+        subprocess_git(service, "init", "-q", service)
+        os.makedirs(os.path.join(service, "src"), exist_ok=True)
+        with open(os.path.join(service, "src", "base.py"), "w", encoding="utf-8") as fh:
+            fh.write("base\n")
+        subprocess_git(service, "-C", service, "add", "-A")
+        subprocess_git(service, "-C", service, "-c", "user.name=t", "-c", "user.email=t@t",
+                       "commit", "-q", "-m", "base")
+
+        store = Store(os.path.join(self.root, ".harness", "state.db"))
+        eng = Engine(store, Policy.load(self.root), self.root)
+        try:
+            eng.store.create_task("T-FIN", policy_version="1.0.0")
+            brief = sample_brief("T-FIN", allowed_files=["service:api/src/a.py"], services=[
+                {"name": "api", "path": service, "base_commit": "a" * 40, "write": True}])
+            eng.apply("T-FIN", "attach_brief", {"brief": brief})
+            eng.apply("T-FIN", "dispatch", {"worker_id": "w"})
+            with open(os.path.join(service, "src", "a.py"), "w", encoding="utf-8") as fh:
+                fh.write("one\n")
+            snapshot = snapshot_for_task(self.root, store.get_task("T-FIN"))
+            eng.apply("T-FIN", "submit", {"attempt": 1, "snapshot_id": snapshot})
+            eng.apply("T-FIN", "verdict", {"verdict": sample_verdict(snapshot, task_id="T-FIN")})
+            self.assertEqual(store.get_task("T-FIN")["state"], "ACCEPTED")
+            out = finalize(store, eng, self.root, "T-FIN", allow_no_spec="integration", author="t")
+            self.assertTrue(out["ok"], out)
+            self.assertEqual(len(out["service_commits"]), 1)
+            service_sha = out["service_commits"][0]["commit_sha"]
+            self.assertTrue(service_sha)
+            self.assertIn(service_sha, [c["commit_sha"] for c in store.commits_for("T-FIN")])
+            self.assertEqual(subprocess_git(service, "-C", service, "status", "--porcelain").strip(), "")
+        finally:
+            store.close()
+
+    def test_evidence_contains_task_commits(self) -> None:
+        from harness import changefsm
+
+        store = Store(os.path.join(self.root, ".harness", "state.db"))
+        try:
+            store.create_change("chg-test", owner="owner", risk_class="L1", title="t")
+            os.makedirs(os.path.join(self.root, "openspec", "changes", "chg-test"), exist_ok=True)
+            with open(os.path.join(self.root, "openspec", "changes", "chg-test", "proposal.md"),
+                      "w", encoding="utf-8") as fh:
+                fh.write("# test\n")
+            store.create_task("T-EV", change_id="chg-test", policy_version="1.0.0")
+            store.record_commit(commit_sha="a" * 40, task_id="T-EV", snapshot_id="snap")
+            result = changefsm.write_evidence(store, self.root, "chg-test")
+            self.assertIn("T-EV", result["manifest"]["task_commits"])
+            self.assertEqual(result["manifest"]["task_commits"]["T-EV"][0]["commit_sha"], "a" * 40)
+        finally:
+            store.close()
+
     def test_commit_services_commits_and_rejects_unexpected(self) -> None:
         from harness.finalize import FinalizeError, commit_services
 
@@ -688,6 +748,8 @@ class FinalizeTests(unittest.TestCase):
             self.assertEqual(records[0]["commit_sha"],
                              subprocess_git(service, "-C", service, "rev-parse", "HEAD").strip())
             self.assertEqual(subprocess_git(service, "-C", service, "status", "--porcelain").strip(), "")
+            self.assertIn(records[0]["commit_sha"],
+                          [c["commit_sha"] for c in store.commits_for("T-SVC")])
 
             with open(os.path.join(service, "src", "b.py"), "w", encoding="utf-8") as fh:
                 fh.write("two\n")

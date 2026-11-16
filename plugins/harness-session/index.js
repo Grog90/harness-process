@@ -8,10 +8,18 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { resolveHarnessRoot, readScope, taskContext, buildStatusArgs } from './session-core.mjs';
+import {
+  TASK_TOOL_ACTIONS,
+  buildStatusArgs,
+  readScope,
+  resolveHarnessRoot,
+  resolveStatusTask,
+  taskContext,
+} from './session-core.mjs';
 
 export const name = 'harness-session';
 export const inject = ['tools', 'systemPrompt'];
+export const actions = TASK_TOOL_ACTIONS;
 
 export function apply(ctx, config) {
   const resolved = resolveHarnessRoot({
@@ -60,10 +68,10 @@ export function apply(ctx, config) {
       },
     },
     async execute(args) {
-      if (!root) return { ok: false, error: 'harness root не найден (config.root/HARNESS_ROOT/~/.dsh/harness-root)' };
       const scope = readScope(root);
-      const taskId = String(args?.task_id || scope?.task_id || '');
-      if (!taskId) return { ok: false, error: 'нет активной задачи и task_id не передан' };
+      const resolvedTask = resolveStatusTask({ root, scope, taskId: args?.task_id || '' });
+      if (!resolvedTask.ok) return resolvedTask;
+      const taskId = resolvedTask.taskId;
       const python = config?.python || process.env.HARNESS_PYTHON || 'python';
       const proc = spawnSync(python, buildStatusArgs({ root, taskId }), {
         encoding: 'utf8',

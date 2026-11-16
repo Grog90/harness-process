@@ -1,0 +1,19 @@
+{
+  "review_id": "rev_a586755558b0",
+  "change_id": "add-service-commit",
+  "revision": 1,
+  "artifact": "proposal.md",
+  "artifact_hash": "sha256:fb4bb769845fb98005a4376e7317cb5487c8ca9fead57848a3c6cc966ba5c340",
+  "reviewer_id": "rev-ba",
+  "reviewer_role": "BA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "Problem и Impact сверены с кодом; recheck через files_snapshot учтён точно",
+    "доки (FACTS/PROCESS/ROADMAP) приведены к «snapshot/commit закрыты»",
+    "Out of Scope совпадает с кодом"
+  ],
+  "findings": [],
+  "created_at": 1794838642.8839872,
+  "created_at_iso": "2026-11-16T17:17:22+0300"
+}

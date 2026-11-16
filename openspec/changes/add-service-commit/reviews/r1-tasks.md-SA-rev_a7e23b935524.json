@@ -1,0 +1,17 @@
+{
+  "review_id": "rev_a7e23b935524",
+  "change_id": "add-service-commit",
+  "revision": 1,
+  "artifact": "tasks.md",
+  "artifact_hash": "sha256:c215323ac75fa8dced77ae5c737aeb54224928ac893ebce87885d7203834ef01",
+  "reviewer_id": "rev-sa",
+  "reviewer_role": "SA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "задачи соответствуют коду; end-to-end finalize и task_commits добавлены"
+  ],
+  "findings": [],
+  "created_at": 1794838642.897989,
+  "created_at_iso": "2026-11-16T17:17:22+0300"
+}
