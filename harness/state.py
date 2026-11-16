@@ -16,7 +16,7 @@ import uuid
 from contextlib import contextmanager
 from typing import Any, Iterable, Iterator
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     created_at        REAL NOT NULL,
     updated_at        REAL NOT NULL,
     spec_version      TEXT,
+    change_id         TEXT,
     base_commit       TEXT,
     brief_json        TEXT,
     brief_hash        TEXT,
@@ -152,6 +153,44 @@ CREATE TABLE IF NOT EXISTS lane_resources (
     task_id    TEXT NOT NULL UNIQUE,
     created_at REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS changes (
+    change_id    TEXT PRIMARY KEY,
+    status       TEXT NOT NULL,
+    revision     INTEGER NOT NULL DEFAULT 1,
+    risk_class   TEXT NOT NULL DEFAULT 'L1',
+    owner        TEXT NOT NULL,
+    title        TEXT,
+    spec_ref     TEXT,
+    base_commit  TEXT,
+    created_at   REAL NOT NULL,
+    updated_at   REAL NOT NULL,
+    payload      TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS change_events (
+    event_id   TEXT PRIMARY KEY,
+    change_id  TEXT NOT NULL,
+    type       TEXT NOT NULL,
+    payload    TEXT,
+    result     TEXT,
+    created_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS change_reviews (
+    review_id      TEXT PRIMARY KEY,
+    change_id      TEXT NOT NULL,
+    revision       INTEGER NOT NULL,
+    artifact       TEXT NOT NULL,
+    artifact_hash  TEXT NOT NULL,
+    reviewer_id    TEXT NOT NULL,
+    reviewer_role  TEXT NOT NULL,
+    author_id      TEXT,
+    verdict        TEXT NOT NULL,
+    criteria       TEXT,
+    findings       TEXT,
+    created_at     REAL NOT NULL
+);
 """
 
 
@@ -190,6 +229,8 @@ class Store:
             self.conn.execute("ALTER TABLE tasks ADD COLUMN commit_sha TEXT")
         if "accepted_files_snapshot" not in cols:
             self.conn.execute("ALTER TABLE tasks ADD COLUMN accepted_files_snapshot TEXT")
+        if "change_id" not in cols:
+            self.conn.execute("ALTER TABLE tasks ADD COLUMN change_id TEXT")
 
     # ------------------------------------------------------------------ транзакции
     @contextmanager
@@ -216,14 +257,16 @@ class Store:
         lane: str = "main",
         policy_version: str | None = None,
         max_attempts: int = 3,
+        change_id: str | None = None,
     ) -> dict[str, Any]:
         ts = now()
         with self.transaction() as c:
             c.execute(
                 """INSERT INTO tasks(task_id, lane, state, created_at, updated_at, spec_version,
-                                     base_commit, policy_version, max_attempts)
-                   VALUES(?,?,?,?,?,?,?,?,?)""",
-                (task_id, lane, "CLAIMED", ts, ts, spec_version, base_commit, policy_version, max_attempts),
+                                     change_id, base_commit, policy_version, max_attempts)
+                   VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                (task_id, lane, "CLAIMED", ts, ts, spec_version, change_id, base_commit,
+                 policy_version, max_attempts),
             )
         return self.get_task(task_id)
 
@@ -251,6 +294,154 @@ class Store:
             if cur.rowcount == 0:
                 raise StoreError(f"задача не найдена: {task_id}")
         return self.get_task(task_id)
+
+    # ------------------------------------------------------------- изменения
+    def create_change(
+        self,
+        change_id: str,
+        *,
+        owner: str,
+        risk_class: str = "L1",
+        title: str = "",
+        status: str = "DRAFT",
+        revision: int = 1,
+        spec_ref: str | None = None,
+        base_commit: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        ts = now()
+        with self.transaction() as c:
+            c.execute(
+                """INSERT INTO changes(change_id, status, revision, risk_class, owner, title,
+                                        spec_ref, base_commit, created_at, updated_at, payload)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                (change_id, status, revision, risk_class, owner, title, spec_ref, base_commit,
+                 ts, ts, json.dumps(payload or {}, ensure_ascii=False, sort_keys=True)),
+            )
+        return self.get_change(change_id)
+
+    def get_change(self, change_id: str) -> dict[str, Any]:
+        row = self.conn.execute("SELECT * FROM changes WHERE change_id = ?", (change_id,)).fetchone()
+        if row is None:
+            raise StoreError(f"change не найден: {change_id}")
+        d = dict(row)
+        d["payload"] = json.loads(d["payload"] or "{}")
+        return d
+
+    def find_change(self, change_id: str) -> dict[str, Any] | None:
+        row = self.conn.execute("SELECT * FROM changes WHERE change_id = ?", (change_id,)).fetchone()
+        if row is None:
+            return None
+        d = dict(row)
+        d["payload"] = json.loads(d["payload"] or "{}")
+        return d
+
+    def list_changes(self) -> list[dict[str, Any]]:
+        rows = self.conn.execute("SELECT * FROM changes ORDER BY created_at").fetchall()
+        out = []
+        for row in rows:
+            d = dict(row)
+            d["payload"] = json.loads(d["payload"] or "{}")
+            out.append(d)
+        return out
+
+    def update_change(self, change_id: str, **fields: Any) -> dict[str, Any]:
+        if not fields:
+            return self.get_change(change_id)
+        if "payload" in fields and not isinstance(fields["payload"], str):
+            fields["payload"] = json.dumps(fields["payload"], ensure_ascii=False, sort_keys=True)
+        fields["updated_at"] = now()
+        cols = ", ".join(f"{k} = ?" for k in fields)
+        with self.transaction() as c:
+            cur = c.execute(f"UPDATE changes SET {cols} WHERE change_id = ?", (*fields.values(), change_id))
+            if cur.rowcount == 0:
+                raise StoreError(f"change не найден: {change_id}")
+        return self.get_change(change_id)
+
+    def append_change_event(
+        self,
+        event_id: str,
+        change_id: str,
+        type_: str,
+        payload: dict[str, Any] | None = None,
+        result: dict[str, Any] | None = None,
+        *,
+        conn: sqlite3.Connection | None = None,
+    ) -> bool:
+        sql = ("INSERT OR IGNORE INTO change_events(event_id, change_id, type, payload, result, created_at) "
+               "VALUES(?,?,?,?,?,?)")
+        params = (
+            event_id,
+            change_id,
+            type_,
+            json.dumps(payload or {}, ensure_ascii=False, sort_keys=True),
+            json.dumps(result or {}, ensure_ascii=False, sort_keys=True),
+            now(),
+        )
+        if conn is not None:
+            return conn.execute(sql, params).rowcount > 0
+        with self.transaction() as c:
+            return c.execute(sql, params).rowcount > 0
+
+    def change_events_for(self, change_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT * FROM change_events WHERE change_id = ? ORDER BY created_at, rowid", (change_id,)
+        ).fetchall()
+        out = []
+        for row in rows:
+            d = dict(row)
+            d["payload"] = json.loads(d["payload"] or "{}")
+            d["result"] = json.loads(d["result"] or "{}")
+            out.append(d)
+        return out
+
+    def add_change_review(self, review: dict[str, Any]) -> dict[str, Any]:
+        with self.transaction() as c:
+            c.execute(
+                """INSERT OR REPLACE INTO change_reviews(review_id, change_id, revision, artifact,
+                       artifact_hash, reviewer_id, reviewer_role, author_id, verdict, criteria,
+                       findings, created_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    review["review_id"],
+                    review["change_id"],
+                    int(review["revision"]),
+                    review["artifact"],
+                    review["artifact_hash"],
+                    review["reviewer_id"],
+                    review["reviewer_role"],
+                    review.get("author_id"),
+                    review["verdict"],
+                    json.dumps(review.get("criteria") or [], ensure_ascii=False, sort_keys=True),
+                    json.dumps(review.get("findings") or [], ensure_ascii=False, sort_keys=True),
+                    review.get("created_at", now()),
+                ),
+            )
+        return review
+
+    def change_reviews(self, change_id: str, revision: int | None = None) -> list[dict[str, Any]]:
+        if revision is None:
+            rows = self.conn.execute(
+                "SELECT * FROM change_reviews WHERE change_id = ? ORDER BY created_at, rowid", (change_id,)
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM change_reviews WHERE change_id = ? AND revision = ? ORDER BY created_at, rowid",
+                (change_id, revision),
+            ).fetchall()
+        out = []
+        for row in rows:
+            d = dict(row)
+            d["criteria"] = json.loads(d["criteria"] or "[]")
+            d["findings"] = json.loads(d["findings"] or "[]")
+            out.append(d)
+        return out
+
+    def tasks_for_change(self, change_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT * FROM tasks WHERE change_id = ? ORDER BY created_at, rowid", (change_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     # ------------------------------------------------------------- ресурсы лейнов
     def reserve_lane_slot(self, task_id: str, slot: int) -> bool:

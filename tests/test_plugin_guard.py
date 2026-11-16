@@ -81,6 +81,33 @@ class PluginGuardTests(unittest.TestCase):
             json.dump({"task_id": "T-GUARD", "role": role, "phase": phase,
                        "primary": primary, "allowed_files": allowed, "attempt": 1}, fh)
 
+    def _ask_probe(self, calls: list[dict]) -> list[dict]:
+        payload = json.dumps({"root": self.root, "calls": calls})
+        env = {**os.environ}
+        env.pop("HARNESS_ROOT", None)
+        proc = subprocess.run(
+            [NODE, os.path.join(PLUGIN, "ask-probe.mjs")], input=payload,
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            cwd=PLUGIN, timeout=60, env=env,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr[:400])
+        return json.loads(proc.stdout)
+
+    def test_gap_turns_write_into_ask_and_read_stays_allowed(self) -> None:
+        gap_path = os.path.join(self.root, ".harness", "gap.json")
+        with open(gap_path, "w", encoding="utf-8") as fh:
+            json.dump({"task_id": "T-GUARD", "gap_id": "GAP-1",
+                       "question": "Отменять оплаченный заказ?"}, fh)
+        decisions = self._ask_probe([{"name": "write", "arguments": {"path": "src/a.py"}},
+                                     {"name": "read", "arguments": {"path": "src/a.py"}}])
+        self.assertEqual(decisions[0]["kind"], "ask")
+        self.assertIn("R-GAP-2", decisions[0]["reason"])
+        self.assertEqual(decisions[1]["kind"], "allow")
+
+        os.remove(gap_path)
+        decisions = self._ask_probe([{"name": "write", "arguments": {"path": "src/a.py"}}])
+        self.assertEqual(decisions[0]["kind"], "allow")
+
     def test_missing_policy_allows_read_and_denies_writes(self) -> None:
         """Без политики сессия остаётся осматриваемой, но не даёт менять файлы."""
         bare = tmpdir.scratch(ROOT, "harness-plugin-nopolicy-")

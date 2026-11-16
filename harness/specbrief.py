@@ -30,6 +30,7 @@ _SECTION = re.compile(r"^##\s+")
 _WHEN = re.compile(r"^[-*]\s+\*\*WHEN\*\*\s*(.+?)\s*$", re.IGNORECASE)
 _THEN = re.compile(r"^[-*]\s+\*\*THEN\*\*\s*(.+?)\s*$", re.IGNORECASE)
 _TICK = re.compile(r"`([^`\n]+)`")
+_ID_PREFIXED = re.compile(r"^\s*\[?([A-Z]+-[A-Za-z0-9][A-Za-z0-9-]*)\]?\s*[:\-—]?\s*(.*)$")
 
 
 class SpecBriefError(RuntimeError):
@@ -59,21 +60,72 @@ def _read(path: str) -> str:
         return fh.read()
 
 
+def _split_id(text: str, prefix: str) -> tuple[str, str]:
+    """Вытаскивает явный ID (`REQ-...`, `CASE-...`) из заголовка, если он там есть.
+
+    Явные ID сохраняются между редакциями спеки; без них выдаётся детерминированный
+    номер по порядку — он стабилен, пока требования только добавляют в конец.
+    """
+    match = _ID_PREFIXED.match(text)
+    if match and match.group(1).upper().startswith(prefix + "-"):
+        return match.group(1).upper(), match.group(2).strip()
+    return "", text.strip()
+
+
+def parse_requirements(text: str) -> list[dict[str, Any]]:
+    """Требования дельты спеки с устойчивыми ID и списком сценариев."""
+    requirements: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        m_req = _REQ.match(line)
+        if m_req:
+            explicit, title = _split_id(m_req.group(1), "REQ")
+            req_id = explicit or f"REQ-{len(requirements) + 1}"
+            current = {"id": req_id, "title": title, "scenarios": []}
+            requirements.append(current)
+            continue
+        m_scen = _SCEN.match(line)
+        if m_scen and current is not None:
+            explicit, name = _split_id(m_scen.group(1), "CASE")
+            case_id = explicit or f"CASE-{current['id']}-{len(current['scenarios']) + 1}"
+            current["scenarios"].append({"id": case_id, "name": name})
+            continue
+        if _SECTION.match(line):
+            current = None
+    return requirements
+
+
 def parse_scenarios(text: str) -> list[dict[str, str]]:
-    """Сценарии из дельты спеки: требование, имя сценария, WHEN/THEN."""
+    """Сценарии из дельты спеки: требование, ID, имя сценария, WHEN/THEN."""
     out: list[dict[str, str]] = []
     requirement = ""
+    requirement_id = ""
+    case_index = 0
     current: dict[str, str] | None = None
     for raw in text.splitlines():
         line = raw.rstrip()
         m_req = _REQ.match(line)
         if m_req:
-            requirement = m_req.group(1)
+            explicit, title = _split_id(m_req.group(1), "REQ")
+            requirement = title
+            requirement_id = explicit or requirement_id or "REQ-1"
+            case_index = 0
             current = None
             continue
         m_scen = _SCEN.match(line)
         if m_scen:
-            current = {"requirement": requirement, "scenario": m_scen.group(1), "when": "", "then": ""}
+            explicit, name = _split_id(m_scen.group(1), "CASE")
+            case_index += 1
+            case_id = explicit or f"CASE-{requirement_id}-{case_index}"
+            current = {
+                "requirement": requirement,
+                "requirement_id": requirement_id,
+                "case_id": case_id,
+                "scenario": name,
+                "when": "",
+                "then": "",
+            }
             out.append(current)
             continue
         if _SECTION.match(line):
@@ -144,6 +196,23 @@ def _digest(paths: list[str]) -> str:
     return h.hexdigest()[:8]
 
 
+def spec_digest(root: str, change: str) -> str | None:
+    """Digest дельты specs текущего change: тот же, что попадает в `spec_version`.
+
+    None означает «в change нет spec.md» — тогда сверять нечего, и это надо
+    называть явно, а не выдавать за совпадение.
+    """
+    path = change_path(root, change)
+    spec_files: list[str] = []
+    specs_root = os.path.join(path, "specs")
+    if os.path.isdir(specs_root):
+        for dirpath, _dirnames, filenames in os.walk(specs_root):
+            for name in sorted(filenames):
+                if name == SPEC_NAME:
+                    spec_files.append(os.path.join(dirpath, name))
+    return _digest(spec_files) if spec_files else None
+
+
 def _git(root: str, *args: str) -> str:
     try:
         proc = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True, timeout=20)
@@ -170,7 +239,7 @@ def _why(proposal: str) -> str:
     return ""
 
 
-def collect(root: str, change: str) -> dict[str, Any]:
+def collect(root: str, change: str, services: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Читает change и возвращает разобранные части. Побочных эффектов нет."""
     path = change_path(root, change)
     if not os.path.isdir(path):
@@ -192,14 +261,27 @@ def collect(root: str, change: str) -> dict[str, Any]:
         raise SpecBriefError("в change нет specs/**/spec.md: критериям неоткуда взяться")
 
     scenarios: list[dict[str, str]] = []
+    requirements: list[dict[str, Any]] = []
     for spec_file in spec_files:
-        scenarios.extend(parse_scenarios(_read(spec_file)))
+        text = _read(spec_file)
+        scenarios.extend(parse_scenarios(text))
+        requirements.extend(parse_requirements(text))
     if not scenarios:
         raise SpecBriefError("в спеке нет сценариев: сценарий — это будущий критерий приёмки")
 
     proposal_text = _read(proposal_file)
     tasks_text = _read(tasks_file)
     writable = [p for p in parse_paths(tasks_text) if p.startswith(CODE_PREFIXES)]
+    writable_services = {
+        str(s.get("name")) for s in services or []
+        if s.get("write", False) and str(s.get("name") or "").strip()
+    }
+    for path in parse_paths(tasks_text):
+        if not path.startswith("service:"):
+            continue
+        name = path[len("service:"):].split("/", 1)[0]
+        if name in writable_services and path not in writable:
+            writable.append(path)
     for test_path in parse_test_modules(tasks_text):
         if test_path not in writable:
             writable.append(test_path)
@@ -211,6 +293,7 @@ def collect(root: str, change: str) -> dict[str, Any]:
         "path": path,
         "spec_files": spec_files,
         "scenarios": scenarios,
+        "requirements": requirements,
         "writable": writable,
         "docs": docs,
         "names": parse_identifiers(tasks_text + "\n" + proposal_text),
@@ -225,12 +308,15 @@ def build(
     *,
     task_id: str | None = None,
     base_commit: str | None = None,
+    spec_ref: str | None = None,
+    actor_role: str = "DEV",
     check_commands: list[str] | None = None,
     attempt_limit: int = 3,
     timeout_seconds: int = 3600,
+    services: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Собирает бриф из change. Возвращает данные, ничего не пишет на диск."""
-    parts = collect(root, change)
+    parts = collect(root, change, services=services)
     checks = list(check_commands or [DEFAULT_CHECK])
     criteria = [
         {
@@ -238,6 +324,8 @@ def build(
             "statement": statement(scenario),
             "mandatory": True,
             "check": checks[0],
+            "req_id": scenario.get("requirement_id", ""),
+            "case_id": scenario.get("case_id", ""),
         }
         for index, scenario in enumerate(parts["scenarios"], 1)
     ]
@@ -246,11 +334,16 @@ def build(
     if len(behavior) > 900:
         behavior = behavior[:897].rstrip() + "..."
 
+    full_head = _git(root, "rev-parse", "HEAD")
     brief: dict[str, Any] = {
         "task_id": task_id or change,
         "brief_version": 1,
-        "base_commit": base_commit or _git(root, "rev-parse", "--short", "HEAD") or "HEAD",
+        "change_id": change,
+        "actor_role": actor_role,
+        "spec_ref": spec_ref or full_head or "",
+        "base_commit": base_commit or full_head or "HEAD",
         "spec_version": f"openspec:{change}@{parts['digest']}",
+        "services": list(services or []),
         "goal": goal,
         "expected_behavior": behavior,
         "scope": {

@@ -6,7 +6,7 @@ import os
 import tempfile
 import unittest
 
-from harness import specgate
+from harness import specbrief, specgate
 
 
 class VersionTest(unittest.TestCase):
@@ -59,10 +59,30 @@ class GateTest(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["change"], "add-demo")
 
-    def test_archived_change_still_satisfies_the_rule(self) -> None:
+    def test_archived_change_does_not_satisfy_the_rule(self) -> None:
+        """Архивный change описывает прошлое поведение: новый код на него ссылаться не может."""
         self._change("add-demo", archive=True)
         result = specgate.check(self.root, {"spec_version": "openspec:add-demo@1"}, ["harness/cli.py"])
-        self.assertTrue(result["ok"])
+        self.assertFalse(result["ok"])
+        self.assertIn("архив", result["reason"])
+
+    def test_digest_mismatch_blocks_commit(self) -> None:
+        spec_dir = os.path.join(self.root, "openspec", "changes", "add-demo", "specs", "cap")
+        os.makedirs(spec_dir)
+        spec_path = os.path.join(spec_dir, "spec.md")
+        with open(spec_path, "w", encoding="utf-8") as fh:
+            fh.write("### Requirement: R\n\n#### Scenario: S\n- **WHEN** x\n- **THEN** y\n")
+        digest = specbrief.spec_digest(self.root, "add-demo")
+        self.assertTrue(digest)
+
+        ok = specgate.check(self.root, {"spec_version": f"openspec:add-demo@{digest}"}, ["harness/cli.py"])
+        self.assertTrue(ok["ok"], ok)
+
+        with open(spec_path, "a", encoding="utf-8") as fh:
+            fh.write("\n### Requirement: R2\n\n#### Scenario: S2\n- **WHEN** x\n- **THEN** y\n")
+        stale = specgate.check(self.root, {"spec_version": f"openspec:add-demo@{digest}"}, ["harness/cli.py"])
+        self.assertFalse(stale["ok"])
+        self.assertIn("изменилась", stale["reason"])
 
     def test_unknown_change_is_denied(self) -> None:
         self._change("add-demo")

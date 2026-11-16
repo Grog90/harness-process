@@ -14,6 +14,8 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SKILLS_ROOT = PROJECT_ROOT / ".dsh" / "skills"
+PROCESS_SKILLS_ROOT = PROJECT_ROOT / "skills"
+PROCESS_SKILLS = ("process-ba", "process-sa", "process-dev", "process-qa", "process-verifier")
 
 #: Наши скиллы: у них проверяется и описание, и конец.
 OWN_SKILLS = frozenset({"web-check", "youtube-check", "vpn-router"})
@@ -190,6 +192,24 @@ class DoneWhenTests(unittest.TestCase):
                 self.assertIn("## Готово, когда", body)
                 tail = body.split("## Готово, когда", 1)[1]
                 self.assertRegex(tail, r"\n- \S")
+
+
+class ProcessSkillsTests(unittest.TestCase):
+    """Процессные скиллы skills/process-*: тот же контракт, что у .dsh/skills."""
+
+    def test_contract_and_done_when(self) -> None:
+        for name in PROCESS_SKILLS:
+            with self.subTest(skill=name):
+                text = (PROCESS_SKILLS_ROOT / name / "SKILL.md").read_text(encoding="utf-8")
+                fields = parse_frontmatter(text)
+                self.assertEqual(name, fields["name"])
+                self.assertEqual([], yaml_issues(fields["description"]))
+                self.assertEqual([], check_description(name, fields["description"]))
+                self.assertIn("## Готово, когда", body_of(text))
+
+    def test_all_process_skills_present(self) -> None:
+        found = {path.parent.name for path in PROCESS_SKILLS_ROOT.glob("*/SKILL.md")}
+        self.assertEqual(set(PROCESS_SKILLS), found)
 
 
 class PointerTests(unittest.TestCase):

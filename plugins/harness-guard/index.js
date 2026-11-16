@@ -118,11 +118,18 @@ function envAllowedFiles() {
   }
 }
 
+function readGap(root) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(root, '.harness', 'gap.json'), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 export function apply(ctx, config) {
   const resolved = resolveRoot(config);
 
-  const guard = (exec) => {
-    const tool = canonicalTool(exec?.name);
+  const guard = (exec) => {    const tool = canonicalTool(exec?.name);
     try {
       if (!resolved.root) {
         // политики нет: осматривать можно, менять — нет
@@ -150,12 +157,14 @@ export function apply(ctx, config) {
       const allowedFiles = Array.isArray(scope?.allowed_files)
         ? scope.allowed_files
         : config?.allowedFiles || envAllowedFiles();
+      const services = Array.isArray(scope?.services) ? scope.services : [];
 
       const decision = decide(policy, root, {
         role,
         tool: exec?.name,
         args: exec?.arguments || {},
         allowed_files: allowedFiles,
+        services,
         scoped: Boolean(scope),
         // без активной задачи дочерний агент не наследует права человека
         is_child: Boolean(exec?.parent) || (Boolean(scope) && Boolean(agentId) && agentId !== String(scope.primary || '')),
@@ -170,5 +179,32 @@ export function apply(ctx, config) {
     }
   };
 
-  return ctx.tools.guard(guard);
+  const disposeGuard = ctx.tools.guard(guard);
+
+  // GAP → ask: пишущий вызов при открытом вопросе спрашивает человека, а не
+  // проходит молча. Guard (ниже по конвейеру) всё равно проверит права.
+  const disposeAsk = typeof ctx.on === 'function'
+    ? ctx.on('tools/pre-execute', async (exec, next) => {
+      try {
+        if (!resolved.root) return next();
+        const gap = readGap(resolved.root);
+        if (!gap) return next();
+        const tool = canonicalTool(exec?.name);
+        if (!MUTATING.has(tool)) return next();
+        const question = String(gap.question || 'открытый вопрос');
+        return {
+          kind: 'ask',
+          reason: `R-GAP-2: ${question}`,
+          displayReason: { en: `Open question: ${question}`, ru: `Открытый вопрос: ${question}` },
+        };
+      } catch {
+        return next();
+      }
+    })
+    : null;
+
+  return () => {
+    if (typeof disposeAsk === 'function') disposeAsk();
+    disposeGuard();
+  };
 }

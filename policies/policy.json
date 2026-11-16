@@ -21,6 +21,24 @@
     "evidence/**",
     "harness/**"
   ],
+  "spec_globs": [
+    "openspec/**"
+  ],
+  "privileged_tools": [
+    "plugin_manager",
+    "plugin_market",
+    "plugin_search"
+  ],
+  "privileged_prefixes": [
+    "plugin_",
+    "mcp__awgm__",
+    "mcp__telegram__",
+    "mcp__desktop__"
+  ],
+  "mcp_allow_globs": [
+    "mcp__xerj__*",
+    "mcp__trendshift__*"
+  ],
   "roles": {
     "human": {
       "description": "Человек-владелец: единственный, кто может менять политику и состояние.",
@@ -85,6 +103,56 @@
         "harness"
       ]
     },
+    "analyst": {
+      "description": "BA/SA: пишет только продуктовую спеку и документы, не пишет код и не запускает команды.",
+      "can_read": [
+        "**"
+      ],
+      "can_write": [
+        "openspec/**",
+        "docs/**",
+        "journal/**",
+        "briefs/**"
+      ],
+      "can_write_product": false,
+      "can_write_specs": true,
+      "may_dispatch": false,
+      "may_commit": false,
+      "may_verify": false,
+      "tools": [
+        "read_file",
+        "write_file",
+        "harness",
+        "mcp__xerj__*"
+      ]
+    },
+    "qa": {
+      "description": "QA: пишет тесты и кейсы, читает продукт, не меняет код сервисов.",
+      "can_read": [
+        "**"
+      ],
+      "can_write": [
+        "tests/**",
+        "evidence/**",
+        "openspec/changes/*/cases/**"
+      ],
+      "can_write_product": false,
+      "product_write_globs": [
+        "tests/**"
+      ],
+      "can_write_specs": true,
+      "write_scope_from_brief": true,
+      "may_dispatch": false,
+      "may_commit": false,
+      "may_verify": false,
+      "tools": [
+        "read_file",
+        "write_file",
+        "bash",
+        "harness",
+        "mcp__xerj__*"
+      ]
+    },
     "worker": {
       "description": "Исполнитель. Пишет только в allowed_files из брифа, не трогает git и не диспетчит.",
       "can_read": [
@@ -93,6 +161,7 @@
       "can_write": [],
       "write_scope_from_brief": true,
       "can_write_product": true,
+      "can_write_services": true,
       "may_dispatch": false,
       "may_commit": false,
       "may_verify": false,

@@ -414,6 +414,33 @@ class GatewayTests(unittest.TestCase):
         })
         self.assertFalse(result["ok"])
 
+    def test_service_write_requires_write_flag_and_allowed_file(self) -> None:
+        from harness.gateway import Gateway
+
+        service = tempfile.mkdtemp(prefix="svc-", dir=os.path.dirname(self.root))
+        self.addCleanup(shutil.rmtree, service, True)
+        brief = sample_brief()
+        brief["services"] = [{"name": "api", "path": service,
+                              "base_commit": "a" * 40, "write": True}]
+        brief["allowed_files"] = ["service:api/src/a.py"]
+        self.eng.apply("T1", "attach_brief", {"brief": brief})
+        self.eng.apply("T1", "dispatch", {"worker_id": "w"})
+        gateway = Gateway(self.root, Policy.load(self.root), self.store)
+
+        result = gateway.handle({
+            "role": "worker", "task_id": "T1", "tool": "write_file",
+            "args": {"path": os.path.join(service, "src", "a.py"), "content": "x"},
+        })
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(os.path.isfile(os.path.join(service, "src", "a.py")))
+
+        other = gateway.handle({
+            "role": "worker", "task_id": "T1", "tool": "write_file",
+            "args": {"path": os.path.join(service, "src", "b.py"), "content": "x"},
+        })
+        self.assertFalse(other["ok"])
+        self.assertEqual(other["rule"], "R-WORK-1")
+
 
 class FinalizeTests(unittest.TestCase):
     def setUp(self) -> None:

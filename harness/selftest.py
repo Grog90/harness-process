@@ -748,6 +748,11 @@ def c_spec_gate(root: str) -> None:
         assert ok["ok"], ok
         assert specgate.check(root, {}, ["docs/RUNNING.md"])["ok"], "документам спека не нужна"
         assert specgate.check(root, {"spec_version": "openspec:missing@1"}, ["harness/cli.py"])["ok"] is False
+
+        # архивный change описывает прошлое: новый код на него ссылаться не может
+        os.makedirs(os.path.join(root, "openspec", "changes", "archive", "2026-01-01-add-old"))
+        archived = specgate.check(root, {"spec_version": "openspec:add-old@1"}, ["harness/cli.py"])
+        assert archived["ok"] is False and "архив" in archived["reason"], archived
     finally:
         store.close()
 
@@ -887,6 +892,283 @@ def c_evals_metrics(root: str) -> None:
     assert metrics["caveats"], "малая выборка должна быть помечена"
 
 
+def _write_change_fixture(root: str, change: str = "chg-self") -> str:
+    base = os.path.join(root, "openspec", "changes", change)
+    os.makedirs(os.path.join(base, "specs", "cap"), exist_ok=True)
+    with open(os.path.join(base, "proposal.md"), "w", encoding="utf-8") as fh:
+        fh.write("## Why\n\nНужен слот.\n")
+    with open(os.path.join(base, "specs", "cap", "spec.md"), "w", encoding="utf-8") as fh:
+        fh.write("### Requirement: REQ-SELF-1: Слот\n\n#### Scenario: CASE-SELF-1: Выдача\n"
+                 "- **WHEN** создаётся лейн\n- **THEN** слот 0\n")
+    with open(os.path.join(base, "design.md"), "w", encoding="utf-8") as fh:
+        fh.write("# Design\n\nСлот — строка.\n")
+    with open(os.path.join(base, "tasks.md"), "w", encoding="utf-8") as fh:
+        fh.write("- [ ] 1.1 Правка `harness/lanes.py`, проверка `python -m unittest tests.test_x`\n")
+    return base
+
+
+def _add_reviews(store, root: str, change: str = "chg-self") -> None:
+    pairs = [
+        ("proposal.md", "BA", "ba-1"), ("specs", "BA", "ba-1"), ("specs", "QA", "qa-1"),
+        ("design.md", "SA", "sa-1"), ("design.md", "DEV", "dev-1"),
+        ("tasks.md", "SA", "sa-1"), ("tasks.md", "DEV", "dev-1"), ("tasks.md", "QA", "qa-1"),
+    ]
+    from . import changefsm
+
+    for artifact, role, reviewer in pairs:
+        changefsm.review(store, root, change, artifact=artifact, reviewer_id=reviewer,
+                         reviewer_role=role, author_id="agent-1", criteria=["проверено"])
+
+
+def _drive_change_to_design(store, root: str, change: str = "chg-self") -> None:
+    from . import changefsm
+
+    changefsm.create(store, root, change, owner="owner-1", risk_class="L1")
+    for event in ("explore", "propose", "agree_specs", "agree_design"):
+        changefsm.transition(store, root, change, event)
+
+
+def c_change_ready_gate(root: str) -> None:
+    """Ready требует review-записи всех ролей по актуальным хешам артефактов."""
+    from . import changefsm
+
+    _write_change_fixture(root)
+    store = Store(os.path.join(root, ".harness", "state.db"))
+    try:
+        _drive_change_to_design(store, root)
+        denied = changefsm.ready_check(store, root, "chg-self", spec_ref="a" * 40)
+        assert not denied["ok"], "Ready прошёл без review-записей"
+        _add_reviews(store, root)
+        ok = changefsm.ready_check(store, root, "chg-self", spec_ref="a" * 40)
+        assert ok["ok"], ok["problems"]
+    finally:
+        store.close()
+
+
+def c_change_review(root: str) -> None:
+    """Review без критериев и без хеша артефакта не принимается."""
+    from . import changefsm
+
+    _write_change_fixture(root)
+    store = Store(os.path.join(root, ".harness", "state.db"))
+    try:
+        changefsm.create(store, root, "chg-self", owner="o")
+        try:
+            changefsm.review(store, root, "chg-self", artifact="proposal.md",
+                             reviewer_id="ba-1", reviewer_role="BA", author_id="a-1")
+        except changefsm.ChangeError as exc:
+            assert exc.rule == "R-REV-1", exc.rule
+        else:
+            raise AssertionError("review без критериев принят")
+    finally:
+        store.close()
+
+
+def c_change_reviewer_identity(root: str) -> None:
+    """Автор артефакта не может быть его проверяющим."""
+    from . import changefsm
+
+    _write_change_fixture(root)
+    store = Store(os.path.join(root, ".harness", "state.db"))
+    try:
+        changefsm.create(store, root, "chg-self", owner="o")
+        try:
+            changefsm.review(store, root, "chg-self", artifact="proposal.md",
+                             reviewer_id="a-1", reviewer_role="BA", author_id="a-1",
+                             criteria=["проверено"])
+        except changefsm.ChangeError as exc:
+            assert exc.rule == "R-REV-2", exc.rule
+        else:
+            raise AssertionError("самопроверка автора принята")
+    finally:
+        store.close()
+
+
+def c_change_trace(root: str) -> None:
+    """Разрыв REQ → CASE блокирует Ready, а не выглядит нормальным."""
+    from . import changefsm
+
+    _write_change_fixture(root)
+    store = Store(os.path.join(root, ".harness", "state.db"))
+    try:
+        changefsm.create(store, root, "chg-self", owner="o")
+        ok = changefsm.check_trace(store, root, "chg-self")
+        assert ok["ok"], ok["problems"]
+        with open(os.path.join(root, "openspec", "changes", "chg-self", "specs", "cap", "spec.md"),
+                  "a", encoding="utf-8") as fh:
+            fh.write("\n### Requirement: REQ-SELF-2: Без сценария\n\nТекст.\n")
+        broken = changefsm.check_trace(store, root, "chg-self")
+        assert not broken["ok"] and any("REQ-SELF-2" in p for p in broken["problems"]), broken
+    finally:
+        store.close()
+
+
+def c_change_dispatch(root: str) -> None:
+    """Задача по зарегистрированному change не диспетчится до Ready."""
+    from . import changefsm
+
+    _write_change_fixture(root)
+    store = Store(os.path.join(root, ".harness", "state.db"))
+    try:
+        _drive_change_to_design(store, root)
+        brief = {
+            "change_id": "chg-self",
+            "spec_ref": "a" * 40,
+            "spec_version": "openspec:chg-self@12345678",
+        }
+        denied = changefsm.gate_dispatch(store, root, brief)
+        assert not denied["ok"] and denied["rule"] == "R-CHG-1", denied
+        _add_reviews(store, root)
+        changefsm.transition(store, root, "chg-self", "ready", {"spec_ref": "a" * 40})
+        allowed = changefsm.gate_dispatch(store, root, brief)
+        assert allowed["ok"], allowed
+        assert store.get_change("chg-self")["status"] == "IN_PROGRESS"
+    finally:
+        store.close()
+
+
+def c_change_spec_ref(root: str) -> None:
+    """Бриф по change обязан нести полный spec_ref, совпадающий с планом."""
+    from . import changefsm
+
+    change = {"spec_ref": "a" * 40}
+    assert not changefsm.check_spec_ref(change, {})["ok"], "пустой spec_ref принят"
+    assert not changefsm.check_spec_ref(change, {"spec_ref": "abc"})["ok"], "короткий SHA принят"
+    assert not changefsm.check_spec_ref(change, {"spec_ref": "b" * 40})["ok"], "чужой SHA принят"
+    assert changefsm.check_spec_ref(change, {"spec_ref": "a" * 40})["ok"]
+
+
+def c_spec_write_scope(root: str) -> None:
+    """R-WORK-3: спеку плана пишут BA/SA, а не рабочий код; QA — только кейсы."""
+    spec = "openspec/changes/chg/specs/cap/spec.md"
+    worker = hooks.run("pretooluse", _ctx(root, role="worker", tool="write_file", path=spec,
+                                        allowed_files=[spec]))
+    assert worker["decision"] == "deny" and worker["rule"] == "R-WORK-3", worker
+    analyst = hooks.run("pretooluse", _ctx(root, role="analyst", tool="write_file", path=spec))
+    assert analyst["decision"] != "deny", analyst
+    qa = hooks.run("pretooluse", _ctx(root, role="qa", tool="write_file",
+                                      path="openspec/changes/chg/cases/a.feature",
+                                      allowed_files=["openspec/changes/chg/cases/a.feature"]))
+    assert qa["decision"] != "deny", qa
+
+
+def c_privileged_tool_denied(root: str) -> None:
+    """R-TOOL-2: plugin_manager и опасные MCP не выдаются рабочим ролям."""
+    worker = hooks.run("pretooluse", _ctx(root, role="worker", tool="plugin_manager"))
+    assert worker["decision"] == "deny" and worker["rule"] == "R-TOOL-2", worker
+    mcp = hooks.run("pretooluse", _ctx(root, role="worker", tool="mcp__awgm__set_route"))
+    assert mcp["decision"] == "deny" and mcp["rule"] == "R-TOOL-2", mcp
+    human = hooks.run("pretooluse", _ctx(root, role="human", tool="plugin_manager"))
+    assert human["decision"] != "deny", human
+
+
+def c_gap_ask(root: str) -> None:
+    """R-GAP-2: открытый вопрос превращает пишущий вызов в ask, чтение не блокирует."""
+    from . import gap as gap_mod
+
+    gap_mod.publish(root, task_id="T-SELF", question="Отменять оплаченный заказ?")
+    write = gap_mod.decide(root, "write_file")
+    assert write["kind"] == "ask" and write["rule"] == "R-GAP-2", write
+    read = gap_mod.decide(root, "read_file")
+    assert read["kind"] == "allow", read
+    gap_mod.clear(root)
+    assert gap_mod.decide(root, "write_file")["kind"] == "allow"
+
+
+def _verification_report(change_id: str, spec_ref: str, *, tests_ran: int = 3,
+                         services: list[dict] | None = None) -> dict:
+    return {
+        "change_id": change_id,
+        "revision": 1,
+        "spec_ref": spec_ref,
+        "environment": "local",
+        "runner": "unittest",
+        "services": services if services is not None else [{"name": "repo", "sha": spec_ref}],
+        "results": {
+            "baseline": {"command": "python -m unittest", "tests_ran": tests_ran, "result": "pass", "failures": []},
+            "candidate": {"command": "python -m unittest", "tests_ran": tests_ran, "result": "pass", "failures": []},
+        },
+        "diff": {"new_failures": [], "fixed": [], "regression": False},
+    }
+
+
+def _write_json(path: str, data: dict) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(data, fh)
+
+
+def c_verification_gate(root: str) -> None:
+    """R-QA-1: проверка без версий/runner/сервисов не является доказательством."""
+    from . import changefsm, verification
+
+    store = Store(os.path.join(root, ".harness", "state.db"))
+    try:
+        spec_ref = "a" * 40
+        store.create_change("chg-v", owner="o", spec_ref=spec_ref)
+        good = _verification_report("chg-v", spec_ref)
+        assert verification.check_report(store, root, "chg-v", report=good)["ok"]
+        bad = json.loads(json.dumps(good))
+        bad["runner"] = ""
+        bad["services"] = []
+        assert not verification.check_report(store, root, "chg-v", report=bad)["ok"]
+        assert changefsm.verification_check(store, root, "chg-v")["ok"] is False
+    finally:
+        store.close()
+
+
+def c_verification_zero(root: str) -> None:
+    """R-QA-2: нулевой прогон — не проверка."""
+    from . import verification
+
+    spec_ref = "a" * 40
+    report = _verification_report("chg-v", spec_ref, tests_ran=0)
+    assert not verification.check_zero(report)["ok"]
+    report = _verification_report("chg-v", spec_ref, tests_ran=2)
+    assert verification.check_zero(report)["ok"]
+
+
+def c_acceptance_gate(root: str) -> None:
+    """R-ACCEPT-1: без acceptance/release/closing и evidence архив невозможен."""
+    from . import changefsm
+
+    store = Store(os.path.join(root, ".harness", "state.db"))
+    try:
+        store.create_change("chg-a", owner="o", spec_ref="a" * 40)
+        assert not changefsm.acceptance_check(store, root, "chg-a")["ok"], "приёмка без записи прошла"
+        assert not changefsm.archive_check(store, root, "chg-a")["ok"], "архив без приёмки прошёл"
+    finally:
+        store.close()
+
+
+def c_l2_human_release(root: str) -> None:
+    """R-ACCEPT-2: L2 выпускает человек, а не агент или CI."""
+    from . import changefsm
+
+    store = Store(os.path.join(root, ".harness", "state.db"))
+    try:
+        spec_ref = "a" * 40
+        store.create_change("chg-l2", owner="o", spec_ref=spec_ref, risk_class="L2")
+        change_dir = os.path.join(root, "openspec", "changes", "chg-l2")
+        _write_json(os.path.join(change_dir, "verification.json"),
+                    _verification_report("chg-l2", spec_ref))
+        _write_json(os.path.join(change_dir, "release.json"), {
+            "change_id": "chg-l2", "spec_ref": spec_ref, "environment": "prod",
+            "services": [{"name": "repo", "sha": spec_ref}], "by": "agent-1",
+            "by_role": "agent", "at": "2026-11-16T00:00:00+03:00",
+        })
+        check = changefsm.release_check(store, root, "chg-l2")
+        assert not check["ok"] and any("L2" in p for p in check["problems"]), check
+        _write_json(os.path.join(change_dir, "release.json"), {
+            "change_id": "chg-l2", "spec_ref": spec_ref, "environment": "prod",
+            "services": [{"name": "repo", "sha": spec_ref}], "by": "human",
+            "by_role": "human", "at": "2026-11-16T00:00:00+03:00",
+        })
+        assert changefsm.release_check(store, root, "chg-l2")["ok"]
+    finally:
+        store.close()
+
+
 CHECKS: list[Check] = [
     Check("R-ORCH-1", "оркестратор пишет документацию", c_orch_positive),
     Check("R-ORCH-1", "оркестратор не пишет продукт", c_orch_negative),
@@ -930,6 +1212,19 @@ CHECKS: list[Check] = [
     Check("R-SANDBOX-1", "изоляция честно помечена", c_sandbox_degrades_honestly),
     Check("R-WAVE-1", "лейн: worktree, коммит, слияние", c_lane_merge),
     Check("R-SPEC-1", "код без спеки не коммитится", c_spec_gate),
+    Check("R-CHG-1", "Ready-гейт не пропускает без review", c_change_ready_gate),
+    Check("R-CHG-1", "диспетч по change только из READY", c_change_dispatch),
+    Check("R-REF-1", "полный spec_ref и совпадение с планом", c_change_spec_ref),
+    Check("R-REV-1", "review без критериев не принимается", c_change_review),
+    Check("R-REV-2", "автор не проверяет сам себя", c_change_reviewer_identity),
+    Check("R-TRACE-2", "разрыв REQ-CASE блокирует Ready", c_change_trace),
+    Check("R-WORK-3", "спеку пишут analyst/QA, не worker", c_spec_write_scope),
+    Check("R-TOOL-2", "привилегированные инструменты закрыты рабочим", c_privileged_tool_denied),
+    Check("R-GAP-2", "открытый GAP требует ответа человека", c_gap_ask),
+    Check("R-QA-1", "проверка без версий и сервисов не проходит", c_verification_gate),
+    Check("R-QA-2", "нулевой прогон не считается проверкой", c_verification_zero),
+    Check("R-ACCEPT-1", "без приёмки и evidence архив запрещён", c_acceptance_gate),
+    Check("R-ACCEPT-2", "L2 выпускает человек", c_l2_human_release),
     Check("R-COST-1", "бюджет останавливает запуск до траты", c_cost_gate),
     Check("R-HOOK-1", "изменение правила требует причины и тестов", c_rule_change),
     Check("R-BUDGET-2", "исчерпание бюджета ведёт к эскалации", c_budget_escalates),

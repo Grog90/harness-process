@@ -19,7 +19,7 @@ from typing import Any
 
 from . import hooks
 from .hooks import HookContext
-from .policy import Policy, deny, normalize_path
+from .policy import Policy, deny, normalize_path, resolve_target, service_base
 from .snapshot import compute_for_scope
 from .state import Store, now
 
@@ -45,6 +45,12 @@ class Gateway:
             return []
         brief = json.loads(task["brief_json"])
         return [str(x) for x in brief.get("allowed_files", [])]
+
+    def _services(self, task: dict[str, Any] | None) -> list[dict[str, Any]]:
+        if not task or not task.get("brief_json"):
+            return []
+        brief = json.loads(task["brief_json"])
+        return [s for s in brief.get("services", []) if isinstance(s, dict)]
 
     # ------------------------------------------------------------------ обработка
     def handle(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -78,6 +84,7 @@ class Gateway:
             command=args.get("command"),
             target=args.get("path"),
             allowed_files=self._allowed_files(task),
+            services=self._services(task),
             policy=self.policy,
             root=self.root,
         )
@@ -87,7 +94,7 @@ class Gateway:
                               details=decision.get("details"))
 
         try:
-            result = self._execute(tool, args, role)
+            result = self._execute(tool, args, role, self._services(task))
         except GatewayError as exc:
             return self._deny(role, path, tool, exc.rule, str(exc), task_id)
 
@@ -114,13 +121,15 @@ class Gateway:
         return out
 
     # ------------------------------------------------------------------ исполнение
-    def _execute(self, tool: str, args: dict[str, Any], role: str) -> Any:
+    def _execute(self, tool: str, args: dict[str, Any], role: str,
+                 services: list[dict[str, Any]] | None = None) -> Any:
+        services = services or []
         if tool == "read_file":
-            return self._read(args)
+            return self._read(args, services)
         if tool == "list_dir":
-            return self._list(args)
+            return self._list(args, services)
         if tool == "write_file":
-            return self._write(args)
+            return self._write(args, services)
         if tool == "run_command":
             return self._run(args)
         if tool == "snapshot":
@@ -128,20 +137,36 @@ class Gateway:
             return {"snapshot_id": compute_for_scope(self.root, scope), "scope": scope}
         raise GatewayError("R-WORK-2", f"инструмент {tool!r} не реализован")
 
-    def _resolve(self, raw: str | None) -> str:
+    def _base_for(self, key: str, services: list[dict[str, Any]]) -> tuple[str, str]:
+        if key.startswith("service:"):
+            name = key.split("/", 1)[0][len("service:"):]
+            inner = key.split("/", 1)[1] if "/" in key else ""
+            service = next((s for s in services if str(s.get("name")) == name), None)
+            if service is None:
+                raise GatewayError("R-PROT-1", f"сервис {name!r} не объявлен в брифе")
+            return service_base(self.root, service), inner
+        return self.root, key
+
+    def _resolve(self, raw: str | None, services: list[dict[str, Any]]) -> str:
         if not raw:
             raise GatewayError("R-PROT-1", "не указан путь")
-        rel = normalize_path(self.root, raw)
-        if rel == "<outside-root>":
+        key = resolve_target(self.root, raw, services)
+        if key == "<outside-root>":
             raise GatewayError("R-PROT-1", f"путь вне рабочего корня: {raw!r}")
-        full = os.path.realpath(os.path.join(self.root, rel))
-        if not (full == self.root or full.startswith(self.root + os.sep)):
+        base, inner = self._base_for(key, services)
+        full = os.path.realpath(os.path.join(base, inner))
+        base_real = os.path.realpath(base)
+        if not (full == base_real or full.startswith(base_real + os.sep)):
             raise GatewayError("R-PROT-1", f"путь выходит из корня через ссылку: {raw!r}")
-        return rel
+        return key
 
-    def _read(self, args: dict[str, Any]) -> dict[str, Any]:
-        rel = self._resolve(args.get("path"))
-        full = os.path.join(self.root, rel)
+    def _full(self, key: str, services: list[dict[str, Any]]) -> str:
+        base, inner = self._base_for(key, services)
+        return os.path.join(base, inner)
+
+    def _read(self, args: dict[str, Any], services: list[dict[str, Any]]) -> dict[str, Any]:
+        rel = self._resolve(args.get("path"), services)
+        full = self._full(rel, services)
         if not os.path.isfile(full):
             raise GatewayError("R-PROT-1", f"файл не найден: {rel}")
         if os.path.getsize(full) > MAX_READ_BYTES:
@@ -149,9 +174,9 @@ class Gateway:
         with open(full, encoding="utf-8", errors="replace") as fh:
             return {"path": rel, "content": fh.read()}
 
-    def _list(self, args: dict[str, Any]) -> dict[str, Any]:
-        rel = self._resolve(args.get("path") or ".")
-        full = os.path.join(self.root, rel)
+    def _list(self, args: dict[str, Any], services: list[dict[str, Any]]) -> dict[str, Any]:
+        rel = self._resolve(args.get("path") or ".", services)
+        full = self._full(rel, services)
         if not os.path.isdir(full):
             raise GatewayError("R-PROT-1", f"каталог не найден: {rel}")
         entries = []
@@ -160,12 +185,12 @@ class Gateway:
             entries.append({"name": name, "dir": os.path.isdir(child)})
         return {"path": rel, "entries": entries}
 
-    def _write(self, args: dict[str, Any]) -> dict[str, Any]:
-        rel = self._resolve(args.get("path"))
+    def _write(self, args: dict[str, Any], services: list[dict[str, Any]]) -> dict[str, Any]:
+        rel = self._resolve(args.get("path"), services)
         content = args.get("content")
         if content is None:
             raise GatewayError("R-WORK-1", "write_file без содержимого")
-        full = os.path.join(self.root, rel)
+        full = self._full(rel, services)
         os.makedirs(os.path.dirname(full) or self.root, exist_ok=True)
         # атомарная замена: недописанный файл не должен попасть в снимок
         fd, tmp = tempfile.mkstemp(prefix=".gw-", dir=os.path.dirname(full) or self.root)

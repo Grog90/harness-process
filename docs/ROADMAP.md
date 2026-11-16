@@ -178,6 +178,145 @@ R-FINAL-1, сценарий 15 демо.
 
 ---
 
+## Этап 7. Продуктовый уровень изменения ✅ (v1)
+
+**Цель:** задача перестаёт быть самостоятельной единицей: у неё появляется изменение
+с согласованным планом, редакцией и доказательствами согласования.
+
+Сделано:
+* `harness/changefsm.py` — автомат изменения (15 состояний), таблица переходов,
+  `Ready`-гейт, review-записи, trace-матрица;
+* SQLite: `changes`, `change_events`, `change_reviews`, `tasks.change_id` (схема v4,
+  миграция идемпотентная); review-записи дублируются файлами в `changes/<id>/reviews/`;
+* `harness change new|list|show|review|trace|ready|advance`; `task new --change`;
+* бриф: `change_id` и полный `spec_ref` (40 hex), критерии несут `req_id`/`case_id`;
+  `brief from-change` заполняет их и берёт полный SHA вместо короткого;
+* `specgate`: архивный change больше не считается связью, digest спеки сверяется;
+  диспетч задачи по change разрешён только из `READY`/`IN_PROGRESS`;
+* правила `R-CHG-1`, `R-REF-1`, `R-REV-1`, `R-REV-2`, `R-TRACE-2` и ужесточённый
+  `R-SPEC-1`: 6 исполняемых пар в `selftest`.
+
+Критерий готовности: нельзя диспетчить задачу по change до Ready; правка плана после
+Ready сбрасывает состояние; review без критериев/хеша и самопроверка отклоняются;
+trace-разрыв блокирует Ready. Подтверждение: `tests/test_changefsm.py`,
+`tests/test_specgate.py`, `selftest` (61 проверка).
+
+**Остаток:** приёмка/архив как гейты с evidence, baseline/candidate, мультирепозиторность,
+пресеты ролей и UI. Это Этапы 2–5.
+
+## Этап 8. Процессные роли и guard ✅ (v1)
+
+**Цель:** роли BA/SA/DEV/QA/verifier перестают быть текстом и становятся правами,
+инструментами и вопросами к человеку.
+
+Сделано:
+* роли политики `analyst` (BA/SA) и `qa`; `spec_globs`, `privileged_tools`,
+  `privileged_prefixes`, `mcp_allow_globs`;
+* `actor_role` в брифе → роль политики в `guard-scope.json` при диспетче;
+* guard: `R-WORK-3` (спеку не пишет рабочий код), `R-TOOL-2` (`plugin_manager`,
+  marketplace и опасные MCP закрыты рабочим), QA-исключение `tests/**`;
+* GAP → `ask`: `harness gap ask|clear|show`, listener `tools/pre-execute` в плагине;
+* пять пресетов DSH `process-ba/sa/dev/qa/verifier` установлены и активны;
+* пять скиллов `skills/process-*` подключены через `skill-filesystem`.
+
+Критерий готовности: worker не пишет спеку; BA-бриф получает `analyst`; рабочий не
+ставит плагины; открытый GAP требует ответа человека. Подтверждение:
+`tests/test_parity.py` (JS/Python), `selftest` (57), `plugin_manager` показывает
+`preset-process-*` активными.
+
+**Остаток:** `can_read`/`may_*` всё ещё декларации; мультирепозиторность (Этап 5);
+UI-доска (Этап 4); baseline/candidate и приёмка (Этап 3).
+
+## Этап 9. Проверка, приёмка и закрытие ✅ (v1)
+
+**Цель:** изменение нельзя объявить готовым, выпущенным и принятым без объектов,
+которые это подтверждают.
+
+Сделано:
+* `harness/verification.py` — baseline/candidate-прогоны с `ref`, runner, окружением,
+  версиями сервисов, числом тестов и diff падений; `verification.json`/`.md`;
+* гейты `verify/release/accept/archive`: отчёт с версиями, `release.json`,
+  `acceptance.json`, `closing.json`;
+* `write_evidence` — пакет `evidence/change-<id>/` с sha256-манифестом;
+* CLI `verification run|show`, `change release|accept|close|evidence`;
+* правила R-QA-1, R-QA-2, R-ACCEPT-1, R-ACCEPT-2 и 4 исполняемые пары в selftest.
+
+Критерий готовности: verify без отчёта/версий/нулевого прогона отклоняется; release и
+accept без записей отклоняются; archive без acceptance и evidence отклоняется; L2 с
+`by_role=agent` отклоняется. Подтверждение: `tests/test_verification.py`,
+`tests/test_changefsm.py`, selftest (61), `harness coverage` (47 правил, 94%).
+
+**Остаток:** подпись evidence (cosign/sigstore), вывоз в доверенное хранилище и
+реальная интеграция с CI/средой (Этап 4); мультирепозиторность (Этап 5).
+
+## Этап 10. Видимость, метрики и CI ✅ (v1)
+
+**Цель:** человек видит очередь и гейты без чтения логов, а CI получает один отчёт о
+здоровье процесса.
+
+Сделано:
+* `harness/metrics.py` — метрики change/tasks/review/verification/evidence, lead time
+  Ready → Accept, rework rate, открытые находки; markdown и JSON;
+* `harness board --out` — самодостаточный HTML со состояниями, гейтами и очередью,
+  с экранированием данных;
+* `harness board --serve` — локальная живая доска (`/`, `/metrics.json`, `/healthz`,
+  автообновление, своё SQLite-соединение на запрос);
+* `harness otel` — OTLP/HTTP JSON с метриками процесса (без protobuf/gRPC);
+* `tools/headless_smoke.py` — проверка `dsh headless --json` с evidence; прогон дошёл
+  до final, но в этой установке упал в `MISSING_CREDENTIAL` (нет ключа у headless-профиля);
+* `docs/CI.md` с примером GitHub Actions и честными границами.
+
+Критерий готовности: очередь и гейты видны без SQL; метрики считаются из состояния;
+CI-прогон оставляет evidence-отчёт; headless-точка запуска проверена и её ограничение
+названо. Подтверждение: `tests/test_metrics.py`, `tests/test_otel.py`,
+`harness board --serve`, `harness otel`, `tools/headless_smoke.py`.
+
+**Остаток:** встраивание доски в DSH GUI и protobuf/gRPC-экспорт не делались;
+headless в CI требует `DEEPSEEK_API_KEY` в окружении job (ключ Web-профиля CLI не видит).
+Мультирепозиторность — Этап 11.
+
+## Этап 11. Мультисервисность ✅ (v1)
+
+**Цель:** change может опираться на несколько сервисов, а приёмка — собрать их версии.
+
+Сделано:
+* `change new --service name=PATH[@SHA]` и `change services`;
+* сервисы в брифе (`services`) и валидация (относительный путь, полный SHA);
+* verification по сервисам: ключи `service:mode`, `--cwd`, требование baseline и
+  candidate для каждого объявленного сервиса;
+* release/acceptance/evidence уже принимают несколько `--service name=SHA`;
+* merge order: порядок объявления сервисов фиксируется в release/acceptance
+  (`merge_order`), запись с другим порядком отклоняется.
+
+Критерий готовности: change объявляет два сервиса; verification требует оба прогона;
+приёмка содержит несколько SHA и merge order. Подтверждение: `tests/test_verification.py`,
+`tests/test_changefsm.py`, trace мультисервисной спеки.
+
+**Остаток:** guard/gateway остаются однокорневыми — запись в чужие репозитории не
+открыта; исполнение merge order и e2e-среда — следующий шаг. Мультикорневой write
+требует отдельной модели прав, а не флага.
+
+## Этап 12. Мультикорневая запись ✅ (v1)
+
+**Цель:** worker может писать в явно открытый сервисный репозиторий, не ослабляя
+однокорневую защиту.
+
+Сделано:
+* `change new --service-write NAME` открывает сервис; по умолчанию read-only;
+* `allowed_files` понимает ключи `service:<name>/<relative>`, бриф валидирует сервис
+  и `write=true`;
+* policy/guard/gateway резолвят путь под сервисный корень с realpath, требуют
+  `can_write_services` (только worker) и `allowed_files`;
+* parity-тесты JS↔Python, gateway пишет в сервис и отклоняет чужой файл/корень;
+* shell-запись в сервис и snapshot/commit сервиса сознательно не открыты.
+
+Критерий готовности: запись в открытый сервис проходит, в чужой корень/чужой файл/
+read-only сервис — отказ; verifier не пишет сервис. Подтверждение:
+`tests/test_parity.py`, `tests/test_harness.py` (GatewayTests).
+
+**Остаток:** мультикорневой snapshot/commit и автоматический коммит сервисов; shell-
+запись; merge order как исполнение.
+
 ## Ближайшие три шага
 
 1. **Собрать 20–30 размеченных случаев из своих реальных отказов** и прогнать `evals`.
@@ -188,8 +327,8 @@ R-FINAL-1, сценарий 15 демо.
 ## Как проверять, что этап закрыт
 
 ```powershell
-python -m unittest discover -s tests -v      # 240+ проверок свойств
-python -m harness selftest                   # 46 исполняемых отказов
+python -m unittest discover -s tests -v      # 409 проверок свойств
+python -m harness selftest                   # 61 исполняемая проверка
 python -m harness demo                       # 50 сквозных проверок
 python -m harness coverage                   # покрытие и наличие тестов
 python -m harness rule verify                # правила менялись с записью?

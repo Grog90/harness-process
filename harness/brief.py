@@ -133,7 +133,52 @@ def validate(data: dict[str, Any], max_attempts: int = 3) -> Brief:
     if not _blank(data.get("task_id")) and not ident.match(str(data["task_id"])):
         issues.append(Issue("E_BAD_TASK_ID", "task_id", "task_id содержит недопустимые символы"))
 
+    change_id = data.get("change_id")
+    if not _blank(change_id) and not ident.match(str(change_id)):
+        issues.append(Issue("E_BAD_CHANGE_ID", "change_id", "change_id содержит недопустимые символы"))
+
+    actor_role = data.get("actor_role")
+    if not _blank(actor_role) and str(actor_role) not in ("BA", "SA", "DEV", "QA", "verifier"):
+        issues.append(
+            Issue("E_BAD_ACTOR_ROLE", "actor_role", "actor_role: BA, SA, DEV, QA или verifier")
+        )
+
+    spec_ref = data.get("spec_ref")
+    if not _blank(spec_ref) and not re.fullmatch(r"[0-9a-fA-F]{40}", str(spec_ref)):
+        issues.append(
+            Issue(
+                "E_BAD_SPEC_REF",
+                "spec_ref",
+                "spec_ref должен быть полным Git SHA (40 hex), а не именем ветки или коротким SHA",
+            )
+        )
+
+    services = data.get("services")
+    if services is not None:
+        if not isinstance(services, list):
+            issues.append(Issue("E_BAD_SERVICES", "services", "services должен быть списком"))
+        else:
+            for index, service in enumerate(services):
+                field = f"services[{index}]"
+                if not isinstance(service, dict):
+                    issues.append(Issue("E_BAD_SERVICES", field, "сервис должен быть объектом"))
+                    continue
+                name = str(service.get("name") or "")
+                if not name or not ident.match(name):
+                    issues.append(Issue("E_BAD_SERVICES", field, "у сервиса нет допустимого name"))
+                path = str(service.get("path") or "")
+                if not path.strip():
+                    issues.append(Issue("E_BAD_SERVICES", field + ".path",
+                                        "path сервиса не должен быть пустым"))
+                base = str(service.get("base_commit") or "")
+                if base and not re.fullmatch(r"[0-9a-fA-F]{40}", base):
+                    issues.append(Issue("E_BAD_SERVICES", field + ".base_commit",
+                                        "base_commit должен быть полным SHA"))
+
     # 2. Границы записи.
+    service_map: dict[str, dict] = {}
+    if isinstance(services, list):
+        service_map = {str(s.get("name")): s for s in services if isinstance(s, dict)}
     allowed = data.get("allowed_files") or []
     if isinstance(allowed, list):
         if not allowed and not _blank(data.get("allowed_files")):
@@ -141,6 +186,20 @@ def validate(data: dict[str, Any], max_attempts: int = 3) -> Brief:
         for glob in allowed:
             if not isinstance(glob, str) or not glob.strip():
                 issues.append(Issue("E_BAD_GLOB", "allowed_files", f"некорректный глоб: {glob!r}"))
+            elif glob.startswith("service:"):
+                rest = glob[len("service:"):]
+                name = rest.split("/", 1)[0]
+                inner = rest.split("/", 1)[1] if "/" in rest else ""
+                service = service_map.get(name)
+                if service is None:
+                    issues.append(Issue("E_BAD_GLOB", "allowed_files",
+                                        f"сервис {name!r} не объявлен в services"))
+                elif not service.get("write", False):
+                    issues.append(Issue("E_CONTRADICTION", "allowed_files",
+                                        f"сервис {name!r} не открыт для записи (write=false)"))
+                elif not inner or inner.startswith("/") or ".." in inner.split("/"):
+                    issues.append(Issue("E_CONTRADICTION", "allowed_files",
+                                        f"недопустимый путь внутри сервиса: {glob!r}"))
             elif glob.startswith("/") or ".." in glob:
                 issues.append(
                     Issue("E_CONTRADICTION", "allowed_files", f"абсолютный путь или '..' в allowed_files: {glob!r}")

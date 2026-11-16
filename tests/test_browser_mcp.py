@@ -412,7 +412,9 @@ class ProtocolTest(unittest.TestCase):
         [reply] = call({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
         self.assertEqual([t["name"] for t in reply["result"]["tools"]],
                          ["fetch_page", "page_screenshot", "page_eval",
-                          "session_start", "session_status", "session_stop"])
+                          "session_start", "session_status", "session_stop",
+                          "chrome_open", "chrome_net", "chrome_click",
+                          "chrome_eval", "chrome_text"])
 
     def test_unknown_tool(self):
         [reply] = call({"jsonrpc": "2.0", "id": 2, "method": "tools/call",

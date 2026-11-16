@@ -22,12 +22,12 @@ def control_index() -> dict[str, Any]:
     Объединяет хуки инструментов и охранные условия автомата: отчёт о покрытии
     должен видеть и то, и другое, иначе половина матрицы выглядит дырой.
     """
-    from . import (brief, checks, cost, doctor, evals, finalize, findings, fsm, gateway, lanes,
-                   pluginctl, rulechange, scope, specgate, verdict, watchdog)
+    from . import (brief, changefsm, checks, cost, doctor, evals, finalize, findings, fsm, gap, gateway, lanes,
+                   pluginctl, rulechange, scope, specgate, verification, verdict, watchdog)
 
     index: dict[str, Any] = dict(hooks.HOOKS)
-    for module in (brief, checks, cost, doctor, evals, finalize, findings, fsm, gateway, lanes,
-                   pluginctl, rulechange, scope, specgate, verdict, watchdog):
+    for module in (brief, changefsm, checks, cost, doctor, evals, finalize, findings, fsm, gap, gateway, lanes,
+                   pluginctl, rulechange, scope, specgate, verification, verdict, watchdog):
         for name, fn in getattr(module, "CONTROL_POINTS", {}).items():
             if fn is not None:
                 index[name] = fn

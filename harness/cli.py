@@ -98,6 +98,213 @@ def cmd_init(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_change(args: argparse.Namespace) -> int:
+    """Уровень изменения: состояние, review-записи, trace-матрица и Ready-гейт."""
+    from . import changefsm
+
+    root = _root(args)
+    store = _store(args)
+    action = args.change_cmd
+    try:
+        if action == "new":
+            services = _parse_change_services(root, args.service, args.service_write)
+            change = changefsm.create(
+                store, root, args.change,
+                owner=args.owner,
+                risk_class=args.risk,
+                title=args.title or "",
+                base_commit=args.base_commit,
+            )
+            if services:
+                body = dict(change.get("payload") or {})
+                body["services"] = services
+                change = store.update_change(args.change, payload=body)
+            _print(change, args.json)
+            return EXIT_OK
+        elif action == "services":
+            change = store.get_change(args.change)
+            services = (change.get("payload") or {}).get("services") or []
+            _print({"change_id": args.change, "services": services,
+                    "merge_order": [str(s.get("name")) for s in services]}, args.json)
+            return EXIT_OK
+        elif action == "list":
+            changes = store.list_changes()
+            _print(changes, args.json)
+            return EXIT_OK
+        elif action == "show":
+            change = store.get_change(args.change)
+            report = changefsm.check_trace(store, root, args.change)
+            change["reviews"] = store.change_reviews(args.change)
+            change["trace"] = {
+                "ok": report["ok"],
+                "coverage": report["coverage"],
+                "problems": report["problems"],
+            }
+            _print(change, args.json)
+            return EXIT_OK
+        elif action == "review":
+            record = changefsm.review(
+                store, root, args.change,
+                artifact=args.artifact,
+                reviewer_id=args.reviewer,
+                reviewer_role=args.role,
+                author_id=args.author,
+                verdict=args.verdict,
+                criteria=list(args.criterion or []),
+            )
+            _print(record, args.json)
+            return EXIT_OK
+        elif action == "trace":
+            report = changefsm.check_trace(store, root, args.change)
+            _print(report, args.json)
+            return EXIT_OK if report["ok"] else EXIT_DENIED
+        elif action == "ready":
+            change = changefsm.transition(store, root, args.change, "ready",
+                                          {"spec_ref": args.spec_ref, "root": root})
+            _print({"change_id": change["change_id"], "state": change["status"],
+                    "revision": change["revision"], "spec_ref": change["spec_ref"]}, args.json)
+            return EXIT_OK
+        elif action == "advance":
+            payload: dict[str, Any] = {"reason": args.reason or ""}
+            change = changefsm.transition(store, root, args.change, args.event, payload)
+            _print({"change_id": change["change_id"], "state": change["status"],
+                    "revision": change["revision"]}, args.json)
+            return EXIT_OK
+        elif action == "release":
+            record = changefsm.write_release(
+                store, root, args.change, environment=args.environment,
+                services=_parse_services(args.service), by=args.by,
+                by_role=args.by_role, flag=args.flag or "",
+            )
+            change = changefsm.transition(store, root, args.change, "release", {"root": root})
+            _print({"release": record, "state": change["status"]}, args.json)
+            return EXIT_OK
+        elif action == "accept":
+            if not args.criterion:
+                raise changefsm.ChangeError("R-ACCEPT-1", "приёмка без критериев не принимается")
+            record = changefsm.write_acceptance(
+                store, root, args.change, accepted_by=args.accepted_by,
+                criteria=list(args.criterion), environment=args.environment,
+                services=_parse_services(args.service), by_role=args.by_role,
+                residual_risks=list(args.residual or []),
+            )
+            change = changefsm.transition(store, root, args.change, "accept", {"root": root})
+            _print({"acceptance": record, "state": change["status"]}, args.json)
+            return EXIT_OK
+        elif action == "close":
+            changefsm.write_closing(
+                root, args.change, by=args.by,
+                specs_synced=args.specs_synced, cases_promoted=args.cases_promoted,
+                contracts_promoted=args.contracts_promoted,
+            )
+            evidence = changefsm.write_evidence(store, root, args.change)
+            change = changefsm.transition(store, root, args.change, "archive", {"root": root})
+            _print({"state": change["status"], "evidence": evidence["path"]}, args.json)
+            return EXIT_OK
+        elif action == "evidence":
+            evidence = changefsm.write_evidence(store, root, args.change)
+            _print(evidence, args.json)
+            return EXIT_OK
+        raise SystemExit(f"неизвестное действие change: {action}")
+    except (changefsm.ChangeError, StoreError, ValueError) as exc:
+        rule = getattr(exc, "rule", "R-CHG-1")
+        message = getattr(exc, "reason", str(exc))
+        if args.json:
+            _print({"ok": False, "rule": rule, "reason": message}, True)
+        else:
+            print(f"ОТКАЗ [{rule}] {message}", file=sys.stderr)
+        return EXIT_DENIED
+
+
+def cmd_gap(args: argparse.Namespace) -> int:
+    """GAP-вопрос: публикует вопрос для guard-плагина (ask), снимает после ответа."""
+    from . import gap as gap_mod
+
+    root = _root(args)
+    try:
+        if args.gap_cmd == "ask":
+            record = gap_mod.publish(root, task_id=args.task, question=args.question,
+                                     gap_id=args.id or "GAP-1")
+        elif args.gap_cmd == "clear":
+            gap_mod.clear(root)
+            record = {"cleared": True}
+        else:
+            record = gap_mod.load(root) or {"open": False}
+    except ValueError as exc:
+        print(f"ОТКАЗ [R-GAP-2] {exc}", file=sys.stderr)
+        return EXIT_DENIED
+    _print(record, args.json)
+    return EXIT_OK
+
+
+def _parse_services(raw: list[str] | None) -> list[dict[str, str]]:
+    services: list[dict[str, str]] = []
+    for item in raw or []:
+        if "=" not in item:
+            raise ValueError(f"сервис должен быть name=SHA: {item!r}")
+        name, sha = item.split("=", 1)
+        services.append({"name": name.strip(), "sha": sha.strip()})
+    return services
+
+
+def _parse_change_services(root: str, raw: list[str] | None,
+                           write_names: list[str] | None = None) -> list[dict[str, Any]]:
+    """name=PATH[@SHA]: каталог сервиса и его принятая версия. --service-write открывает запись."""
+    from . import verification
+
+    writable = {str(name) for name in (write_names or [])}
+    services: list[dict[str, Any]] = []
+    for item in raw or []:
+        if "=" not in item:
+            raise ValueError(f"сервис должен быть name=PATH[@SHA]: {item!r}")
+        name, spec = item.split("=", 1)
+        name = name.strip()
+        path_spec, base = (spec.rsplit("@", 1) if "@" in spec else (spec, ""))
+        path = os.path.abspath(path_spec if os.path.isabs(path_spec) else os.path.join(root, path_spec))
+        if not os.path.isdir(path):
+            raise ValueError(f"каталог сервиса не найден: {path}")
+        if not base:
+            base = verification._git(path, "rev-parse", "HEAD") or ""
+        if base and len(base) != 40:
+            raise ValueError(f"сервис {name}: base_commit должен быть полным SHA")
+        rel = os.path.relpath(path, os.path.abspath(root)).replace("\\", "/")
+        services.append({"name": name, "path": rel if not rel.startswith("..") else path,
+                         "base_commit": base, "write": name in writable})
+    for name in writable:
+        if name not in {s["name"] for s in services}:
+            raise ValueError(f"--service-write {name!r}: сервис не объявлен через --service")
+    return services
+
+
+def cmd_verification(args: argparse.Namespace) -> int:
+    """Baseline/candidate: два прогона с версиями и diff."""
+    from . import verification
+
+    root = _root(args)
+    store = _store(args)
+    try:
+        if args.verification_cmd == "run":
+            svc = _parse_services(args.service)
+            if len(svc) > 1:
+                raise ValueError("один прогон — один сервис; для нескольких запустите run на каждый")
+            report = verification.record(
+                store, root, args.change, args.mode, args.command,
+                ref=args.ref, timeout=args.timeout, environment=args.environment,
+                runner=args.runner, services=svc, cwd=args.cwd,
+                service=(svc[0]["name"] if svc else "repo"),
+            )
+        else:
+            report = verification.load(root, args.change)
+            if report is None:
+                print(f"ОТКАЗ [R-QA-1] нет verification.json для {args.change}", file=sys.stderr)
+                return EXIT_DENIED
+    except (ValueError, StoreError, RuntimeError) as exc:
+        print(f"ОТКАЗ [R-QA-1] {exc}", file=sys.stderr)
+        return EXIT_DENIED
+    _print(report, args.json)
+    return EXIT_OK if report.get("ok") else EXIT_DENIED
+
+
 def cmd_task_new(args: argparse.Namespace) -> int:
     eng = _engine(args)
     task = eng.store.create_task(
@@ -107,6 +314,7 @@ def cmd_task_new(args: argparse.Namespace) -> int:
         lane=args.lane,
         policy_version=eng.policy.version,
         max_attempts=int(eng.policy.limit("max_attempts", 3)),
+        change_id=args.change,
     )
     _print({"task_id": task["task_id"], "state": task["state"]}, args.json)
     return EXIT_OK
@@ -163,15 +371,26 @@ def cmd_brief_from_change(args: argparse.Namespace) -> int:
     from . import specbrief
 
     root = _root(args)
+    services: list[dict[str, Any]] = []
+    store = _store(args)
+    try:
+        record = store.find_change(args.change)
+        if record:
+            services = list((record.get("payload") or {}).get("services") or [])
+    finally:
+        store.close()
     try:
         brief = specbrief.build(
             root,
             args.change,
             task_id=args.task,
             base_commit=args.base_commit,
+            spec_ref=args.spec_ref,
+            actor_role=args.actor_role,
             check_commands=args.check,
             attempt_limit=args.attempt_limit,
             timeout_seconds=args.timeout,
+            services=services,
         )
     except specbrief.SpecBriefError as exc:
         print(f"ОТКАЗ [SPEC-BRIEF] {exc}", file=sys.stderr)
@@ -560,6 +779,109 @@ def cmd_coverage(args: argparse.Namespace) -> int:
     return EXIT_OK if sums["broken"] == 0 else EXIT_DENIED
 
 
+def cmd_otel(args: argparse.Namespace) -> int:
+    from . import metrics, otel
+
+    root = _root(args)
+    store = _store(args)
+    try:
+        data = metrics.collect(store, root)
+    finally:
+        store.close()
+    payload = otel.build(data, service_name=args.service_name,
+                         service_version=args.service_version or "")
+    if args.out:
+        print(f"OTLP: записано {otel.write(payload, args.out)}")
+    sent = None
+    if args.endpoint:
+        try:
+            sent = otel.send(payload, args.endpoint, timeout=args.timeout)
+        except OSError as exc:
+            print(f"ОТКАЗ [OTEL] {exc}", file=sys.stderr)
+            return EXIT_DENIED
+        print(f"OTLP: отправлено {sent['status']} → {args.endpoint}")
+    if args.json:
+        _print(payload, True)
+    elif not args.out and not args.endpoint:
+        metrics_count = len(payload["resourceMetrics"][0]["scopeMetrics"][0]["metrics"])
+        print(f"OTLP: {metrics_count} метрик; укажи --out PATH или --endpoint URL")
+    return EXIT_OK
+
+
+def cmd_metrics(args: argparse.Namespace) -> int:
+    from . import metrics
+
+    root = _root(args)
+    store = _store(args)
+    try:
+        data = metrics.collect(store, root)
+    finally:
+        store.close()
+    if args.markdown:
+        path = os.path.abspath(args.markdown)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(metrics.render_md(data))
+        print(f"записано: {args.markdown}")
+        return EXIT_OK
+    if args.json:
+        _print(data, True)
+    else:
+        print(metrics.render_md(data), end="")
+    return EXIT_OK
+
+
+def cmd_board(args: argparse.Namespace) -> int:
+    from . import metrics
+
+    root = _root(args)
+    store = _store(args)
+    if args.serve:
+        server = metrics.make_server(store, root, args.host, args.port)
+        host, port = server.server_address[:2]
+        print(f"доска: http://{host}:{port}/ · Ctrl+C чтобы остановить", flush=True)
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            server.server_close()
+            store.close()
+        return EXIT_OK
+    try:
+        data = metrics.board_data(store, root)
+    finally:
+        store.close()
+    if not args.out:
+        print("нужен --out PATH или --serve", file=sys.stderr)
+        return EXIT_DENIED
+    path = os.path.abspath(args.out)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(metrics.render_html(data))
+    if args.json:
+        _print(data, True)
+    else:
+        print(f"доска: {args.out} · change {data['summary']['changes']} · "
+              f"задач {data['summary']['tasks']} · открытых находок {data['summary']['open_findings']}")
+    return EXIT_OK
+
+
+def cmd_ci(args: argparse.Namespace) -> int:
+    from . import ci
+
+    root = _root(args)
+    report = ci.collect(root, run_tests=args.run_tests, timeout=args.timeout)
+    path = ci.write_report(root, report, args.report)
+    print(f"CI: {'OK' if report['ok'] else 'FAIL'} · selftest {report['selftest']['passed']}/"
+          f"{report['selftest']['total']} · правил {report['coverage']['total']} · "
+          f"пробелов {report['coverage']['gap']} · отчёт {os.path.relpath(path, root)}")
+    if args.run_tests:
+        print(f"  unittest: {'OK' if report['tests']['ok'] else 'FAIL'} "
+              f"{report['tests']['duration_s']} c")
+    return EXIT_OK if report["ok"] else EXIT_DENIED
+
+
 def cmd_selftest(args: argparse.Namespace) -> int:
     report = selftest_mod.run_all(_root(args))
     if args.json:
@@ -735,6 +1057,7 @@ def build_parser() -> argparse.ArgumentParser:
     tn.add_argument("--spec", default=None)
     tn.add_argument("--base-commit", default=None)
     tn.add_argument("--lane", default="main")
+    tn.add_argument("--change", default=None, help="change_id, к которому относится задача")
     tn.set_defaults(func=cmd_task_new)
     tl = tsub.add_parser("list", help="список задач")
     tl.set_defaults(func=cmd_task_list)
@@ -758,10 +1081,115 @@ def build_parser() -> argparse.ArgumentParser:
     bf.add_argument("--out", default=None, help="куда записать JSON брифа")
     bf.add_argument("--check", action="append", default=None, help="команда проверки (можно несколько)")
     bf.add_argument("--base-commit", default=None)
+    bf.add_argument("--spec-ref", default=None, help="полный SHA согласованного плана (40 hex)")
+    bf.add_argument("--actor-role", default="DEV", choices=["BA", "SA", "DEV", "QA", "verifier"],
+                    help="процессная роль исполнителя (влияет на права guard'а)")
     bf.add_argument("--attempt-limit", type=int, default=3)
     bf.add_argument("--timeout", type=int, default=3600)
     bf.add_argument("--json", action="store_true")
     bf.set_defaults(func=cmd_brief_from_change)
+
+    chg = sub.add_parser("change", help="уровень изменения: состояния, review, trace, Ready-гейт")
+    csub = chg.add_subparsers(dest="change_cmd", required=True)
+    cn = csub.add_parser("new", help="зарегистрировать изменение в состоянии")
+    cn.add_argument("--change", required=True)
+    cn.add_argument("--owner", required=True)
+    cn.add_argument("--risk", default="L1", choices=["L0", "L1", "L2", "L3"])
+    cn.add_argument("--title", default="")
+    cn.add_argument("--base-commit", default=None)
+    cn.add_argument("--service", action="append", default=None,
+                    help="name=PATH[@SHA]: сервис, на который опирается change")
+    cn.add_argument("--service-write", action="append", default=None,
+                    help="имя сервиса, в который разрешена запись (read-only по умолчанию)")
+    cn.set_defaults(func=cmd_change)
+    csvc = csub.add_parser("services", help="сервисы и их принятые версии")
+    csvc.add_argument("--change", required=True)
+    csvc.set_defaults(func=cmd_change)
+    cl = csub.add_parser("list", help="список изменений")
+    cl.set_defaults(func=cmd_change)
+    cshow = csub.add_parser("show", help="состояние изменения и trace")
+    cshow.add_argument("--change", required=True)
+    cshow.set_defaults(func=cmd_change)
+    crev = csub.add_parser("review", help="добавить review-запись артефакта")
+    crev.add_argument("--change", required=True)
+    crev.add_argument("--artifact", required=True, help="proposal.md | specs | design.md | contracts | tasks.md")
+    crev.add_argument("--reviewer", required=True)
+    crev.add_argument("--role", required=True, choices=["product_owner", "BA", "SA", "DEV", "QA", "verifier", "human"])
+    crev.add_argument("--author", default=None)
+    crev.add_argument("--verdict", default="approve", choices=["approve", "request_changes", "abstain"])
+    crev.add_argument("--criterion", action="append", default=None, help="что именно проверено (нужно для approve)")
+    crev.set_defaults(func=cmd_change)
+    ctr = csub.add_parser("trace", help="матрица REQ → CASE → задачи")
+    ctr.add_argument("--change", required=True)
+    ctr.set_defaults(func=cmd_change)
+    crd = csub.add_parser("ready", help="пройти Ready-гейт и перевести в READY")
+    crd.add_argument("--change", required=True)
+    crd.add_argument("--spec-ref", required=True, help="полный SHA согласованного плана (40 hex)")
+    crd.set_defaults(func=cmd_change)
+    cad = csub.add_parser("advance", help="переход состояния изменения")
+    cad.add_argument("--change", required=True)
+    cad.add_argument("--event", required=True,
+                     choices=["explore", "propose", "agree_specs", "agree_design", "start", "tasks_done",
+                              "verify", "release", "accept", "archive", "block", "unblock", "cancel",
+                              "supersede", "revise"])
+    cad.add_argument("--reason", default=None)
+    cad.set_defaults(func=cmd_change)
+    crel = csub.add_parser("release", help="записать выпуск в опорную среду")
+    crel.add_argument("--change", required=True)
+    crel.add_argument("--environment", required=True)
+    crel.add_argument("--service", action="append", default=None, help="name=полный SHA (можно несколько)")
+    crel.add_argument("--by", required=True)
+    crel.add_argument("--by-role", default="human", choices=["human", "agent", "ci"])
+    crel.add_argument("--flag", default="")
+    crel.set_defaults(func=cmd_change)
+    cacc = csub.add_parser("accept", help="записать приёмку бизнес-результата")
+    cacc.add_argument("--change", required=True)
+    cacc.add_argument("--accepted-by", required=True)
+    cacc.add_argument("--criterion", action="append", default=None, help="принятый критерий (нужен хотя бы один)")
+    cacc.add_argument("--environment", required=True)
+    cacc.add_argument("--service", action="append", default=None, help="name=полный SHA (можно несколько)")
+    cacc.add_argument("--by-role", default="human", choices=["human", "agent", "ci"])
+    cacc.add_argument("--residual", action="append", default=None, help="принятый остаточный риск")
+    cacc.set_defaults(func=cmd_change)
+    ccl = csub.add_parser("close", help="закрыть change: closing + evidence + archive")
+    ccl.add_argument("--change", required=True)
+    ccl.add_argument("--by", required=True)
+    ccl.add_argument("--specs-synced", action="store_true")
+    ccl.add_argument("--cases-promoted", action="store_true")
+    ccl.add_argument("--contracts-promoted", action="store_true")
+    ccl.set_defaults(func=cmd_change)
+    cev = csub.add_parser("evidence", help="собрать пакет доказательств с хеш-манифестом")
+    cev.add_argument("--change", required=True)
+    cev.set_defaults(func=cmd_change)
+
+    ver = sub.add_parser("verification", help="baseline/candidate прогоны изменения")
+    vsub = ver.add_subparsers(dest="verification_cmd", required=True)
+    vrun = vsub.add_parser("run", help="выполнить прогон и записать версии")
+    vrun.add_argument("--change", required=True)
+    vrun.add_argument("--mode", required=True, choices=["baseline", "candidate"])
+    vrun.add_argument("--command", required=True)
+    vrun.add_argument("--ref", default=None, help="ref для baseline-worktree (например, base commit)")
+    vrun.add_argument("--runner", default="")
+    vrun.add_argument("--environment", default="")
+    vrun.add_argument("--service", action="append", default=None, help="name=полный SHA (можно несколько)")
+    vrun.add_argument("--cwd", default=None, help="каталог сервиса для прогона (по умолчанию корень)")
+    vrun.add_argument("--timeout", type=int, default=600)
+    vrun.set_defaults(func=cmd_verification)
+    vshow = vsub.add_parser("show", help="показать сохранённый отчёт")
+    vshow.add_argument("--change", required=True)
+    vshow.set_defaults(func=cmd_verification)
+
+    gap = sub.add_parser("gap", help="GAP-вопрос человеку: публикация и снятие")
+    gsub = gap.add_subparsers(dest="gap_cmd", required=True)
+    ga = gsub.add_parser("ask", help="опубликовать вопрос: пишущие вызовы спросят человека")
+    ga.add_argument("--task", required=True)
+    ga.add_argument("--question", required=True)
+    ga.add_argument("--id", default="GAP-1")
+    ga.set_defaults(func=cmd_gap)
+    gc = gsub.add_parser("clear", help="снять вопрос после ответа")
+    gc.set_defaults(func=cmd_gap)
+    gs = gsub.add_parser("show", help="показать открытый вопрос")
+    gs.set_defaults(func=cmd_gap)
 
     d = sub.add_parser("dispatch", help="запустить исполнителя (нужен валидный бриф)")
     d.add_argument("--task", required=True)
@@ -889,6 +1317,31 @@ def build_parser() -> argparse.ArgumentParser:
     cov.add_argument("--markdown", default=None)
     cov.add_argument("--rules", default=None)
     cov.set_defaults(func=cmd_coverage)
+
+    mt = sub.add_parser("metrics", help="метрики процесса из SQLite и файлов change")
+    mt.add_argument("--markdown", default=None, help="записать отчёт в markdown")
+    mt.set_defaults(func=cmd_metrics)
+
+    bd = sub.add_parser("board", help="HTML-доска состояния процесса")
+    bd.add_argument("--out", default=None, help="куда записать HTML (снимок)")
+    bd.add_argument("--serve", action="store_true", help="живая доска по HTTP")
+    bd.add_argument("--host", default="127.0.0.1")
+    bd.add_argument("--port", type=int, default=8765)
+    bd.set_defaults(func=cmd_board)
+
+    ot = sub.add_parser("otel", help="OTLP/HTTP JSON с метриками процесса")
+    ot.add_argument("--out", default=None, help="записать OTLP JSON")
+    ot.add_argument("--endpoint", default=None, help="POST на OTLP/HTTP endpoint")
+    ot.add_argument("--service-name", default="harness")
+    ot.add_argument("--service-version", default="")
+    ot.add_argument("--timeout", type=int, default=10)
+    ot.set_defaults(func=cmd_otel)
+
+    cifn = sub.add_parser("ci", help="CI-снимок: selftest, покрытие, метрики, тесты")
+    cifn.add_argument("--report", default=None, help="путь отчёта (по умолчанию evidence/ci-<ts>/report.json)")
+    cifn.add_argument("--run-tests", action="store_true", help="запустить unittest")
+    cifn.add_argument("--timeout", type=int, default=900)
+    cifn.set_defaults(func=cmd_ci)
 
     st = sub.add_parser("selftest", help="исполняемые проверки правил")
     st.set_defaults(func=cmd_selftest)

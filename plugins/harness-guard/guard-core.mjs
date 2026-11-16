@@ -66,6 +66,39 @@ export function normalizePath(root, raw) {
   return normalized === '' ? '.' : normalized;
 }
 
+/**
+ * Путь с учётом сервисных корней: `service:<name>/<rel>` или обычный rel.
+ * Абсолютный путь вне главного корня не прощается — он должен лежать под
+ * объявленным сервисом; иначе остаётся outside-root.
+ */
+export function normalizeTarget(root, raw, services) {
+  const rel = normalizePath(root, raw);
+  if (rel !== '<outside-root>') return rel;
+  const realish = (p) => {
+    try {
+      return fs.realpathSync(p);
+    } catch {
+      try {
+        return path.join(fs.realpathSync(path.dirname(p)), path.basename(p));
+      } catch {
+        return p;
+      }
+    }
+  };
+  const target = realish(path.resolve(root, String(raw)));
+  for (const service of services || []) {
+    const name = String(service.name || '');
+    if (!name) continue;
+    const base = realish(path.resolve(root, String(service.path || '')));
+    const inner = path.relative(base, target).replace(/\\/g, '/');
+    if (inner === '') return `service:${name}/`;
+    if (!inner.startsWith('../') && inner !== '..' && !path.isAbsolute(inner)) {
+      return `service:${name}/${inner}`;
+    }
+  }
+  return '<outside-root>';
+}
+
 /** Сопоставление с глобами: '*' захватывает '/', регистр не важен (как в Python). */
 export function matchesAny(relPath, globs) {
   const low = String(relPath).toLowerCase();
@@ -118,8 +151,19 @@ export function decide(policy, root, req) {
   const role = policy.roles[roleName];
   if (!role) return deny('R-ROLE-1', `неизвестная роль: '${roleName}'`);
 
+  if (roleName !== 'human' && roleName !== 'system') {
+    const privileged = policy.privileged_tools || [];
+    const prefixes = policy.privileged_prefixes || [];
+    if (privileged.includes(tool) || prefixes.some((p) => tool.startsWith(p))) {
+      return deny('R-TOOL-2', `инструмент '${tool}' привилегированный: рабочие роли его не получают`);
+    }
+  }
+
   const tools = role.tools || [];
-  if (!tools.includes('*') && !tools.includes(tool)) {
+  if (tool.startsWith('mcp__') && matchesAny(tool, policy.mcp_allow_globs || [])) {
+    // разрешённый MCP-инструмент: читающие поисковые серверы
+  } else if (!tools.includes('*') && !tools.includes(tool)
+             && !tools.some((t) => t.endsWith('*') && tool.startsWith(t.slice(0, -1)))) {
     return deny('R-WORK-2', `инструмент '${tool}' не разрешён роли '${roleName}'`);
   }
 
@@ -142,19 +186,49 @@ export function decide(policy, root, req) {
   // Чтение защищённых путей разрешено: R-PROT-1 ограничивает ЗАПИСЬ, иначе агент
   // не может прочитать даже политику, по которой его же и проверяют.
   if (rawPath && WRITE_TOOLS.has(tool)) {
-    const decision = checkWrite(policy, root, roleName, role, tool, rawPath, req.allowed_files);
+    const decision = checkWrite(policy, root, roleName, role, tool, rawPath,
+                                req.allowed_files, req.services || []);
     if (decision) return decision;
   }
   return allow('R-PROT-1');
 }
 
-function checkWrite(policy, root, roleName, role, tool, rawPath, allowedFiles) {
-  const rel = normalizePath(root, rawPath);
+function checkWrite(policy, root, roleName, role, tool, rawPath, allowedFiles, services) {
+  const rel = normalizeTarget(root, rawPath, services);
   if (rel === '<outside-root>') {
     return deny('R-PROT-1', `путь вне рабочего корня: '${rawPath}'`);
   }
 
+  if (rel.startsWith('service:')) {
+    const rest = rel.slice('service:'.length);
+    const name = rest.split('/')[0];
+    const inner = rest.includes('/') ? rest.slice(name.length + 1) : '';
+    const service = (services || []).find((s) => String(s.name) === name);
+    if (!service) return deny('R-PROT-1', `сервис '${name}' не объявлен в change`);
+    if (!role.can_write_services) {
+      return deny('R-PROT-1', `${rel} — код сервиса; роль '${roleName}' не пишет в сервисы`);
+    }
+    if (!service.write) {
+      return deny('R-PROT-1', `сервис '${name}' не открыт для записи (read-only)`);
+    }
+    if (!inner || inner.split('/').includes('..')) {
+      return deny('R-PROT-1', `недопустимый путь внутри сервиса: '${rel}'`);
+    }
+    const scope = allowedFiles || [];
+    if (scope.length === 0) {
+      return deny('R-WORK-1', 'воркер запущен без allowed_files: писать некуда — это дефект брифа');
+    }
+    if (!matchesAny(rel, scope)) {
+      return deny('R-WORK-1', `${rel} вне allowed_files брифа`);
+    }
+    return null;
+  }
+
   const protectedGlobs = policy.protected_globs || [];
+  if (matchesAny(rel, policy.spec_globs || []) && roleName !== 'human' && roleName !== 'system'
+      && !role.can_write_specs) {
+    return deny('R-WORK-3', `${rel} — каталог спеки; роль '${roleName}' не пишет план`);
+  }
   if (matchesAny(rel, protectedGlobs) && roleName !== 'system') {
     if (!matchesAny(rel, role.can_write || [])) {
       return deny('R-PROT-1', `${rel} — защищённый путь, запись ролью '${roleName}' запрещена`);
@@ -162,8 +236,11 @@ function checkWrite(policy, root, roleName, role, tool, rawPath, allowedFiles) {
   }
 
   if (matchesAny(rel, policy.product_globs || []) && !role.can_write_product) {
-    const rule = roleName === 'orchestrator' ? 'R-ORCH-1' : 'R-VER-1';
-    return deny(rule, `${rel} — продуктовый код; роль '${roleName}' не имеет права записи`);
+    if (!matchesAny(rel, role.product_write_globs || [])) {
+      const rule = roleName === 'orchestrator' ? 'R-ORCH-1'
+        : (roleName === 'analyst' || roleName === 'qa' ? 'R-PROT-1' : 'R-VER-1');
+      return deny(rule, `${rel} — продуктовый код; роль '${roleName}' не имеет права записи`);
+    }
   }
 
   if (role.write_scope_from_brief && WRITE_TOOLS.has(tool)) {
@@ -173,6 +250,10 @@ function checkWrite(policy, root, roleName, role, tool, rawPath, allowedFiles) {
     }
     if (!matchesAny(rel, scope)) {
       return deny('R-WORK-1', `${rel} вне allowed_files брифа`);
+    }
+    const writeGlobs = role.can_write || [];
+    if (writeGlobs.length > 0 && !matchesAny(rel, writeGlobs)) {
+      return deny('R-PROT-1', `${rel} не входит в разрешённую область записи роли '${roleName}'`);
     }
     return null;
   }

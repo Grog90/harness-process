@@ -15,6 +15,7 @@ from typing import Any, Callable
 
 from . import brief as brief_mod
 from . import cost as cost_mod
+from . import gap as gap_mod
 from . import scope as scope_mod
 from . import snapshot as snapshot_mod
 from . import verdict as verdict_mod
@@ -220,6 +221,7 @@ class Engine:
             scope_mod.publish_verifying(self.root, task_id=task_id, attempt=task.get("attempt"))
         elif new_state != "RUNNING":
             scope_mod.clear_scope(self.root)
+            gap_mod.clear(self.root)
         self.store.log(task_id, f"{task['state']} -> {new_state} ({event})", attempt=task.get("attempt"))
 
     def _resolve_verdict_state(self, task: dict[str, Any], payload: dict[str, Any]) -> str:
@@ -233,6 +235,16 @@ class Engine:
 
 
 # ---------------------------------------------------------------------- guards
+
+# Процессная роль из брифа → роль политики. BA/SA не пишут код, QA пишет тесты,
+# верификатор — evidence; одна и та же задача не может сменить роль по ходу.
+PROCESS_ROLES = {
+    "BA": "analyst",
+    "SA": "analyst",
+    "DEV": "worker",
+    "QA": "qa",
+    "verifier": "verifier",
+}
 
 
 def _guard_attach_brief(engine: Engine, task: dict[str, Any], payload: dict[str, Any]) -> None:
@@ -280,23 +292,43 @@ def _guard_dispatch(engine: Engine, task: dict[str, Any], payload: dict[str, Any
     if not b.allowed_files:
         raise TransitionError("R-BRIEF-1", "allowed_files пуст: нечего разрешать писать")
 
+    # R-CHG-1 / R-REF-1: если бриф привязан к зарегистрированному change,
+    # диспетч возможен только из READY/IN_PROGRESS и только по тому же spec_ref.
+    from . import changefsm
+    change_gate = changefsm.gate_dispatch(engine.store, engine.root, b.data)
+    if not change_gate.get("ok"):
+        raise TransitionError(str(change_gate.get("rule") or "R-CHG-1"),
+                              str(change_gate.get("reason") or "change не готов к диспетчу"),
+                              **{k: v for k, v in change_gate.items() if k not in ("ok", "rule", "reason")})
+
     # R-BRIEF-2: бриф, который воркер физически не сможет выполнить, не выдаётся.
     # Живой прогон: задача просила править harness/doctor.py, а политика запрещает
     # воркеру запись в protected-пути — воркер упёрся в отказ уже после диспетча.
+    role_name = PROCESS_ROLES.get(str(b.data.get("actor_role") or "DEV"), "worker")
+    services = list((b.data or {}).get("services") or [])
     blocked = []
     for rel in b.allowed_files:
+        if str(rel).startswith("service:"):
+            decision = engine.policy.check_write(
+                role_name, str(rel), allowed_files=b.allowed_files, services=services
+            )
+            if not decision.allowed:
+                blocked.append((rel, f"{decision.rule}: {decision.reason}"))
+            continue
         rel_norm = normalize_path(engine.root, rel)
         if rel_norm == "<outside-root>":
             blocked.append((rel, "путь вне корня"))
             continue
-        decision = engine.policy.check_write("worker", rel_norm, allowed_files=b.allowed_files)
+        decision = engine.policy.check_write(role_name, rel_norm, allowed_files=b.allowed_files,
+                                             services=services)
         if not decision.allowed:
             blocked.append((rel, f"{decision.rule}: {decision.reason}"))
     if blocked:
         raise TransitionError(
             "R-BRIEF-2",
-            "allowed_files недостижимы для роли worker: "
+            f"allowed_files недостижимы для роли {role_name}: "
             + "; ".join(f"{rel} ({why})" for rel, why in blocked),
+            role=role_name,
             blocked=[{"path": rel, "reason": why} for rel, why in blocked],
         )
 
@@ -326,8 +358,9 @@ def _guard_dispatch(engine: Engine, task: dict[str, Any], payload: dict[str, Any
         or ""
     )
     scope_mod.write_scope(
-        engine.root, task_id=task["task_id"], role="worker",
+        engine.root, task_id=task["task_id"], role=role_name,
         allowed_files=b.allowed_files, attempt=attempt, primary=primary,
+        services=list((b.data or {}).get("services") or []),
     )
     payload["_attempt"] = attempt
     payload["_deadline"] = deadline
@@ -532,6 +565,7 @@ def check_watchdog(engine: Engine, task_id: str) -> Outcome | None:
         return None
     engine.store.finish_attempt(task_id, int(task["attempt"]), status="timed_out")
     scope_mod.clear_scope(engine.root)
+    gap_mod.clear(engine.root)
     engine.store.update_task(task_id, state="TIMED_OUT", deadline_ts=None)
     engine.store.append_event(
         new_id("evt"),

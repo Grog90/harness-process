@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from .policy import Decision, Policy, advise, allow, deny, normalize_path
+from .policy import Decision, Policy, advise, allow, deny, normalize_path, resolve_target
 
 WRITE_TOOLS = ("write_file", "edit_file", "apply_patch", "create_file")
 
@@ -29,6 +29,7 @@ class HookContext:
     path: str | None = None
     command: str | None = None
     allowed_files: list[str] = field(default_factory=list)
+    services: list[dict[str, Any]] = field(default_factory=list)
     target: str | None = None
     policy: Policy | None = None
     root: str = "."
@@ -54,14 +55,16 @@ def policy_write_scope(ctx: HookContext) -> Decision:
     assert ctx.policy is not None
     if ctx.tool not in WRITE_TOOLS or not ctx.path:
         return allow("R-PROT-1")
-    return ctx.policy.check_write(ctx.role, ctx.path, allowed_files=ctx.allowed_files)
+    return ctx.policy.check_write(ctx.role, ctx.path, allowed_files=ctx.allowed_files,
+                                  services=ctx.services)
 
 
 def policy_worker_scope(ctx: HookContext) -> Decision:
     assert ctx.policy is not None
     if ctx.role != "worker" or ctx.tool not in WRITE_TOOLS or not ctx.path:
         return allow("R-WORK-1")
-    return ctx.policy.check_write(ctx.role, ctx.path, allowed_files=ctx.allowed_files)
+    return ctx.policy.check_write(ctx.role, ctx.path, allowed_files=ctx.allowed_files,
+                                  services=ctx.services)
 
 
 def policy_protected_paths(ctx: HookContext) -> Decision:
@@ -72,9 +75,12 @@ def policy_protected_paths(ctx: HookContext) -> Decision:
     # иначе агент не увидит правил, по которым его проверяют
     if ctx.tool not in WRITE_TOOLS:
         return allow("R-PROT-1")
-    rel = normalize_path(ctx.root, ctx.path)
+    rel = resolve_target(ctx.root, ctx.path, ctx.services)
     if rel == "<outside-root>":
         return deny("R-PROT-1", f"путь вне рабочего корня: {ctx.path!r}")
+    if rel.startswith("service:"):
+        # права на сервис проверяет policy.check_write; здесь нет главных protected-глобов
+        return allow("R-PROT-1")
     if ctx.policy.is_protected(rel) and ctx.role != "system":
         allowed = ctx.policy.role(ctx.role).get("can_write", [])
         from .policy import matches_any
@@ -152,7 +158,8 @@ def bash_write_bypass(ctx: HookContext) -> Decision:
         if rel == "<outside-root>":
             return deny("R-PROT-1", f"запись вне корня через shell: {cand!r}")
         if ctx.policy.is_product(rel):
-            d = ctx.policy.check_write(ctx.role, rel, allowed_files=ctx.allowed_files)
+            d = ctx.policy.check_write(ctx.role, rel, allowed_files=ctx.allowed_files,
+                                       services=ctx.services)
             if not d.allowed:
                 return deny(d.rule, f"обход через shell в {rel}: {d.reason}")
     return allow("R-ORCH-1")

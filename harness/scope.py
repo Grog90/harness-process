@@ -41,7 +41,8 @@ def scope_path(root: str) -> str:
 
 def write_scope(root: str, *, task_id: str, role: str, allowed_files: list[str],
                 attempt: int | None = None, primary: str | None = None,
-                phase: str = PHASE_RUNNING) -> str:
+                phase: str = PHASE_RUNNING,
+                services: list[dict[str, Any]] | None = None) -> str:
     path = scope_path(root)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     payload = {
@@ -50,6 +51,7 @@ def write_scope(root: str, *, task_id: str, role: str, allowed_files: list[str],
         "phase": phase,
         "primary": primary or "",
         "allowed_files": list(allowed_files),
+        "services": list(services or []),
         "attempt": attempt,
     }
     tmp = path + ".tmp"

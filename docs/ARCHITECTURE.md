@@ -91,6 +91,106 @@ VERIFY_BLOCKED ──submit/recheck──▶ VERIFYING ──escalate──▶ E
 
 ---
 
+## Уровень изменения (`changefsm.py`)
+
+Задача отвечает на вопрос «сделай этот кусок», изменение — «что и зачем делаем, кто
+согласовал и на какой редакции». Уровень включается, когда change зарегистрирован
+(`harness change new`); брифы без `change_id` работают по-старому.
+
+```
+DRAFT ─▶ EXPLORED ─▶ PROPOSED ─▶ SPECS_AGREED ─▶ DESIGN_AGREED ─▶ READY
+  │                                                                 │
+  └─ revise: revision+1, назад в SPECS_AGREED                       ▼
+READY ─▶ IN_PROGRESS ─▶ IMPLEMENTED ─▶ VERIFIED ─▶ RELEASED ─▶ ACCEPTED ─▶ ARCHIVED
+```
+
+| Слой | Где | Что проверяет |
+|---|---|---|
+| Автомат изменения | `changefsm.TRANSITIONS`, `transition()` | переход есть в таблице; запрещённый отклоняется с `R-CHG-1` |
+| Review-записи | `changefsm.review()`, таблица `change_reviews`, файлы `changes/<id>/reviews/` | артефакт, его sha256, редакция, автор ≠ проверяющий, критерии (`R-REV-1`, `R-REV-2`) |
+| Ready-гейт | `changefsm.ready_check()` | review всех ролей по текущим хешам, trace, GAP=0, полный `spec_ref` |
+| Трассировка | `changefsm.check_trace()` | каждое `REQ` имеет `CASE`, каждая задача — файл и проверку (`R-TRACE-2`) |
+| Привязка задач | `fsm._guard_dispatch` → `changefsm.gate_dispatch()` | диспетч только из `READY`/`IN_PROGRESS`, `spec_ref` совпадает (`R-CHG-1`, `R-REF-1`) |
+| Коммит | `specgate.check()` | живой change (не архив) и совпадающий digest спеки (`R-SPEC-1`) |
+
+Состояние — SQLite (`changes`, `change_events`, `change_reviews`, `tasks.change_id`,
+схема v4); review-записи дополнительно пишутся файлами в каталог change, чтобы их
+видел Git. Ready не хранится флагом: он пересчитывается перед переходом, поэтому
+правка плана после Ready снова закрывает гейт (ревизия увеличивается, `spec_ref`
+сбрасывается).
+
+## Проверка, приёмка и evidence
+
+`VERIFIED` не выводится из «тесты прошли» и не считается по состоянию задач:
+
+| Объект | Где | Что проверяется |
+|---|---|---|
+| `verification.json` | каталог change | baseline и candidate: command, ref, runner, environment, tests_ran, failures, exit_code; diff новых падений |
+| `release.json` | каталог change | `spec_ref`, среда, сервисы (полный SHA), кто выпустил, флаг |
+| `acceptance.json` | каталог change | принимающий, критерии, среда, сервисы, остаточные риски |
+| `closing.json` | каталог change | `specs_synced`, `cases_promoted`, `contracts_promoted`, кто закрыл |
+| `evidence/change-<id>/manifest.json` | evidence | sha256 и размер каждого файла пакета |
+
+Гейты: `IMPLEMENTED → VERIFIED` требует отчёт с версиями и ненулевыми прогонами;
+`VERIFIED → RELEASED` — release-запись; `RELEASED → ACCEPTED` — acceptance; `ACCEPTED →
+ARCHIVED` — closing + манифест evidence с verification и acceptance. Для L0 приёмка
+без release допустима; для L2 `by_role`/`accepted_by_role` обязаны быть `human`.
+
+Baseline может выполняться в отдельном git-worktree на `--ref` (принятая версия),
+candidate — в рабочем дереве. Парсер понимает unittest и pytest; нестандартный runner
+обязан назвать число тестов, иначе отчёт не проходит — «ноль тестов» не считается
+проверкой. Записи и evidence — файлы, а не строки БД: их видит Git и закрывающий PR.
+Подпись/вывоз evidence — остаток Этапа 4.
+
+## Мультисервисные изменения (v1)
+
+`change.payload.services` хранит список `{name, path, base_commit}`; сервисы
+объявляются `change new --service name=PATH[@SHA]`, попадают в бриф и валидируются
+(непустые имя и путь, полный SHA). Путь — ссылка для чтения и verification, не граница
+записи. Verification пишет прогоны по ключам
+`service:baseline`/`service:candidate`; сервис `repo` сохраняет старые ключи
+`baseline`/`candidate`. `check_report` требует оба режима для каждого сервиса,
+объявленного в change, и считает новые падения отдельно по сервисам. Baseline может
+идти в git-worktree сервиса на `--ref`, candidate — в его рабочем дереве.
+
+Release/acceptance принимают несколько `--service name=SHA` и обязаны сохранять порядок
+объявления сервисов: это merge order, он фиксируется в `release.json`,
+`acceptance.json` и evidence-манифесте; другой порядок отклоняется.
+
+Запись в сервис — явная: `change new --service-write NAME` ставит `write=true`, в
+брифе появляются ключи `service:<name>/<relative>`. Policy резолвит абсолютный путь
+под сервисный корень (`resolve_target`), требует `role.can_write_services` и
+`service.write`, а `allowed_files` проверяются по ключу; gateway и guard делают
+realpath-проверку, чтобы симлинк не вывел из корня. Shell-запись в сервис не
+открывается. Snapshot/commit/finalize по-прежнему однокорневые: коммит сервисного
+репозитория — отдельное действие, а не скрытая часть v1.
+
+## Метрики, доска и CI (`metrics.py`, `ci.py`)
+
+Метрики — проекция состояния, а не отдельное хранилище. `collect` читает
+`changes/change_events/change_reviews/tasks/attempts/verdicts/findings/costs` и файлы
+`verification.json`, считает очередь, lead time Ready → Accept, rework rate, состояние
+verification и evidence, открытые находки. Улучшить цифры отдельно от процесса нельзя.
+
+Доска (`harness board --out`) — самодостаточный HTML без сети и JS: изменения, review,
+trace/verify/release/accept, очередь и риски. Все поля экранируются. `board --serve`
+поднимает локальный HTTP-сервер (`HTTPServer`, своё SQLite-соединение на запрос) и
+отдаёт `/`, `/metrics.json`, `/healthz`; HTML автообновляется каждые 15 секунд. Это
+снимок/локальная доска, а не встроенная панель DSH GUI.
+
+`harness otel` строит OTLP/HTTP JSON (`resourceMetrics` → `scopeMetrics` → gauge) с
+метриками процесса и ресурсом `service.name`/`service.version`/`vcs.revision`;
+отправка — POST на endpoint или файл. Protobuf/gRPC не реализованы сознательно.
+Агентские трейсы DSH экспортирует сам.
+
+`harness ci` собирает selftest, покрытие правил, метрики и (опционально) unittest в
+`evidence/ci-<ts>/report.json` с Git HEAD и версией Python. CI-отчёт отвечает на вопрос
+«здоров ли harness», но не заменяет release/accept/archive: зелёный CI и принятый
+change — разные вещи. Для headless-пути есть `tools/headless_smoke.py`: он запускает
+`dsh headless --json` и пишет evidence; в этой установке прогон дошёл до `final`, но
+упёрся в `MISSING_CREDENTIAL` — у headless-профиля нет `DEEPSEEK_API_KEY`. Это
+ограничение окружения, а не скрытая неработоспособность.
+
 ## Шлюз инструментов (`gateway.py`)
 
 Единственный путь, которым агент трогает файлы и команды. Рантайм не получает
@@ -115,6 +215,32 @@ VERIFY_BLOCKED ──submit/recheck──▶ VERIFYING ──escalate──▶ E
 
 `allowed_files` берутся из брифа в состоянии задачи. Если агент передаст свой
 список прав в запросе, он будет проигнорирован — это и есть `R-TOOL-1`.
+
+## Процессные роли, пресеты и guard
+
+Процессная роль (`actor_role` брифа: BA/SA/DEV/QA/verifier) переводится в роль
+политики и публикуется в `guard-scope.json` при диспетче:
+
+| actor_role | роль политики | что может писать |
+|---|---|---|
+| BA, SA | `analyst` | `openspec/**`, `docs/**`, `journal/**`; код — нет |
+| DEV | `worker` | только `allowed_files`; спеку — нет |
+| QA | `qa` | `tests/**`, `openspec/changes/*/cases/**`, `evidence/**` |
+| verifier | `verifier` | только `evidence/**`; продукт читает |
+| — (нет поля) | `worker` | прежнее поведение |
+
+Guard (`plugins/harness-guard`) держит три класса запретов, которых нет в тексте
+брифа: `R-WORK-3` (каталог спеки не пишет рабочий код), `R-TOOL-2`
+(`plugin_manager`, marketplace и MCP-префиксы с побочными эффектами закрыты всем,
+кроме human/system; читающие `xerj`/`trendshift` разрешены явно) и `R-GAP-2`
+(открытый `.harness/gap.json` превращает пишущий вызов в `ask` человеку; чтение
+проходит). `ask` не может вернуть синхронный `ctx.tools.guard()`, поэтому это
+отдельный listener `tools/pre-execute`.
+
+Пресеты DSH (`plugins/process-presets`) дают каждой роли свою композицию
+инструментов и скиллов (`skills/process-*`), но не являются источником прав: путь и
+инструмент всё равно проверяет guard по `policy.json`. Пресет без `plugin_manager` и
+`workflow` — defence in depth, а не замена политике.
 
 ## Изолированный прогон проверок (`checks.py`)
 
@@ -364,7 +490,7 @@ python -m harness rule change --id R-COST-1 --reason "бюджет провер�
 ## Структура репозитория
 
 ```
-harness/            пакет: cli, fsm, state, policy, hooks, gateway, checks, finalize,
+harness/            пакет: cli, changefsm, fsm, state, policy, hooks, gateway, checks, finalize,
                     brief, verdict, snapshot, findings, rules, evals, selftest, demo
 policies/           policy.json (полномочия), rules.json (матрица правил)
 schemas/            JSON-схемы брифа и вердикта

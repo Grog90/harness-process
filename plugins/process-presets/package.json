@@ -1,0 +1,8 @@
+{
+  "name": "@local/dsh-process-presets",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Процессные пресеты harness: BA, SA, DEV, QA, verifier",
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
+}

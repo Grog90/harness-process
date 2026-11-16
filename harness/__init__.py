@@ -8,6 +8,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "brief",
+    "changefsm",
     "evals",
     "findings",
     "fsm",
