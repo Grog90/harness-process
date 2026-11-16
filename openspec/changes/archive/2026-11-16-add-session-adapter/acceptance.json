@@ -1,0 +1,27 @@
+{
+  "change_id": "add-session-adapter",
+  "spec_ref": "693e3e2d1934199828729180da526f34fe851aa9",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "693e3e2d1934199828729180da526f34fe851aa9"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "Активная задача видна в системном контексте DSH-сессии",
+    "Read-only harness_task возвращает статус задачи",
+    "Плагин установлен в desktop, application applied; нет dispatch/verdict/commit"
+  ],
+  "residual_risks": [
+    "Автоматический dispatch/verdict/commit не сделаны",
+    "spawnSync блокирует event loop до 30 с; node-тест пропускается без node в PATH"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-16T20:17:58+0300"
+}

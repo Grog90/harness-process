@@ -1,0 +1,18 @@
+{
+  "change_id": "add-session-adapter",
+  "spec_ref": "693e3e2d1934199828729180da526f34fe851aa9",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "693e3e2d1934199828729180da526f34fe851aa9"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "by": "human",
+  "by_role": "human",
+  "flag": "",
+  "at": "2026-11-16T17:19:40+0300"
+}

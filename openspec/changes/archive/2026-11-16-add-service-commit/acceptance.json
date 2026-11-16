@@ -1,0 +1,27 @@
+{
+  "change_id": "add-service-commit",
+  "spec_ref": "693e3e2d1934199828729180da526f34fe851aa9",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "693e3e2d1934199828729180da526f34fe851aa9"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "Snapshot задачи включает writable-сервисы, read-only исключён",
+    "Finalize коммитит сервис с write-set и пишет SHA в commits/evidence",
+    "End-to-end finalize и evidence task_commits покрыты тестами"
+  ],
+  "residual_risks": [
+    "Push/PR сервисов и откат частичного коммита не сделаны",
+    "In-root mode=main без e2e; missing service на submit может дать traceback"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-16T20:17:58+0300"
+}

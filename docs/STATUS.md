@@ -33,6 +33,14 @@ DRAFT → READY → IN_PROGRESS → IMPLEMENTED → VERIFIED → RELEASED → AC
 - дельта синхронизирована в `openspec/specs/multi-root-write/spec.md`;
 - change перенесён в `openspec/changes/archive/2026-11-16-add-multi-root-write/`.
 
+## Дополнительно закрыто после пилота
+
+- `add-service-commit` — tree-snapshot и commit writable-сервисов, evidence
+  `task_commits`; ACCEPTED → ARCHIVED, дельта в `openspec/specs/multi-root-commit/`;
+- `add-session-adapter` — контекст задачи и read-only `harness_task` в DSH;
+  плагин установлен в профиль `desktop`; ACCEPTED → ARCHIVED, дельта в
+  `openspec/specs/session-adapter/`.
+
 ## Проверки на момент закрытия
 
 ```
