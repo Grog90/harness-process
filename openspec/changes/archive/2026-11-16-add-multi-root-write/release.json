@@ -1,0 +1,18 @@
+{
+  "change_id": "add-multi-root-write",
+  "spec_ref": "06abde2d6f4ef817713e0948f72efad9a6d10728",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "06abde2d6f4ef817713e0948f72efad9a6d10728"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "by": "human",
+  "by_role": "human",
+  "flag": "",
+  "at": "2026-11-16T16:26:26+0300"
+}

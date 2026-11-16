@@ -1,0 +1,24 @@
+{
+  "review_id": "rev_739dddfa6fa3",
+  "change_id": "add-multi-root-write",
+  "revision": 1,
+  "artifact": "proposal.md",
+  "artifact_hash": "sha256:120f1f1c41c9ac8fb91283bc279658f39c50a2267732443a449836fcfe95a639",
+  "reviewer_id": "rev-ba",
+  "reviewer_role": "BA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "проблема, границы и out-of-scope сформулированы без противоречий",
+    "обещания proposal соответствуют коду и docs; коммит/снапшот сервисов не обещаны",
+    "риск-класс L1 зафиксирован"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "proposal не упоминает сверку services брифа с change (REQ-WRITE-4)"
+    }
+  ],
+  "created_at": 1794835407.2167413,
+  "created_at_iso": "2026-11-16T16:23:27+0300"
+}

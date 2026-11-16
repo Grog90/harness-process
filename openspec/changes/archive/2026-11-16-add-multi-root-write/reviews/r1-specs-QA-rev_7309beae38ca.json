@@ -1,0 +1,24 @@
+{
+  "review_id": "rev_7309beae38ca",
+  "change_id": "add-multi-root-write",
+  "revision": 1,
+  "artifact": "specs",
+  "artifact_hash": "sha256:856c73593013d807d6c275be28d00f12b41fb09259e1b19404da0ec79fe7266b",
+  "reviewer_id": "rev-qa",
+  "reviewer_role": "QA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "негативные сценарии покрывают read-only, symlink/junction, shell, verifier и чужой корень",
+    "in-root сервис проверяется по файловому пути, а не только по service-ключу",
+    "Windows-absolute allowed_files отклоняются"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "shell-эвристика не ловит python -c open(...,'w') — унаследованное ограничение"
+    }
+  ],
+  "created_at": 1794835407.225247,
+  "created_at_iso": "2026-11-16T16:23:27+0300"
+}

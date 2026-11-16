@@ -1,0 +1,29 @@
+{
+  "change_id": "add-multi-root-write",
+  "spec_ref": "06abde2d6f4ef817713e0948f72efad9a6d10728",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "06abde2d6f4ef817713e0948f72efad9a6d10728"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "Запись только в явно открытый сервис (write=true), role=worker, allowed_files service:<name>/<rel>",
+    "Чужие файлы, read-only сервис, чужой/ancestor root, verifier, symlink/junction и shell отклоняются",
+    "Бриф не открывает сервис сверх change; in-root protected paths не обходятся",
+    "Verification: baseline и candidate 420/420, selftest 61/61"
+  ],
+  "residual_risks": [
+    "Мультикорневой tree-snapshot/commit сервисов и автоматический коммит не сделаны",
+    "Shell-эвристика не ловит python -c open(...,'w'); TOCTOU между realpath и записью",
+    "В spec Out of Scope осталась формулировка snapshot/commit без tree-snapshot; review-замечание зафиксировано"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-16T16:28:05+0300"
+}

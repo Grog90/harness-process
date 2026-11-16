@@ -1,0 +1,24 @@
+{
+  "review_id": "rev_5df1bf356538",
+  "change_id": "add-multi-root-write",
+  "revision": 1,
+  "artifact": "specs",
+  "artifact_hash": "sha256:856c73593013d807d6c275be28d00f12b41fb09259e1b19404da0ec79fe7266b",
+  "reviewer_id": "rev-ba",
+  "reviewer_role": "BA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "REQ-WRITE-1..4 и CASE имеют проверяемые WHEN/THEN",
+    "термины согласованы с кодом и политикой",
+    "CASE-2-1 использует service-путь, а не путь главного корня"
+  ],
+  "findings": [
+    {
+      "severity": "major",
+      "text": "Out of Scope не сужен до tree-snapshot/commit; остальные артефакты говорят про files_snapshot с service-ключами"
+    }
+  ],
+  "created_at": 1794835407.2212412,
+  "created_at_iso": "2026-11-16T16:23:27+0300"
+}

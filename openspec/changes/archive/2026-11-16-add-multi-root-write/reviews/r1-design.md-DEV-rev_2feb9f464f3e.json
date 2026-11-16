@@ -1,0 +1,24 @@
+{
+  "review_id": "rev_2feb9f464f3e",
+  "change_id": "add-multi-root-write",
+  "revision": 1,
+  "artifact": "design.md",
+  "artifact_hash": "sha256:3fa3afa4dfbc20894d1521d3ec09ac883ab2aa9fc55d15e602ea2d5854477383",
+  "reviewer_id": "rev-dev",
+  "reviewer_role": "DEV",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "tasks design реализованы в коде, unused import убран",
+    "ancestor-root обход закрыт и проверен Python+JS",
+    "key-форма пути, in-root shell и роль-спуф покрыты тестами"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "в snapshot.py не было завершающего newline; CLI не ловит корень диска как ancestor"
+    }
+  ],
+  "created_at": 1794835407.232251,
+  "created_at_iso": "2026-11-16T16:23:27+0300"
+}

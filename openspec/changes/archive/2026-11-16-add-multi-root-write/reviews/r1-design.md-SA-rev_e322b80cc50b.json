@@ -1,0 +1,24 @@
+{
+  "review_id": "rev_e322b80cc50b",
+  "change_id": "add-multi-root-write",
+  "revision": 1,
+  "artifact": "design.md",
+  "artifact_hash": "sha256:3fa3afa4dfbc20894d1521d3ec09ac883ab2aa9fc55d15e602ea2d5854477383",
+  "reviewer_id": "rev-sa",
+  "reviewer_role": "SA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "решения design соответствуют policy.py/gateway.py/guard/hooks/snapshot",
+    "in-root и ancestor root проверяются по target под главным корнем, а не по base",
+    "остаточные риски snapshot/commit, TOCTOU и JS/Python названы"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "декларация сервиса-предка через junction не названа в Risks; защита держится policy"
+    }
+  ],
+  "created_at": 1794835407.228747,
+  "created_at_iso": "2026-11-16T16:23:27+0300"
+}

@@ -1,0 +1,23 @@
+{
+  "review_id": "rev_351dfe1a57a7",
+  "change_id": "add-multi-root-write",
+  "revision": 1,
+  "artifact": "tasks.md",
+  "artifact_hash": "sha256:aa40e11256d62ddff88cd0266c7d673c5f96ac1a519d444e20813d1429d4e0a5",
+  "reviewer_id": "rev-dev",
+  "reviewer_role": "DEV",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "tasks не обещают больше, чем реализовано",
+    "тесты разрешения и отказа присутствуют, parity зелёная"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "имя теста write_flag не проверяет write=false, но read-only покрыт отдельным тестом"
+    }
+  ],
+  "created_at": 1794835407.239754,
+  "created_at_iso": "2026-11-16T16:23:27+0300"
+}
