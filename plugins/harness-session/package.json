@@ -7,12 +7,16 @@
   "main": "index.js",
   "exports": {
     ".": "./index.js",
-    "./session-core": "./session-core.mjs"
+    "./session-core": "./session-core.mjs",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
   },
   "files": [
     "index.js",
     "session-core.mjs",
     "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
     "README.md"
   ],
   "dsh": {

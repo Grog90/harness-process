@@ -226,8 +226,10 @@ $payload | node plugins/harness-guard/guard-probe.mjs
 - регистрирует read-only `harness_task` (`harness task status`);
 - не диспетчит, не выносит вердикт и не коммитит.
 
-Он не установлен по умолчанию. Установка — тем же `plugin_manager`, что и guard;
-до неё проверки: `node --test plugins/harness-session/session-core.test.mjs` и
+Он установлен в текущем профиле `desktop` (16.11.2026, `application: applied`,
+`harness_task` виден в живом списке инструментов). В поставку harness не входит:
+на другом профиле установка — тем же `plugin_manager`, что и guard; до неё проверки:
+`node --test plugins/harness-session/session-core.test.mjs` и
 `python -m unittest tests.test_session_adapter -v`.
 
 ## Ограничения v1

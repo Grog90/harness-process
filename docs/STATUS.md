@@ -47,9 +47,8 @@ rule verify: current
 
 - мультикорневой tree-snapshot/commit сервисов закрыт в `add-service-commit`;
   push/PR и откат частичного коммита не сделаны;
-- адаптер DSH: контекст задачи и read-only `harness_task` есть в
-  `plugins/harness-session`, но плагин не установлен в профиль и не делает
-  автодиспетч/вердикт;
+- адаптер DSH: плагин установлен в профиль `desktop` (`application: applied`,
+  `harness_task` виден в живом списке), но автодиспетч/вердикт не сделаны;
 - shell-эвристика не ловит `python -c open(...,'w')`; TOCTOU между realpath и записью;
 - merge order записывается, но не исполняется; e2e-среды нет;
 - `can_read`/`may_*` остаются декларациями, доверенная идентичность — допущение;

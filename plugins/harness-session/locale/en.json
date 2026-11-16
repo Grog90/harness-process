@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Harness session",
+    "description": "Shows the active harness task in the session context and exposes read-only task status."
+  }
+}
