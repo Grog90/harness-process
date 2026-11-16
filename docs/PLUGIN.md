@@ -217,6 +217,19 @@ $payload | node plugins/harness-guard/guard-probe.mjs
 и порядок относительно других guard'ов. Установка и регистрация сами по себе не
 доказывают поведение — доказательство даёт только наблюдённый отказ.
 
+## Адаптер сессии
+
+`plugins/harness-session` — отдельный host-плагин, не замена guard:
+
+- читает `.harness/guard-scope.json` и добавляет задачу, роль, `allowed_files`,
+  сервисы и фазу в системный контекст сессии;
+- регистрирует read-only `harness_task` (`harness task status`);
+- не диспетчит, не выносит вердикт и не коммитит.
+
+Он не установлен по умолчанию. Установка — тем же `plugin_manager`, что и guard;
+до неё проверки: `node --test plugins/harness-session/session-core.test.mjs` и
+`python -m unittest tests.test_session_adapter -v`.
+
 ## Ограничения v1
 
 1. **Главный корень один, сервисы — по явному разрешению.** `product-specs` и сервисные

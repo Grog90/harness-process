@@ -266,8 +266,9 @@ policies/         policy.json — полномочия ролей; rules.json �
 schemas/          JSON-схемы брифа и вердикта
 templates/        примеры артефактов
 examples/         учебные агент, верификаторы и размеченный набор evals
-plugins/          harness-guard — host-плагин DSH: ограждение на ctx.tools.guard()
-tests/            423 unittest-проверки свойств, включая паритет плагина и ядра
+plugins/          harness-guard — host-плагин DSH: ограждение на ctx.tools.guard();
+                  harness-session — контекст задачи и read-only статус в DSH
+tests/            425 unittest-проверки свойств, включая паритет плагина и ядра
 docs/             ANALYSIS, ARCHITECTURE, PROCESS, ROADMAP, RUNNING, PLUGIN, PLUGINS, LESSONS, SKILLS, PROMPT-DEFENSE, RECALL, TRENDSHIFT, BROWSER, XERJ, RULES_MATRIX
 bin/              обёртки harness / harness.cmd
 tools/            вспомогательное: экстрактор текста PDF, журнал уроков (lessons.py),
@@ -286,6 +287,13 @@ tools/            вспомогательное: экстрактор текс�
 там, где нет плагинной системы. Обе опираются на один и тот же
 `policies/policy.json`; расхождение решений ловит `tests/test_parity.py`.
 Подробности — [`docs/PLUGIN.md`](docs/PLUGIN.md).
+
+## Адаптер сессии
+
+`plugins/harness-session` добавляет активную задачу harness в системный контекст
+DSH-сессии и даёт read-only инструмент `harness_task`. Он **не** диспетчит и не
+выносит вердикт: гейты остаются у управляющего процесса. Плагин не установлен по
+умолчанию — установка меняет профиль DSH и делается отдельно.
 
 ## Подключение к живому агенту
 

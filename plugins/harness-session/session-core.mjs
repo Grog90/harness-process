@@ -1,0 +1,91 @@
+/**
+ * Чистое ядро адаптера: без Cordis, чтобы проверяться `node --test`.
+ */
+
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+export function hasPolicy(dir) {
+  try {
+    return fs.statSync(path.join(dir, 'policies', 'policy.json')).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function readPointer(home) {
+  try {
+    const value = fs.readFileSync(path.join(home, 'harness-root'), 'utf8').trim();
+    return value ? path.resolve(value) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Корень harness: config → env → ~/.dsh/harness-root → cwd вверх до политики. */
+export function resolveHarnessRoot({
+  configRoot = '',
+  envRoot = '',
+  home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh'),
+  cwd = process.cwd(),
+} = {}) {
+  const candidates = [];
+  if (configRoot) candidates.push(path.resolve(configRoot));
+  if (envRoot) candidates.push(path.resolve(envRoot));
+  const pointer = readPointer(home);
+  if (pointer) candidates.push(pointer);
+  candidates.push(path.resolve(cwd));
+  for (const candidate of candidates) {
+    if (hasPolicy(candidate)) return { root: candidate, tried: candidates.slice() };
+  }
+  let dir = path.resolve(cwd);
+  for (let depth = 0; depth < 4; depth += 1) {
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+    if (hasPolicy(dir)) return { root: dir, tried: [...candidates, dir] };
+  }
+  return { root: null, tried: candidates };
+}
+
+export function readScope(root) {
+  if (!root) return null;
+  try {
+    return JSON.parse(fs.readFileSync(path.join(root, '.harness', 'guard-scope.json'), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/** Текст системного контекста. null — задачи нет, контекст не добавляется. */
+export function taskContext(scope) {
+  if (!scope || !scope.task_id) return null;
+  const lines = [
+    '## Harness task',
+    `task_id: ${scope.task_id}`,
+    `role: ${scope.role || 'worker'}`,
+    `phase: ${scope.phase || 'work'}`,
+    `attempt: ${scope.attempt ?? '?'}`,
+  ];
+  const allowed = Array.isArray(scope.allowed_files) ? scope.allowed_files : [];
+  lines.push(`allowed_files: ${allowed.length ? allowed.join(', ') : '(none)'}`);
+  const services = Array.isArray(scope.services) ? scope.services : [];
+  if (services.length) {
+    const parts = services.map((s) => {
+      const name = String(s.name || '?');
+      const mode = s.write ? 'write' : 'read-only';
+      return `${name} (${mode})`;
+    });
+    lines.push(`services: ${parts.join(', ')}`);
+  }
+  if (scope.primary) lines.push(`primary_agent: ${scope.primary}`);
+  return lines.join('\n');
+}
+
+/** Аргументы read-only статуса; глобальные флаги — до subcommand. */
+export function buildStatusArgs({ root, taskId }) {
+  if (!root) throw new Error('root не задан');
+  if (!taskId) throw new Error('task_id не задан');
+  return ['-m', 'harness', '--root', root, '--json', 'task', 'status', '--task', String(taskId)];
+}

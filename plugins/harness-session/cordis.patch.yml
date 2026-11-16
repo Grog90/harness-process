@@ -1,0 +1,4 @@
+- insert:
+    - id: harness-session
+      name: '@local/harness-session'
+      config: {}

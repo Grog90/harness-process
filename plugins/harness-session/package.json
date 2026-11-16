@@ -1,0 +1,23 @@
+{
+  "name": "@local/harness-session",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Harness task context and read-only task status for DSH sessions",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./session-core": "./session-core.mjs"
+  },
+  "files": [
+    "index.js",
+    "session-core.mjs",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
