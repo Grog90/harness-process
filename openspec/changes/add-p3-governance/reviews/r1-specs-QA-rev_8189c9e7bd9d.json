@@ -1,0 +1,23 @@
+{
+  "review_id": "rev_8189c9e7bd9d",
+  "change_id": "add-p3-governance",
+  "revision": 1,
+  "artifact": "specs",
+  "artifact_hash": "sha256:9ce2aa377a799d94101f96455263cd67edeb3e6ff74fb92ccae3d1f0e201764c",
+  "reviewer_id": "rev-qa",
+  "reviewer_role": "QA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "PII scan/redact, file scope, SLO confirmed/na",
+    "legal inventory incl LLM, evals separate"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "scan semantics overlap; --strict CLI test absent"
+    }
+  ],
+  "created_at": 1794917319.1174285,
+  "created_at_iso": "2026-11-17T15:08:39+0300"
+}
