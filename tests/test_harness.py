@@ -1274,6 +1274,38 @@ class LaneTests(unittest.TestCase):
         self.assertEqual(ctx.exception.rule, "R-WAVE-1")
         self.assertIn("грязное", str(ctx.exception))
 
+    def test_merge_verify_failure_rolls_back(self) -> None:
+        import subprocess
+        from unittest.mock import patch
+
+        from harness import lanes, signing
+
+        if not shutil.which("ssh-keygen"):
+            self.skipTest("ssh-keygen недоступен")
+        keydir = tempfile.mkdtemp(prefix="merge-key-")
+        self.addCleanup(shutil.rmtree, keydir, True)
+        key = os.path.join(keydir, "key")
+        subprocess.run(["ssh-keygen", "-t", "ed25519", "-N", "", "-f", key, "-q"], check=True)
+        pub = open(key + ".pub", encoding="utf-8").read().strip()
+        allowed = os.path.join(keydir, "allowed")
+        with open(allowed, "w", encoding="utf-8") as fh:
+            fh.write("harness@local " + " ".join(pub.split()[:2]) + "\n")
+        subprocess_git(self.root, "-C", self.root, "config", "--local", "gpg.format", "ssh")
+        subprocess_git(self.root, "-C", self.root, "config", "--local", "user.signingkey", key)
+        subprocess_git(self.root, "-C", self.root, "config", "--local", "commit.gpgsign", "true")
+        subprocess_git(self.root, "-C", self.root, "config", "--local",
+                       "gpg.ssh.allowedSignersFile", allowed)
+        self._lane_with_change("T-SIGN", "def calculate_fee(amount):\n    return 42\n")
+        before = subprocess_git(self.root, "-C", self.root, "rev-parse", "HEAD").strip()
+        with patch.object(lanes.signing, "verify", side_effect=signing.SigningError("bad signature")):
+            with self.assertRaises(lanes.LaneError) as ctx:
+                lanes.merge(self.root, self.store, "T-SIGN")
+        self.assertEqual(ctx.exception.rule, "R-FINAL-2")
+        after = subprocess_git(self.root, "-C", self.root, "rev-parse", "HEAD").strip()
+        self.assertEqual(after, before, "неподписанный merge не откачен")
+        with open(os.path.join(self.root, "src", "fee.py"), encoding="utf-8") as fh:
+            self.assertNotIn("42", fh.read())
+
     def test_merge_lock_is_exclusive(self) -> None:
         from harness import lanes
 

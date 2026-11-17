@@ -685,6 +685,27 @@ def c_sandbox_degrades_honestly(root: str) -> None:
     assert report["results"][0]["isolation"] == info["mode"]
 
 
+def c_signing_preflight(root: str) -> None:
+    import shutil
+    import subprocess
+    import tempfile
+
+    from . import signing
+
+    base = tempfile.mkdtemp(prefix="sign-selftest-")
+    try:
+        subprocess.run(["git", "-C", base, "init", "-q"], check=True)
+        subprocess.run(["git", "-C", base, "config", "--local", "commit.gpgsign", "true"], check=True)
+        try:
+            signing.context(base)
+        except signing.SigningError as exc:
+            assert exc.rule == "R-FINAL-2", exc.rule
+        else:
+            raise AssertionError("подпись без ключа не отклонена")
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
 def c_e2e_parse(root: str) -> None:
     from . import e2e as e2e_mod
 
@@ -1312,6 +1333,7 @@ CHECKS: list[Check] = [
     Check("R-FORGE-1", "упавший check делает PR не готовым", c_forge_status),
     Check("R-EVID-1", "evidence экспортируется с манифестом и проверяется", c_evidence_export),
     Check("R-E2E-1", "e2e принимает только name=PATH[@SHA]", c_e2e_parse),
+    Check("R-FINAL-2", "подпись финализатора: без ключа R-FINAL-2", c_signing_preflight),
     Check("R-SPEC-1", "код без спеки не коммитится", c_spec_gate),
     Check("R-CHG-1", "Ready-гейт не пропускает без review", c_change_ready_gate),
     Check("R-CHG-1", "диспетч по change только из READY", c_change_dispatch),

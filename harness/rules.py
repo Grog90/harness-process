@@ -23,11 +23,11 @@ def control_index() -> dict[str, Any]:
     должен видеть и то, и другое, иначе половина матрицы выглядит дырой.
     """
     from . import (brief, changefsm, checks, cost, doctor, e2e, evals, evidence_export, finalize, findings, forge, fsm, gap, gateway, lanes,
-                   pluginctl, rulechange, scope, specgate, verification, verdict, watchdog)
+                   pluginctl, rulechange, scope, signing, specgate, verification, verdict, watchdog)
 
     index: dict[str, Any] = dict(hooks.HOOKS)
     for module in (brief, changefsm, checks, cost, doctor, e2e, evals, evidence_export, finalize, findings, forge, fsm, gap, gateway, lanes,
-                   pluginctl, rulechange, scope, specgate, verification, verdict, watchdog):
+                   pluginctl, rulechange, scope, signing, specgate, verification, verdict, watchdog):
         for name, fn in getattr(module, "CONTROL_POINTS", {}).items():
             if fn is not None:
                 index[name] = fn

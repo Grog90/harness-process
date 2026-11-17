@@ -475,6 +475,18 @@
       "residual_risk": "Хеш коммита нельзя записать внутрь него самого; связь хранится в состоянии и проверяется постфактум."
     },
     {
+      "id": "R-FINAL-2",
+      "statement": "Финализатор и merge не создают коммит без подписи, если она требуется, и проверяют её после коммита.",
+      "event": "precommit",
+      "enforcement": "blocking",
+      "implemented": true,
+      "hook": "signing.context",
+      "positive_test": "commit.gpgsign=true и ключ — коммит с -S проходит verify",
+      "negative_test": "нет user.signingkey или verify не прошёл — R-FINAL-2 и откат",
+      "owner": "control",
+      "residual_risk": "Tamper-evident, не tamper-proof: финализатор в том же дереве; включение зависит от локального commit.gpgsign."
+    },
+    {
       "id": "R-CHECK-1",
       "statement": "Проверки из брифа выполняются в изолированной копии дерева; результат подтверждается артефактом, а не пересказом.",
       "event": "postverdict",

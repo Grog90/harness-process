@@ -256,6 +256,7 @@ def merge(root: str, store: Store, task_id: str, *, message: str | None = None,
         ):
             raise LaneError("R-WAVE-1", "главное дерево грязное: слияние требует чистого состояния")
 
+        previous = _git(root, "rev-parse", "HEAD").stdout.strip()
         try:
             signing_ctx = signing.context(root)
         except signing.SigningError as exc:
@@ -292,6 +293,7 @@ def merge(root: str, store: Store, task_id: str, *, message: str | None = None,
             try:
                 signing.verify(root, signing_ctx)
             except signing.SigningError as exc:
+                _git(root, "reset", "--hard", previous)
                 raise LaneError(exc.rule, f"merge-коммит не подписан: {exc}", **exc.details) from exc
 
     store.record_commit(commit_sha=head, task_id=task_id, snapshot_id=task.get("accepted_snapshot") or "",

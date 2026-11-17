@@ -50,6 +50,12 @@ def context(root: str) -> dict[str, str] | None:
         candidate = os.path.join(root, ".github", "allowed_signers")
         if os.path.isfile(candidate):
             allowed = candidate
+    if os.path.sep in key or key.startswith("~"):
+        key_path = os.path.expanduser(key)
+        if not os.path.isfile(key_path):
+            raise SigningError("user.signingkey указывает на несуществующий файл", key=key_path)
+    if allowed and not os.path.isfile(allowed):
+        raise SigningError("allowedSignersFile не найден", allowed=allowed)
     return {"format": fmt, "key": key, "allowed": allowed}
 
 
@@ -79,3 +85,6 @@ def verify(base: str, ctx: dict[str, str] | None) -> None:
             "коммит не прошёл verify-commit: " + (proc.stderr.strip()[:300] or "нет подписи"),
             base=base,
         )
+
+
+CONTROL_POINTS = {"signing.context": context}
