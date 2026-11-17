@@ -7,10 +7,9 @@ GitHub CI + cosign + attach (см. [`STATUS.md`](STATUS.md), [`DEPLOY.md`](DEPLO
 
 ## P1 — технические долги, которые меняют корректность
 
-1. **Адаптер DSH ↔ harness.** Автодиспетч есть: `harness session attach` + плагин
-   на `agent/created` переводят задачу в RUNNING; привязка одноразовая.
-   Не сделаны автоматический submit после работы, auto-verdict и auto-commit;
-   один attach на корень, две задачи в одном профиле не поддерживаются.
+1. **Адаптер DSH ↔ harness.** Автодиспетч и opt-in auto-submit (`--auto-submit`)
+   есть; привязка одноразовая. Не сделаны auto-verdict и auto-commit; один attach
+   на корень, две задачи в одном профиле не поддерживаются.
 2. ~~Мультикорневой tree-snapshot/commit сервисов~~ — закрыто в `add-service-commit`
    (snapshot writable-сервисов, отдельный коммит, SHA в evidence); остались push/PR,
    откат частичного коммита и merge order.

@@ -1,0 +1,23 @@
+{
+  "review_id": "rev_6a03dc7c564a",
+  "change_id": "add-adapter-autosubmit",
+  "revision": 1,
+  "artifact": "specs",
+  "artifact_hash": "sha256:21886a030dd3e9623c404513c63b45cde4e119f3f1eb116b1c6dd781b710292a",
+  "reviewer_id": "rev-ba",
+  "reviewer_role": "BA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "opt-in marker, один submit в turn-stopping",
+    "root-only, marker/scope, gates verdict/commit/accept не трогаются"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "listener проверен чистыми функциями, не end-to-end"
+    }
+  ],
+  "created_at": 1794899505.3823,
+  "created_at_iso": "2026-11-17T10:11:45+0300"
+}

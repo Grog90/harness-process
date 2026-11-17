@@ -62,8 +62,9 @@ cosign verify-blob --bundle evidence/ci-download/report.json.bundle \
   отключён намеренно (`harness/checks.py`).
 - **Один attach на корень**: две одновременные задачи в одном профиле не
   поддерживаются.
-- **Auto-submit/verdict/accept** не автоматизированы: submit — действие роли,
-  verdict — проверяющего, accept — человека.
+- **Auto-submit** — opt-in (`--auto-submit`), только для коротких задач: первый
+  turn может быть неполным. **Auto-verdict/accept** не автоматизированы; commit —
+  отдельный гейт.
 - **5 старых change** закрываются как исторические (CANCELLED), не через полный
   процесс.
 

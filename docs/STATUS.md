@@ -71,7 +71,7 @@ rule verify: current
 
 - мультикорневой tree-snapshot/commit сервисов закрыт в `add-service-commit`;
   push/PR и откат частичного коммита не сделаны;
-- адаптер DSH: автодиспетч через `session attach` работает; submit/verdict/accept
+- адаптер DSH: автодиспетч и opt-in auto-submit работают; verdict/accept
   не автоматизированы, один attach на корень;
 - shell-эвристика не ловит `python -c open(...,'w')`; TOCTOU между realpath и записью;
 - merge order записывается, но не исполняется; e2e-среды нет;
