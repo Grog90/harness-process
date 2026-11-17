@@ -72,7 +72,8 @@ rule verify: current
 ## Остаточные риски v1
 
 - мультикорневой tree-snapshot/commit сервисов закрыт в `add-service-commit`;
-  push/PR и откат частичного коммита не сделаны;
+  push/PR лейна и откат частичного коммита закрыты в `add-lane-push-rollback`;
+  push/PR сервисных репозиториев не сделаны;
 - адаптер DSH: автодиспетч и opt-in auto-submit работают; verdict/accept
   не автоматизированы, один attach на корень;
 - shell-эвристика не ловит `python -c open(...,'w')`; TOCTOU между realpath и записью;

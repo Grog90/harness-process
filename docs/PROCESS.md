@@ -1357,7 +1357,8 @@ product-specs (spec_ref = SHA)
    verification идёт по каждому, merge order фиксируется, запись в явно открытый сервис
    разрешена (`--service-write`, `service:`-ключи) с realpath и защитой in-root путей.
    Snapshot/commit сервисов закрыты (`add-service-commit`), merge order записывается
-   и сверяется; не сделаны push/PR сервисных репозиториев и multi-service e2e.
+   и сверяется; push/PR лейна и откат частичного коммита закрыты
+   (`add-lane-push-rollback`); не сделаны push/PR сервисных репозиториев и multi-service e2e.
 6. **Нет baseline/candidate.** ✅ Закрыто: `verification.py`, два прогона с версиями,
    diff падений; нулевой прогон блокирует VERIFIED.
 7. **Review-запись — не объект.** ✅ Закрыто для артефактов плана; вердикт задачи остаётся
@@ -1833,8 +1834,8 @@ baseline/candidate для каждого объявленного сервиса
 принимают несколько SHA; merge order фиксируется в release/acceptance и проверяется.
 Запись в явно открытый сервис (`--service-write`) разрешена worker'у через
 `allowed_files` вида `service:api/...`, с realpath-проверкой и паритетом guard↔Python.
-**Не сделано:** push/PR сервисных репозиториев и откат частичного коммита;
-shell-запись в сервис; исполнение merge order.
+**Не сделано:** push/PR сервисных репозиториев; merge order как очередь;
+shell-запись в сервис.
 
 * `spec_root` отдельно от `code_root`; снимок на репозиторий; change-кандидат как набор
   SHA; PR-метаданные.

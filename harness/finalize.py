@@ -350,7 +350,7 @@ def finalize(
 
         out = engine.apply(task_id, "commit", {"snapshot_id": current, "commit_sha": main_sha},
                            event_id=f"commit-{main_sha}")
-    except FinalizeError as exc:
+    except Exception as exc:
         rolled = _rollback_records(store, service_records)
         if main_sha:
             reset = _git(root, "reset", "--soft", main_previous)
@@ -360,8 +360,11 @@ def finalize(
             else:
                 rolled.append({"name": "main", "sha": main_sha, "ok": False,
                                "error": reset.stderr.strip()[:200]})
-        exc.details["rollback"] = rolled
-        raise
+        if isinstance(exc, FinalizeError):
+            exc.details["rollback"] = rolled
+            raise
+        raise FinalizeError("R-FINAL-1", f"финализатор откачен после ошибки: {exc}",
+                            rollback=rolled) from exc
     return {
         "ok": True,
         "task_id": task_id,

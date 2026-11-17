@@ -890,6 +890,54 @@ class FinalizeTests(unittest.TestCase):
         finally:
             store.close()
 
+    def test_finalize_rolls_back_main_when_post_commit_step_fails(self) -> None:
+        from unittest.mock import patch
+
+        import harness.finalize as fin
+        from harness.snapshot import snapshot_for_task
+
+        subprocess_git(self.root, "init", "-q", self.root)
+        subprocess_git(self.root, "-C", self.root, "add", "-A")
+        subprocess_git(self.root, "-C", self.root, "-c", "user.name=t", "-c", "user.email=t@t",
+                       "commit", "-q", "-m", "base")
+        root_previous = subprocess_git(self.root, "-C", self.root, "rev-parse", "HEAD").strip()
+        service = tempfile.mkdtemp(prefix="svc-", dir=os.path.dirname(self.root))
+        self.addCleanup(shutil.rmtree, service, True)
+        subprocess_git(service, "init", "-q", service)
+        os.makedirs(os.path.join(service, "src"), exist_ok=True)
+        with open(os.path.join(service, "src", "a.py"), "w", encoding="utf-8") as fh:
+            fh.write("base\n")
+        subprocess_git(service, "-C", service, "add", "-A")
+        subprocess_git(service, "-C", service, "-c", "user.name=t", "-c", "user.email=t@t",
+                       "commit", "-q", "-m", "base")
+        service_previous = subprocess_git(service, "-C", service, "rev-parse", "HEAD").strip()
+
+        store = Store(os.path.join(self.root, ".harness", "state.db"))
+        try:
+            eng = Engine(store, Policy.load(self.root), self.root)
+            eng.store.create_task("T-RB3", policy_version="1.0.0")
+            brief = sample_brief("T-RB3", allowed_files=["service:api/src/a.py"], services=[
+                {"name": "api", "path": service, "base_commit": "a" * 40, "write": True}])
+            eng.apply("T-RB3", "attach_brief", {"brief": brief})
+            eng.apply("T-RB3", "dispatch", {"worker_id": "w"})
+            with open(os.path.join(service, "src", "a.py"), "w", encoding="utf-8") as fh:
+                fh.write("one\n")
+            snapshot = snapshot_for_task(self.root, store.get_task("T-RB3"))
+            eng.apply("T-RB3", "submit", {"attempt": 1, "snapshot_id": snapshot})
+            eng.apply("T-RB3", "verdict", {"verdict": sample_verdict(snapshot, task_id="T-RB3")})
+
+            with patch.object(eng, "apply", side_effect=RuntimeError("commit event boom")):
+                with self.assertRaises(fin.FinalizeError):
+                    fin.finalize(store, eng, self.root, "T-RB3",
+                                 allow_no_spec="integration", author="t")
+            self.assertEqual(subprocess_git(self.root, "-C", self.root, "rev-parse", "HEAD").strip(),
+                             root_previous)
+            self.assertEqual(
+                subprocess_git(service, "-C", service, "rev-parse", "HEAD").strip(), service_previous)
+            self.assertEqual(store.commits_for("T-RB3"), [])
+        finally:
+            store.close()
+
     def test_commit_services_commits_and_rejects_unexpected(self) -> None:
         from harness.finalize import FinalizeError, commit_services
 
@@ -1138,6 +1186,25 @@ class LaneTests(unittest.TestCase):
         sha = subprocess_git(path, "-C", path, "rev-parse", "HEAD").strip()
         self.store.update_task(task_id, state="COMMITTED", commit_sha=sha)
         return sha
+
+    def test_pull_request_requires_gh_and_reports_failure(self) -> None:
+        from unittest.mock import patch
+
+        from harness import lanes
+
+        with patch.object(lanes.shutil, "which", return_value=None):
+            with self.assertRaises(lanes.LaneError) as ctx:
+                lanes.pull_request(self.root, "T-1")
+            self.assertEqual(ctx.exception.rule, "R-WAVE-1")
+
+        def fake_run(*args, **kwargs):
+            import subprocess
+            return subprocess.CompletedProcess(args[0], 1, "", "no auth")
+
+        with patch.object(lanes.shutil, "which", return_value="gh"), \
+                patch.object(lanes.subprocess, "run", side_effect=fake_run):
+            with self.assertRaises(lanes.LaneError):
+                lanes.pull_request(self.root, "T-1")
 
     def test_pr_args_are_stable(self) -> None:
         from harness import lanes
