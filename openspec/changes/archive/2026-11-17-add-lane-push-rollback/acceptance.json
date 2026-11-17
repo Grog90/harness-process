@@ -1,0 +1,25 @@
+{
+  "change_id": "add-lane-push-rollback",
+  "spec_ref": "98b67c5e66cd9b721cdcae47f2a421ae63c12c58",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "98b67c5e66cd9b721cdcae47f2a421ae63c12c58"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "lane push/pr без force, gh обязателен",
+    "частичный финализатор откатывается reset --soft, записи удаляются"
+  ],
+  "residual_risks": [
+    "push сервисных репозиториев не реализован"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-17T13:22:40+0300"
+}
