@@ -18,10 +18,11 @@ class SigningTests(unittest.TestCase):
 
         if not os.path.isdir(os.path.join(ROOT, ".git")):
             self.skipTest("not a git checkout")
+        ref = os.environ.get("HARNESS_SIGNING_REF", "HEAD")
         proc = subprocess.run(
             ["git", "-c", "gpg.format=ssh",
              "-c", "gpg.ssh.allowedSignersFile=" + os.path.join(ROOT, ".github", "allowed_signers"),
-             "verify-commit", "HEAD"],
+             "verify-commit", ref],
             cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
         )
         self.assertEqual(proc.returncode, 0, proc.stderr)

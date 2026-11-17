@@ -25,19 +25,27 @@ jobs:
           if ("${{ github.event_name }}" -eq "pull_request") {
             git fetch origin "${{ github.base_ref }}" --depth=1
             if ($LASTEXITCODE -ne 0) { exit 1 }
-            $signers = Join-Path $env:RUNNER_TEMP "allowed_signers"
-            git show FETCH_HEAD:.github/allowed_signers | Set-Content -LiteralPath $signers -Encoding utf8
+            $content = git show FETCH_HEAD:.github/allowed_signers
             if ($LASTEXITCODE -ne 0) { exit 1 }
+            $signers = Join-Path $env:RUNNER_TEMP "allowed_signers"
+            $content | Set-Content -LiteralPath $signers -Encoding utf8
             $ref = "${{ github.event.pull_request.head.sha }}"
             $range = "FETCH_HEAD..$ref"
           } else {
             $before = "${{ github.event.before }}"
+            $signers = Join-Path $env:RUNNER_TEMP "allowed_signers"
             if ($before -match "^0+$") {
               $signers = "${{ github.workspace }}/.github/allowed_signers"
             } else {
-              $signers = Join-Path $env:RUNNER_TEMP "allowed_signers"
-              git show "${before}:.github/allowed_signers" | Set-Content -LiteralPath $signers -Encoding utf8
-              if ($LASTEXITCODE -ne 0) { exit 1 }
+              git cat-file -e "${before}:.github/allowed_signers" 2>$null
+              if ($LASTEXITCODE -ne 0) {
+                # bootstrap: в before файла ещё нет, доверяем текущему дереву один раз
+                $signers = "${{ github.workspace }}/.github/allowed_signers"
+              } else {
+                $content = git show "${before}:.github/allowed_signers"
+                if ($LASTEXITCODE -ne 0) { exit 1 }
+                $content | Set-Content -LiteralPath $signers -Encoding utf8
+              }
             }
             $ref = "HEAD"
             $range = "$before..HEAD"
@@ -54,6 +62,8 @@ jobs:
         with:
           python-version: "3.13"
       - name: Unit tests
+        env:
+          HARNESS_SIGNING_REF: ${{ github.event.pull_request.head.sha || 'HEAD' }}
         run: python -m unittest discover -s tests -q
       - name: Harness CI (selftest, coverage, metrics)
         run: python -m harness ci --report evidence/ci/report.json
