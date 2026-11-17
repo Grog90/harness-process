@@ -50,12 +50,15 @@ def context(root: str) -> dict[str, str] | None:
         candidate = os.path.join(root, ".github", "allowed_signers")
         if os.path.isfile(candidate):
             allowed = candidate
-    if os.path.sep in key or key.startswith("~"):
-        key_path = os.path.expanduser(key)
-        if not os.path.isfile(key_path):
-            raise SigningError("user.signingkey указывает на несуществующий файл", key=key_path)
+    # git -C <service> разрешает относительный путь от сервиса; фиксируем от root.
+    if key and not os.path.isabs(key):
+        key = os.path.normpath(os.path.join(root, key))
+    if allowed and not os.path.isabs(allowed):
+        allowed = os.path.normpath(os.path.join(root, allowed))
     if fmt == "ssh" and not allowed:
         raise SigningError("gpg.format=ssh, но allowedSignersFile не задан")
+    if os.path.sep in key and not os.path.isfile(key):
+        raise SigningError("user.signingkey указывает на несуществующий файл", key=key)
     if allowed and not os.path.isfile(allowed):
         raise SigningError("allowedSignersFile не найден", allowed=allowed)
     return {"format": fmt, "key": key, "allowed": allowed}

@@ -79,6 +79,20 @@ class SigningPreflightTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         signing.verify(self.root, ctx)
 
+    def test_relative_allowed_is_resolved_from_root(self) -> None:
+        key = os.path.join(self.root, "key")
+        allowed = os.path.join(self.root, "allowed")
+        open(key, "w", encoding="utf-8").write("key\n")
+        open(allowed, "w", encoding="utf-8").write("owner ssh-ed25519 AAAA\n")
+        git(self.root, "config", "--local", "commit.gpgsign", "true")
+        git(self.root, "config", "--local", "gpg.format", "ssh")
+        git(self.root, "config", "--local", "user.signingkey", "./key")
+        git(self.root, "config", "--local", "gpg.ssh.allowedSignersFile", "./allowed")
+        ctx = signing.context(self.root)
+        self.assertTrue(os.path.isabs(ctx["key"]))
+        self.assertTrue(os.path.isabs(ctx["allowed"]))
+        self.assertEqual(ctx["allowed"], allowed)
+
     def test_env_forces_requirement(self) -> None:
         old = os.environ.get("HARNESS_REQUIRE_SIGNED")
         os.environ["HARNESS_REQUIRE_SIGNED"] = "1"
