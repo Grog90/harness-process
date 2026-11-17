@@ -3,7 +3,9 @@
 ## Ключ
 
 - приватный: `~/.ssh/harness_signing` (ed25519, без пароля, вне репозитория);
-- публичный: `.github/allowed_signers` (в репозитории — это и есть доверие).
+- публичный: `.github/allowed_signers` — две строки с одним ключом:
+  `ownage0512@Mail.ru` (владелец) и `harness@harness.local` (финализатор,
+  `finalize.py` коммитит этой личностью).
 
 Проверка:
 
@@ -12,7 +14,7 @@ git verify-commit HEAD
 git log --show-signature -1
 ```
 
-## Настройка (уже сделана локально)
+## Настройка (как настроить)
 
 ```powershell
 git config --local gpg.format ssh
@@ -24,9 +26,10 @@ git config --local gpg.ssh.allowedSignersFile .github/allowed_signers
 ## CI
 
 Workflow настраивает `gpg.ssh.allowedSignersFile` и выполняет
-`git verify-commit`; неподписанный коммит валит job. Для PR доверенный ключ
+`git verify-commit` для каждого коммита диапазона (`before..HEAD` на push,
+`base..head` на PR); неподписанный коммит валит job. Для PR доверенный ключ
 берётся из base-ветки, а не из ветки PR — иначе автор мог бы подписать свой же
-коммит своим ключом.
+коммит своим ключом. Checkout — `fetch-depth: 0`.
 
 ## GitHub
 
@@ -37,7 +40,8 @@ key`, тип **Signing Key**), GitHub UI показывает «Unverified». Э
 ## Ротация
 
 1. `ssh-keygen -t ed25519 -f ~/.ssh/harness_signing_new`.
-2. Заменить строку в `.github/allowed_signers`.
+2. Заменить **обе** строки в `.github/allowed_signers` (владелец и
+   `harness@harness.local`) на новый публичный ключ.
 3. `git config --local user.signingkey <новый>`.
 4. Новые коммиты подписаны новым ключом; старые проверяются старым, пока он в
    allowed_signers (если удалить — старые станут unverified).

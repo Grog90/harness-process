@@ -16,6 +16,7 @@ class SigningTests(unittest.TestCase):
     def test_allowed_signers_has_public_key_only(self) -> None:
         text = self._read(".github/allowed_signers").strip()
         self.assertIn("ssh-ed25519 ", text)
+        self.assertIn("harness@harness.local", text)
         self.assertNotIn("PRIVATE KEY", text)
         self.assertNotIn("OPENSSH PRIVATE", text)
 
@@ -25,6 +26,8 @@ class SigningTests(unittest.TestCase):
         self.assertIn("allowed_signers", workflow)
         self.assertIn("fetch-depth: 0", workflow)
         self.assertIn("FETCH_HEAD:.github/allowed_signers", workflow)
+        self.assertIn("rev-list", workflow)
+        self.assertIn("verify-commit", workflow)
 
     def test_docs_cover_rotation_and_github(self) -> None:
         doc = self._read("docs/SIGNING.md")

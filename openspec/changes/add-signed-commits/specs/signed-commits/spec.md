@@ -31,8 +31,8 @@ CI ДОЛЖЕН (SHALL) настраивать `gpg.ssh.allowedSignersFile` и �
 
 #### Scenario: [CASE-SIGN-2-1] CI-шаг
 
-- **WHEN** workflow выполняется на push
-- **THEN** есть шаг `git verify-commit HEAD`
+- **WHEN** workflow выполняется на push/PR
+- **THEN** каждый коммит диапазона проходит `git verify-commit`; при ошибке job падает
 
 ### Requirement: [REQ-SIGN-3] Документация
 
