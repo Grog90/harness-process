@@ -57,7 +57,7 @@ python -m harness forge status --task T --wait --timeout 300
 ```
 
 Читает PR ветки `harness/T` и checks через `gh`; без `gh` — отказ `R-FORGE-1`.
-Это только чтение: required checks на free-private GitHub недоступны.
+Это только чтение: required checks включает branch protection на public-репозитории.
 
 ## Вывоз evidence
 
