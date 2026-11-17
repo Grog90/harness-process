@@ -62,7 +62,7 @@ DRAFT → READY → IN_PROGRESS → IMPLEMENTED → VERIFIED → RELEASED → AC
 ## Проверки на момент закрытия
 
 ```
-unittest: 484 тестов — OK (9 skipped)
+unittest: 486 тестов — OK (9 skipped)
 selftest: 61/61
 demo:     50/50
 coverage: 47 правил: 44 наших, 3 delegated, 94%

@@ -1,0 +1,25 @@
+{
+  "change_id": "add-multi-service-e2e",
+  "spec_ref": "a96ecf97a937c14c93223dab8777b80b1f26d0ac",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "a96ecf97a937c14c93223dab8777b80b1f26d0ac"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "e2e на копиях, git archive SHA, отчёт",
+    "timeout/worker/имена"
+  ],
+  "residual_risks": [
+    "POSIX kill только shell; отчёт перезаписывается"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-17T14:41:35+0300"
+}

@@ -1,0 +1,18 @@
+{
+  "change_id": "add-multi-service-e2e",
+  "spec_ref": "a96ecf97a937c14c93223dab8777b80b1f26d0ac",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "a96ecf97a937c14c93223dab8777b80b1f26d0ac"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "by": "human",
+  "by_role": "human",
+  "flag": "",
+  "at": "2026-11-17T14:41:35+0300"
+}

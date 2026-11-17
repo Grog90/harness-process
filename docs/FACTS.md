@@ -26,7 +26,7 @@
 - Ready-гейт требует review-записи BA, SA, DEV и QA по актуальным хешам proposal/specs/design/tasks, полную трассировку REQ-CASE-task и отсутствие блокирующих GAP (правила R-REV-1, R-REV-2, R-TRACE-2).
 - spec_ref в брифе — полный Git SHA плана (40 hex); specgate принимает только живой change и сверяет digest спеки с spec_version (правило R-SPEC-1).
 - Схема состояния версии 4: таблицы changes, change_events, change_reviews и колонка tasks.change_id; review-записи дублируются файлами в openspec/changes/<id>/reviews/.
-- В матрице 47 правил: 44 наших покрытых, 3 делегированы рантайму; selftest содержит 61 исполняемую проверку, unittest — 484.
+- В матрице 47 правил: 44 наших покрытых, 3 делегированы рантайму; selftest содержит 61 исполняемую проверку, unittest — 486.
 - harness metrics считает очередь, lead time Ready → Accept, rework, review, verification, evidence и находки из SQLite и файлов change; harness board --out рендерит самодостаточный HTML со снимком.
 - harness ci выполняет selftest, покрытие, метрики и (с --run-tests) unittest, пишет evidence/ci-<ts>/report.json с Git HEAD и возвращает 0/2.
 - harness board --serve поднимает локальную HTTP-доску (/, /metrics.json, /healthz) с автообновлением; harness otel отдаёт OTLP/HTTP JSON с метриками процесса.
