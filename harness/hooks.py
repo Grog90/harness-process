@@ -159,6 +159,10 @@ def bash_write_bypass(ctx: HookContext) -> Decision:
             return deny("R-PROT-1", f"запись вне корня через shell: {cand!r}")
         if rel.startswith("service:"):
             return deny("R-PROT-1", f"shell-запись в сервис не открыта: {cand!r}")
+        if rel == ".harness" or rel.startswith(".harness/"):
+            return deny("R-PROT-1", f"shell-запись в control-plane .harness запрещена: {cand!r}")
+        if ctx.policy.is_protected(rel):
+            return deny("R-PROT-1", f"shell-запись в защищённый путь запрещена: {cand!r}")
         if ctx.policy.is_product(rel):
             d = ctx.policy.check_write(ctx.role, rel, allowed_files=ctx.allowed_files,
                                        services=ctx.services)

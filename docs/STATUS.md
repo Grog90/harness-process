@@ -44,7 +44,7 @@ DRAFT → READY → IN_PROGRESS → IMPLEMENTED → VERIFIED → RELEASED → AC
 ## Проверки на момент закрытия
 
 ```
-unittest: 432 теста — OK (9 skipped)
+unittest: 434 теста — OK (9 skipped)
 selftest: 61/61
 demo:     50/50
 coverage: 47 правил: 44 наших, 3 delegated, 94%
@@ -55,8 +55,8 @@ rule verify: current
 
 - мультикорневой tree-snapshot/commit сервисов закрыт в `add-service-commit`;
   push/PR и откат частичного коммита не сделаны;
-- адаптер DSH: плагин установлен в профиль `desktop` (`application: applied`,
-  `harness_task` виден в живом списке), но автодиспетч/вердикт не сделаны;
+- адаптер DSH: автодиспетч через `session attach` работает; submit/verdict/accept
+  не автоматизированы, один attach на корень;
 - shell-эвристика не ловит `python -c open(...,'w')`; TOCTOU между realpath и записью;
 - merge order записывается, но не исполняется; e2e-среды нет;
 - `can_read`/`may_*` остаются декларациями, доверенная идентичность — допущение;

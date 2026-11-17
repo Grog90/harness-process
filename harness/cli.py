@@ -364,6 +364,10 @@ def cmd_session(args: argparse.Namespace) -> int:
     root = _root(args)
     store = _store(args)
     if args.session_cmd == "attach":
+        role = os.environ.get("HARNESS_ROLE", "human")
+        if role not in ("human", "system", "orchestrator"):
+            print(f"session attach запрещён роли {role!r}: привязку делает оператор", file=sys.stderr)
+            return EXIT_DENIED
         out = session_mod.attach(root, args.task, store)
     elif args.session_cmd == "detach":
         out = session_mod.detach(root)

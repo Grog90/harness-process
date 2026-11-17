@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import sys
 import unittest
 
@@ -33,6 +34,7 @@ class SessionAttachTests(unittest.TestCase):
             data = json.load(fh)
         self.assertEqual(data["task_id"], "T-1")
         self.assertTrue(data["auto_dispatch"])
+        self.assertIn("created_at", data)
         self.assertEqual(session.read_attach(self.root)["task_id"], "T-1")
 
     def test_attach_unknown_task_does_not_write(self) -> None:
@@ -48,6 +50,32 @@ class SessionAttachTests(unittest.TestCase):
         self.assertTrue(out["removed"])
         self.assertIsNone(session.read_attach(self.root))
         self.assertFalse(session.detach(self.root)["removed"])
+
+    def test_cli_status_and_unknown_attach(self) -> None:
+        db = os.path.join(self.root, ".harness", "state.db")
+        status = subprocess.run(
+            [sys.executable, "-m", "harness", "--root", self.root, "--db", db, "--json",
+             "session", "status"],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+        self.assertEqual(status.returncode, 0, status.stderr)
+        self.assertIsNone(json.loads(status.stdout)["attach"])
+        missing = subprocess.run(
+            [sys.executable, "-m", "harness", "--root", self.root, "--db", db,
+             "session", "attach", "--task", "missing"],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIsNone(session.read_attach(self.root))
+
+        denied = subprocess.run(
+            [sys.executable, "-m", "harness", "--root", self.root, "--db", db,
+             "session", "attach", "--task", "T-2"],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env={**os.environ, "HARNESS_ROLE": "worker"},
+        )
+        self.assertNotEqual(denied.returncode, 0)
+        self.assertIsNone(session.read_attach(self.root))
 
 
 if __name__ == "__main__":

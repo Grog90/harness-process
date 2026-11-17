@@ -557,6 +557,18 @@ class GatewayTests(unittest.TestCase):
         self.assertFalse(read_only.allowed)
         self.assertEqual(read_only.rule, "R-PROT-1")
 
+    def test_shell_write_to_control_plane_is_denied(self) -> None:
+        from harness.hooks import HookContext, run as run_hooks
+
+        ctx = HookContext(
+            event="pretooluse", tool="bash", role="worker",
+            command="echo x > .harness/session-attach.json",
+            allowed_files=[], services=[], policy=Policy.load(self.root), root=self.root,
+        )
+        result = run_hooks("pretooluse", ctx)
+        self.assertEqual(result["decision"], "deny")
+        self.assertEqual(result["rule"], "R-PROT-1")
+
     def test_shell_write_to_in_root_service_is_denied(self) -> None:
         from harness.hooks import HookContext, run as run_hooks
 

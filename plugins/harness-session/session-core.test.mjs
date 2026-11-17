@@ -6,12 +6,15 @@ import test from 'node:test';
 
 import {
   buildStatusArgs,
+  dispatchDecision,
   dispatchArgs,
+  consumeAttach,
   readAttach,
   readScope,
   resolveHarnessRoot,
   resolveStatusTask,
   taskContext,
+  writeAttachError,
 } from './session-core.mjs';
 import { actions } from './index.js';
 
@@ -87,6 +90,32 @@ test('readAttach и dispatchArgs', () => {
   assert.equal(readAttach(root).task_id, 'T-9');
   assert.deepEqual(dispatchArgs({ root, taskId: 'T-9', agentId: 'A' }),
     ['-m', 'harness', '--root', root, 'dispatch', '--task', 'T-9', '--primary-agent', 'A']);
+  assert.throws(() => dispatchArgs({ root, taskId: '', agentId: 'A' }));
+  assert.throws(() => dispatchArgs({ root, taskId: 'T', agentId: '' }));
   fs.rmSync(path.join(root, '.harness', 'session-attach.json'));
   assert.equal(readAttach(root), null);
+});
+
+test('dispatchDecision: один раз, конфликт чужого scope', () => {
+  const attach = { task_id: 'T-1', auto_dispatch: true };
+  assert.equal(dispatchDecision(attach, null, 'A'), 'dispatch');
+  assert.equal(dispatchDecision(attach, { task_id: 'T-1' }, 'A'), 'already');
+  assert.equal(dispatchDecision(attach, { task_id: 'T-2' }, 'A'), 'conflict');
+  assert.equal(dispatchDecision(attach, null, ''), 'skip');
+  assert.equal(dispatchDecision({ task_id: 'T-1' }, null, 'A'), 'skip');
+});
+
+test('consumeAttach удаляет привязку', () => {
+  const root = tempRoot();
+  fs.writeFileSync(path.join(root, '.harness', 'session-attach.json'),
+    JSON.stringify({ task_id: 'T-1', auto_dispatch: true }));
+  assert.equal(consumeAttach(root), true);
+  assert.equal(readAttach(root), null);
+});
+
+test('writeAttachError пишет в .harness', () => {
+  const root = tempRoot();
+  const file = writeAttachError(root, 'boom');
+  assert.ok(file.endsWith('session-attach.error'));
+  assert.equal(fs.readFileSync(file, 'utf8'), 'boom');
 });

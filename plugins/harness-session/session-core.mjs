@@ -82,6 +82,37 @@ export function readAttach(root) {
   }
 }
 
+/** Решение по автодиспетчу: dispatch | already | conflict | skip. */
+export function dispatchDecision(attach, scope, agentId) {
+  if (!attach?.auto_dispatch || !attach.task_id || !agentId) return 'skip';
+  if (scope && String(scope.task_id) !== String(attach.task_id)) return 'conflict';
+  if (scope && String(scope.task_id) === String(attach.task_id)) return 'already';
+  return 'dispatch';
+}
+
+/** Одноразовость: после успешного dispatch привязка больше не срабатывает. */
+export function consumeAttach(root) {
+  try {
+    fs.rmSync(path.join(root, '.harness', 'session-attach.json'), { force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Ошибка автодиспетча рядом с привязкой; не роняет сессию. */
+export function writeAttachError(root, text) {
+  if (!root) return null;
+  try {
+    fs.mkdirSync(path.join(root, '.harness'), { recursive: true });
+    const file = path.join(root, '.harness', 'session-attach.error');
+    fs.writeFileSync(file, String(text || 'dispatch failed').slice(0, 4000), 'utf8');
+    return file;
+  } catch {
+    return null;
+  }
+}
+
 /** Аргументы dispatch из привязки. */
 export function dispatchArgs({ root, taskId, agentId }) {
   if (!root) throw new Error('root не задан');

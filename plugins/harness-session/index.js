@@ -2,9 +2,10 @@
  * Host-плагин адаптера DSH → harness.
  *
  * - активная задача из `.harness/guard-scope.json` попадает в системный контекст;
+ * - привязка `.harness/session-attach.json` автоматически диспетчит сессию;
  * - инструмент `harness_task` возвращает read-only статус задачи.
  *
- * Плагин не диспетчит, не выносит вердикт и не коммитит.
+ * Вердикт и commit плагин не делает.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -13,16 +14,19 @@ import path from 'node:path';
 import {
   TASK_TOOL_ACTIONS,
   buildStatusArgs,
+  consumeAttach,
+  dispatchDecision,
   dispatchArgs,
   readAttach,
   readScope,
   resolveHarnessRoot,
   resolveStatusTask,
   taskContext,
+  writeAttachError,
 } from './session-core.mjs';
 
 export const name = 'harness-session';
-export const inject = ['tools', 'systemPrompt'];
+export const inject = ['tools', 'systemPrompt', 'subagents'];
 export const actions = TASK_TOOL_ACTIONS;
 
 export function apply(ctx, config) {
@@ -48,25 +52,51 @@ export function apply(ctx, config) {
       disposers.push(ctx.on('agent/created', async (payload) => {
         try {
           const attach = readAttach(root);
-          if (!attach?.auto_dispatch || !attach.task_id) return;
           const scope = readScope(root);
-          if (scope && String(scope.task_id) === String(attach.task_id)) return;
-          const agentId = payload?.agent?.id;
-          if (!agentId) return;
+          const agent = payload?.agent;
+          if (!agent?.id) return;
+          // Только корневой агент: субагент не должен стать primary задачи.
+          let isRoot = !agent.parent;
+          try {
+            if (typeof ctx.subagents?.rootOf === 'function') {
+              isRoot = ctx.subagents.rootOf(agent)?.id === agent.id;
+            }
+          } catch {
+            // fallback: agent.parent
+          }
+          if (!isRoot) return;
+          const decision = dispatchDecision(attach, scope, agent.id);
+          if (decision === 'conflict') {
+            writeAttachError(root, `active task ${scope.task_id} != attach ${attach.task_id}; detach/clear first`);
+            return;
+          }
+          if (decision !== 'dispatch') return;
           const python = config?.python || process.env.HARNESS_PYTHON || 'python';
-          const proc = spawnSync(python, dispatchArgs({
-            root, taskId: attach.task_id, agentId: String(agentId),
-          }), { encoding: 'utf8', timeout: 15000, windowsHide: true });
+          let proc;
+          try {
+            proc = spawnSync(python, dispatchArgs({
+              root, taskId: attach.task_id, agentId: String(agent.id),
+            }), { encoding: 'utf8', timeout: 15000, windowsHide: true });
+          } catch (error) {
+            writeAttachError(root, String(error?.message || error));
+            return;
+          }
+          if (proc.error) {
+            writeAttachError(root, String(proc.error.message || proc.error));
+            return;
+          }
           if (proc.status !== 0) {
-            fs.mkdirSync(path.join(root, '.harness'), { recursive: true });
-            fs.writeFileSync(
-              path.join(root, '.harness', 'session-attach.error'),
-              String(proc.stderr || proc.stdout || `dispatch exit ${proc.status}`).slice(0, 4000),
-              'utf8',
-            );
+            writeAttachError(root, proc.stderr || proc.stdout || `dispatch exit ${proc.status}`);
+            return;
+          }
+          consumeAttach(root);
+          try {
+            fs.rmSync(path.join(root, '.harness', 'session-attach.error'), { force: true });
+          } catch {
+            // устаревшая ошибка не должна мешать успешному dispatch
           }
         } catch {
-          // Привязка не должна ронять создание агента; причина останется в error-файле.
+          // Привязка не должна ронять создание агента.
         }
       }));
     }

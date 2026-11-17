@@ -223,14 +223,20 @@ $payload | node plugins/harness-guard/guard-probe.mjs
 
 - читает `.harness/guard-scope.json` и добавляет задачу, роль, `allowed_files`,
   сервисы и фазу в системный контекст сессии;
+- при `agent/created` и наличии `.harness/session-attach.json` один раз вызывает
+  `harness dispatch --task <id> --primary-agent <agent>`;
+- ошибка пишется в `.harness/session-attach.error`, успех её удаляет;
 - регистрирует read-only `harness_task` (`harness task status`);
-- не диспетчит, не выносит вердикт и не коммитит.
+- не выносит вердикт и не коммитит.
+
+Привязка: `harness session attach --task <id>`, отвязка: `harness session detach`.
+Один attach на корень; две одновременные задачи в одном профиле не поддерживаются.
 
 Он установлен в текущем профиле `desktop` (16.11.2026, `application: applied`,
 `harness_task` виден в живом списке инструментов). В поставку harness не входит:
 на другом профиле установка — тем же `plugin_manager`, что и guard; до неё проверки:
 `node --test plugins/harness-session/session-core.test.mjs` и
-`python -m unittest tests.test_session_adapter -v`.
+`python -m unittest tests.test_session_adapter tests.test_session_attach -v`.
 
 ## Ограничения v1
 

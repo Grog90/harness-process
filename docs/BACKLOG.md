@@ -5,11 +5,10 @@
 
 ## P1 — технические долги, которые меняют корректность
 
-1. **Адаптер DSH ↔ harness.** Каркас установлен: `plugins/harness-session` добавляет
-   активную задачу в системный контекст и даёт read-only `harness_task`
-   (`application: applied`, строка `harness_task` видна живьём). Не сделаны
-   автодиспетч при создании сессии и автоматический submit/verdict/commit; пока это
-   два контура, связанных брифами вручную.
+1. **Адаптер DSH ↔ harness.** Автодиспетч есть: `harness session attach` + плагин
+   на `agent/created` переводят задачу в RUNNING; привязка одноразовая.
+   Не сделаны автоматический submit после работы, auto-verdict и auto-commit;
+   один attach на корень, две задачи в одном профиле не поддерживаются.
 2. ~~Мультикорневой tree-snapshot/commit сервисов~~ — закрыто в `add-service-commit`
    (snapshot writable-сервисов, отдельный коммит, SHA в evidence); остались push/PR,
    откат частичного коммита и merge order.

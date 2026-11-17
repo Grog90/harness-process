@@ -8,15 +8,20 @@
 ## What Changes
 
 - `harness session attach --task <id>` пишет `.harness/session-attach.json`;
-- плагин при `agent/created` видит файл и один раз вызывает
-  `harness dispatch --task <id> --primary-agent <agent>`;
+- `harness session status|detach` показывает/снимает привязку;
+- плагин при `agent/created` один раз вызывает
+  `harness dispatch --task <id> --primary-agent <agent>`; после успеха привязка
+  удаляется, повторного dispatch нет;
+- чужой активный scope не перезаписывается, причина пишется в
+  `.harness/session-attach.error`;
 - ошибка диспетча пишется в `.harness/session-attach.error` и не роняет сессию;
-- `harness session detach` убирает привязку;
 - вердикт, commit и приёмка не автоматизируются.
 
 ## Impact
 
-- Класс риска: **L1** (автоматический переход задачи в IN_PROGRESS).
+- Класс риска: **L1** (задача переходит в RUNNING, change — в IN_PROGRESS;
+  резервируется попытка).
+- Привязку делает оператор/человек; CLI отказывает роли worker/verifier.
 - Новые `harness/session.py`, CLI-команда, правки плагина, тесты.
 - Требует подготовленной задачи с брифом; иначе dispatch откажет.
 
