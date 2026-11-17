@@ -1,0 +1,3 @@
+- insert:
+    - id: harness-panel
+      name: '@local/harness-panel'

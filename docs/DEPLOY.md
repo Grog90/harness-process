@@ -71,6 +71,9 @@ cosign verify-blob --bundle evidence/ci-download/report.json.bundle \
   checks через `gh`, без `gh` отказывает.
 - **Вывоз evidence:** `harness evidence export --dest <каталог> [--change C]`,
   проверка — `harness evidence verify --dest <каталог>`.
+- **Панель в DSH:** бандл `plugins/harness-panel` ставится в профиль `desktop`;
+  данные читает с `harness board --serve --port 8765`, offline показывает команду
+  запуска. Адрес можно задать в `localStorage.harnessBoardUrl`.
 - **5 старых change** закрываются как исторические (CANCELLED), не через полный
   процесс.
 
