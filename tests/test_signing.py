@@ -1,4 +1,4 @@
-"""L2: подпись коммитов — статическая проверка конфигурации доверия."""
+"""L2: подпись коммитов — проверки конфигурации доверия и HEAD."""
 
 from __future__ import annotations
 
@@ -60,6 +60,8 @@ class SigningTests(unittest.TestCase):
         self.assertIn("verify-commit", workflow)
         self.assertIn("github.event.before", workflow)
         self.assertIn("pull_request", workflow)
+        self.assertIn("HARNESS_SIGNING_REF", workflow)
+        self.assertIn("pull_request.head.sha", workflow)
 
     def test_docs_cover_rotation_and_github(self) -> None:
         doc = self._read("docs/SIGNING.md")
