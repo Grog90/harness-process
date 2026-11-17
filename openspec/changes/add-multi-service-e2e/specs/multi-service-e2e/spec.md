@@ -22,6 +22,16 @@
 - **WHEN** путь сервиса не существует
 - **THEN** отказ `R-E2E-1`, команда не запускается
 
+#### Scenario: [CASE-E2E-1-3] SHA — это коммит
+
+- **WHEN** задан `name=PATH@SHA`
+- **THEN** копия делается `git archive SHA`, а не из грязного worktree
+
+#### Scenario: [CASE-E2E-1-4] Worktree без SHA
+
+- **WHEN** SHA не задан
+- **THEN** копируется worktree, в отчёте `dirty=true`, если есть незакоммиченные правки
+
 ### Requirement: [REQ-E2E-2] Ошибка и таймаут
 
 Ненулевой exit или таймаут ДОЛЖНЫ (MUST) давать `ok=false` с кодом/флагом в
