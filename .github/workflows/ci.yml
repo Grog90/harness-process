@@ -17,6 +17,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Verify signed commit
+        run: |
+          git config --global gpg.format ssh
+          git config --global gpg.ssh.allowedSignersFile "${{ github.workspace }}/.github/allowed_signers"
+          $ref = if ("${{ github.event_name }}" -eq "pull_request") { "${{ github.event.pull_request.head.sha }}" } else { "HEAD" }
+          git verify-commit $ref
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
