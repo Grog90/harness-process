@@ -1,0 +1,18 @@
+{
+  "change_id": "add-signed-commits",
+  "spec_ref": "725446b665cd2bf0c4120c1f8525ff7ec710ad31",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "725446b665cd2bf0c4120c1f8525ff7ec710ad31"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "by": "human",
+  "by_role": "human",
+  "flag": "",
+  "at": "2026-11-17T16:00:47+0300"
+}
