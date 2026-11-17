@@ -11,6 +11,8 @@ Host-плагин DSH: активная задача harness видна сесс
   `harness dispatch --task <id> --primary-agent <agent>` и удаляет привязку;
 - чужой активный scope не перезаписывает: пишет конфликт в error-файл;
 - ошибка dispatch пишется в `.harness/session-attach.error`, успех удаляет старую;
+- при `--auto-submit` и `agent/turn-stopping` один раз вызывает `harness submit`
+  и удаляет `.harness/session-auto-submit.json`;
 - регистрирует read-only `harness_task`, который зовёт
   `python -m harness --json task status --task <id>`;
 - не выносит вердикт и не коммитит.
@@ -19,6 +21,8 @@ Host-плагин DSH: активная задача harness видна сесс
 
 ```powershell
 python -m harness session attach --task T-1
+# для короткой задачи: --auto-submit
+python -m harness session attach --task T-1 --auto-submit
 # открыть DSH-сессию: dispatch произойдёт автоматически
 python -m harness session status
 python -m harness session detach

@@ -6,10 +6,13 @@ import test from 'node:test';
 
 import {
   buildStatusArgs,
+  autoSubmitArgs,
   dispatchDecision,
   dispatchArgs,
   consumeAttach,
+  consumeAutoSubmit,
   readAttach,
+  readAutoSubmit,
   readScope,
   resolveHarnessRoot,
   resolveStatusTask,
@@ -111,6 +114,18 @@ test('consumeAttach удаляет привязку', () => {
     JSON.stringify({ task_id: 'T-1', auto_dispatch: true }));
   assert.equal(consumeAttach(root), true);
   assert.equal(readAttach(root), null);
+});
+
+test('auto-submit marker и аргументы', () => {
+  const root = tempRoot();
+  fs.writeFileSync(path.join(root, '.harness', 'session-auto-submit.json'),
+    JSON.stringify({ task_id: 'T-5' }));
+  assert.equal(readAutoSubmit(root).task_id, 'T-5');
+  assert.deepEqual(autoSubmitArgs({ root, taskId: 'T-5', attempt: 2 }),
+    ['-m', 'harness', '--root', root, 'submit', '--task', 'T-5', '--attempt', '2']);
+  assert.throws(() => autoSubmitArgs({ root, taskId: 'T-5', attempt: 0 }));
+  assert.equal(consumeAutoSubmit(root), true);
+  assert.equal(readAutoSubmit(root), null);
 });
 
 test('writeAttachError пишет в .harness', () => {

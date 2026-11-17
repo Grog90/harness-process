@@ -13,11 +13,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   TASK_TOOL_ACTIONS,
+  autoSubmitArgs,
   buildStatusArgs,
   consumeAttach,
+  consumeAutoSubmit,
   dispatchDecision,
   dispatchArgs,
   readAttach,
+  readAutoSubmit,
   readScope,
   resolveHarnessRoot,
   resolveStatusTask,
@@ -28,6 +31,19 @@ import {
 export const name = 'harness-session';
 export const inject = ['tools', 'systemPrompt', 'subagents'];
 export const actions = TASK_TOOL_ACTIONS;
+
+/** Только корневой агент: субагент не должен стать primary/отправить задачу. */
+function isRootAgent(ctx, agent) {
+  if (!agent?.id) return false;
+  try {
+    if (typeof ctx.subagents?.rootOf === 'function') {
+      return ctx.subagents.rootOf(agent)?.id === agent.id;
+    }
+  } catch {
+    // fallback: agent.parent
+  }
+  return !agent.parent;
+}
 
 export function apply(ctx, config) {
   const resolved = resolveHarnessRoot({
@@ -54,17 +70,7 @@ export function apply(ctx, config) {
           const attach = readAttach(root);
           const scope = readScope(root);
           const agent = payload?.agent;
-          if (!agent?.id) return;
-          // Только корневой агент: субагент не должен стать primary задачи.
-          let isRoot = !agent.parent;
-          try {
-            if (typeof ctx.subagents?.rootOf === 'function') {
-              isRoot = ctx.subagents.rootOf(agent)?.id === agent.id;
-            }
-          } catch {
-            // fallback: agent.parent
-          }
-          if (!isRoot) return;
+          if (!isRootAgent(ctx, agent)) return;
           const decision = dispatchDecision(attach, scope, agent.id);
           if (decision === 'conflict') {
             writeAttachError(root, `active task ${scope.task_id} != attach ${attach.task_id}; detach/clear first`);
@@ -100,6 +106,32 @@ export function apply(ctx, config) {
           }
         } catch {
           // Привязка не должна ронять создание агента.
+        }
+      }));
+
+      // Opt-in авто-submit: только при явном маркере, только корневой агент,
+      // ровно один раз в конце turn. Гейты verdict/accept не трогаются.
+      disposers.push(ctx.on('agent/turn-stopping', async (payload) => {
+        try {
+          const marker = readAutoSubmit(root);
+          if (!marker?.task_id) return;
+          const scope = readScope(root);
+          const agent = payload?.agent;
+          if (!scope || String(scope.task_id) !== String(marker.task_id)) return;
+          if (!isRootAgent(ctx, agent)) return;
+          const python = config?.python || process.env.HARNESS_PYTHON || 'python';
+          const proc = spawnSync(python, autoSubmitArgs({
+            root, taskId: marker.task_id, attempt: scope.attempt,
+          }), { encoding: 'utf8', timeout: 30000, windowsHide: true });
+          consumeAutoSubmit(root);
+          if (proc.error) {
+            writeAttachError(root, String(proc.error.message || proc.error));
+          } else if (proc.status !== 0) {
+            writeAttachError(root, proc.stderr || proc.stdout || `submit exit ${proc.status}`);
+          }
+        } catch (error) {
+          writeAttachError(root, String(error?.message || error));
+          consumeAutoSubmit(root);
         }
       }));
     }

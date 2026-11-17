@@ -225,6 +225,7 @@ $payload | node plugins/harness-guard/guard-probe.mjs
   сервисы и фазу в системный контекст сессии;
 - при `agent/created` и наличии `.harness/session-attach.json` один раз вызывает
   `harness dispatch --task <id> --primary-agent <agent>`;
+- при `--auto-submit` и `agent/turn-stopping` один раз вызывает `harness submit`;
 - ошибка пишется в `.harness/session-attach.error`, успех её удаляет;
 - регистрирует read-only `harness_task` (`harness task status`);
 - не выносит вердикт и не коммитит.

@@ -16,6 +16,7 @@ from typing import Any
 from .state import Store
 
 ATTACH_REL = ".harness/session-attach.json"
+AUTO_REL = ".harness/session-auto-submit.json"
 ERROR_REL = ".harness/session-attach.error"
 
 
@@ -32,7 +33,7 @@ def read_attach(root: str) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def attach(root: str, task_id: str, store: Store) -> dict[str, Any]:
+def attach(root: str, task_id: str, store: Store, auto_submit: bool = False) -> dict[str, Any]:
     task = store.get_task(task_id)  # неизвестная задача — StoreError, файл не пишем
     payload = {
         "task_id": task["task_id"],
@@ -41,7 +42,21 @@ def attach(root: str, task_id: str, store: Store) -> dict[str, Any]:
     }
     path = attach_path(root)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=".session-attach-", dir=os.path.dirname(path))
+    _atomic_json(path, payload)
+    auto_path = os.path.join(os.path.abspath(root), AUTO_REL)
+    if auto_submit:
+        _atomic_json(auto_path, {"task_id": task["task_id"]})
+    else:
+        try:
+            os.unlink(auto_path)
+        except FileNotFoundError:
+            pass
+    return {"ok": True, "path": path, "attach": payload, "auto_submit": auto_submit}
+
+
+def _atomic_json(path: str, payload: dict[str, Any]) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".session-", dir=os.path.dirname(path))
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(payload, fh, ensure_ascii=False, sort_keys=True)
@@ -50,7 +65,15 @@ def attach(root: str, task_id: str, store: Store) -> dict[str, Any]:
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)
-    return {"ok": True, "path": path, "attach": payload}
+
+
+def read_auto_submit(root: str) -> dict[str, Any] | None:
+    try:
+        with open(os.path.join(os.path.abspath(root), AUTO_REL), encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def detach(root: str) -> dict[str, Any]:
@@ -60,6 +83,10 @@ def detach(root: str) -> dict[str, Any]:
         removed = True
     except FileNotFoundError:
         removed = False
+    try:
+        os.unlink(os.path.join(os.path.abspath(root), AUTO_REL))
+    except FileNotFoundError:
+        pass
     return {"ok": True, "path": path, "removed": removed}
 
 

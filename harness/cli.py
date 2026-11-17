@@ -370,7 +370,7 @@ def cmd_session(args: argparse.Namespace) -> int:
             print(f"session attach запрещён роли {role!r}: привязку делает оператор",
                   file=sys.stderr)
             return EXIT_DENIED
-        out = session_mod.attach(root, args.task, store)
+        out = session_mod.attach(root, args.task, store, auto_submit=args.auto_submit)
     elif args.session_cmd == "detach":
         out = session_mod.detach(root)
     else:
@@ -1097,6 +1097,8 @@ def build_parser() -> argparse.ArgumentParser:
     ssub = session.add_subparsers(dest="session_cmd", required=True)
     sa = ssub.add_parser("attach", help="привязать сессию к задаче")
     sa.add_argument("--task", required=True)
+    sa.add_argument("--auto-submit", action="store_true",
+                    help="отправить задачу на проверку в конце первого turn")
     sa.set_defaults(func=cmd_session)
     sd = ssub.add_parser("detach", help="убрать привязку")
     sd.set_defaults(func=cmd_session)

@@ -70,6 +70,7 @@ export function resolveStatusTask({ root, scope, taskId = '' } = {}) {
 }
 
 export const ATTACH_FILE = '.harness/session-attach.json';
+export const AUTO_SUBMIT_FILE = '.harness/session-auto-submit.json';
 
 /** Привязка сессии к задаче; null — файла нет или он битый. */
 export function readAttach(root) {
@@ -100,6 +101,34 @@ export function consumeAttach(root) {
   }
 }
 
+/** Opt-in авто-submit: маркер переживает dispatch и снимается после turn-stopping. */
+export function readAutoSubmit(root) {
+  try {
+    const data = JSON.parse(fs.readFileSync(path.join(root, AUTO_SUBMIT_FILE), 'utf8'));
+    return data && data.task_id ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+export function consumeAutoSubmit(root) {
+  try {
+    fs.rmSync(path.join(root, AUTO_SUBMIT_FILE), { force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function autoSubmitArgs({ root, taskId, attempt }) {
+  if (!root) throw new Error('root не задан');
+  if (!taskId) throw new Error('task_id не задан');
+  const n = Number(attempt);
+  if (!Number.isInteger(n) || n < 1) throw new Error('attempt не задан');
+  return ['-m', 'harness', '--root', root, 'submit', '--task', String(taskId),
+    '--attempt', String(n)];
+}
+
 /** Ошибка автодиспетча рядом с привязкой; не роняет сессию. */
 export function writeAttachError(root, text) {
   if (!root) return null;
@@ -113,8 +142,7 @@ export function writeAttachError(root, text) {
   }
 }
 
-/** Аргументы dispatch из привязки. */
-export function dispatchArgs({ root, taskId, agentId }) {
+/** Аргументы dispatch из привязки. */export function dispatchArgs({ root, taskId, agentId }) {
   if (!root) throw new Error('root не задан');
   if (!taskId) throw new Error('task_id не задан');
   if (!agentId) throw new Error('agent_id не задан');

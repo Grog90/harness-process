@@ -42,6 +42,14 @@ class SessionAttachTests(unittest.TestCase):
             session.attach(self.root, "missing", self.store)
         self.assertIsNone(session.read_attach(self.root))
 
+    def test_attach_auto_submit_marker(self) -> None:
+        self.store.create_task("T-AUTO", policy_version="1.0.0")
+        session.attach(self.root, "T-AUTO", self.store, auto_submit=True)
+        self.assertIsNotNone(session.read_auto_submit(self.root))
+        self.assertEqual(session.read_auto_submit(self.root)["task_id"], "T-AUTO")
+        session.detach(self.root)
+        self.assertIsNone(session.read_auto_submit(self.root))
+
     def test_detach(self) -> None:
         self.store.create_task("T-2", policy_version="1.0.0")
         session.attach(self.root, "T-2", self.store)
