@@ -1075,6 +1075,18 @@ def cmd_pii(args: argparse.Namespace) -> int:
             if not inside:
                 print(f"ОТКАЗ [PII] путь вне корня: {path}", file=sys.stderr)
                 return EXIT_DENIED
+    from .policy import Policy
+    for path, tool in ((args.file, "read_file"), (args.out, "write_file")):
+        if not path:
+            continue
+        rel = os.path.relpath(os.path.realpath(path), os.path.realpath(root)).replace("\\", "/")
+        decision = run_hooks("pretooluse", HookContext(
+            event="pretooluse", tool=tool, role=_runtime_role(root), path=rel,
+            policy=Policy.load(_control_root(args)), root=root,
+        ))
+        if decision["decision"] == "deny":
+            print(f"ОТКАЗ [{decision['rule']}] {decision['reason']}", file=sys.stderr)
+            return EXIT_DENIED
     if args.file:
         with open(args.file, encoding="utf-8") as fh:
             text = fh.read()
