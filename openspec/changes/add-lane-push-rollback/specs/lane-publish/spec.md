@@ -19,7 +19,7 @@
 #### Scenario: [CASE-PUSH-1-2] Нет gh
 
 - **WHEN** `gh` отсутствует
-- **THEN** `lane pr` отказывает `R-WAVE-1`, PR не создаётся
+- **THEN** `lane pr` отказывает `R-PUSH-1`, PR не создаётся
 
 ### Requirement: [REQ-RB-1] Откат частичного финализатора
 

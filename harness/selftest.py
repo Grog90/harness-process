@@ -685,6 +685,31 @@ def c_sandbox_degrades_honestly(root: str) -> None:
     assert report["results"][0]["isolation"] == info["mode"]
 
 
+def c_lane_push(root: str) -> None:
+    """R-PUSH-1: ветка лейна публикуется в bare-remote без force."""
+    import subprocess
+
+    from . import lanes as lanes_mod
+
+    _git_setup(root)
+    store = Store(os.path.join(root, ".harness", "state.db"))
+    try:
+        store.create_task("T-PUSH", policy_version="1.0.0")
+        lanes_mod.create(root, store, "T-PUSH")
+        bare = os.path.join(root, "..", "bare-" + os.path.basename(root))
+        bare = os.path.abspath(bare)
+        shutil.rmtree(bare, ignore_errors=True)
+        subprocess.run(["git", "init", "-q", "--bare", bare], check=True)
+        subprocess.run(["git", "-C", root, "remote", "add", "origin", bare], check=True)
+        out = lanes_mod.push(root, store, "T-PUSH")
+        assert out["ok"], out
+        ref = subprocess.run(["git", "--git-dir", bare, "rev-parse", "refs/heads/harness/T-PUSH"],
+                             capture_output=True, text=True)
+        assert ref.returncode == 0 and ref.stdout.strip(), "ветка лейна не опубликована"
+    finally:
+        store.close()
+
+
 def c_lane_merge(root: str) -> None:
     """Полный цикл в лейне: worktree → коммит финализатором → слияние."""
     from . import checks as checks_mod
@@ -1243,6 +1268,7 @@ CHECKS: list[Check] = [
     Check("R-TIMEOUT-1", "сторож отзывает просрочку отдельным проходом", c_watchdog_loop),
     Check("R-SANDBOX-1", "изоляция честно помечена", c_sandbox_degrades_honestly),
     Check("R-WAVE-1", "лейн: worktree, коммит, слияние", c_lane_merge),
+    Check("R-PUSH-1", "лейн публикуется в remote без force", c_lane_push),
     Check("R-SPEC-1", "код без спеки не коммитится", c_spec_gate),
     Check("R-CHG-1", "Ready-гейт не пропускает без review", c_change_ready_gate),
     Check("R-CHG-1", "диспетч по change только из READY", c_change_dispatch),

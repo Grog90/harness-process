@@ -362,6 +362,18 @@
       "residual_risk": "Лейн получает слот с базой портов, тестовой БД и временным каталогом; остаток — сеть, внешние сервисы и общие очереди, которые harness не поднимает."
     },
     {
+      "id": "R-PUSH-1",
+      "statement": "Публикация лейна (push/PR) выполняется без force и только с may_commit.",
+      "event": "precommit",
+      "enforcement": "blocking",
+      "implemented": true,
+      "hook": "lanes.push",
+      "positive_test": "lane push публикует refs/heads/harness/<task> в bare remote",
+      "negative_test": "lane pr без gh — R-PUSH-1; роль без may_commit не публикует",
+      "owner": "lanes",
+      "residual_risk": "push — внешняя публикация кода; non-fast-forward и права remote не отменяются"
+    },
+    {
       "id": "R-EVAL-1",
       "statement": "Верификатор измеряется: пропуск дефекта, ложный отказ, неполная проверка, стоимость принятой задачи.",
       "event": "process",

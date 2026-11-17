@@ -226,9 +226,13 @@ def commit_services(store: Store, root: str, task: dict[str, Any], snapshot_id: 
                     "R-FINAL-1", f"после коммита сервиса {name!r} остались изменения",
                     service=name, leftover=leftover, commit=sha,
                 )
-    except FinalizeError as exc:
-        exc.details["rollback"] = _rollback_records(store, records)
-        raise
+    except Exception as exc:
+        rolled = _rollback_records(store, records)
+        if isinstance(exc, FinalizeError):
+            exc.details["rollback"] = rolled
+            raise
+        raise FinalizeError("R-FINAL-1", f"откат сервисных коммитов после ошибки: {exc}",
+                            rollback=rolled) from exc
     return records
 
 

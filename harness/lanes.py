@@ -296,7 +296,7 @@ def push(root: str, store: Store, task_id: str, *, remote: str = "origin") -> di
     branch = branch_name(task_id)
     proc = _git(root, "push", "--set-upstream", remote, branch)
     if proc.returncode != 0:
-        raise LaneError("R-WAVE-1", f"git push {remote} {branch} не удался: {proc.stderr.strip()[:300]}")
+        raise LaneError("R-PUSH-1", f"git push {remote} {branch} не удался: {proc.stderr.strip()[:300]}")
     store.log(task_id, f"лейн опубликован: {remote}/{branch}")
     return {"ok": True, "task_id": task_id, "remote": remote, "branch": branch}
 
@@ -307,13 +307,13 @@ def pull_request(root: str, task_id: str, *, base: str = "main", title: str = ""
     root = os.path.abspath(root)
     _require_repo(root)
     if shutil.which("gh") is None:
-        raise LaneError("R-WAVE-1", "gh не найден: PR не создан")
+        raise LaneError("R-PUSH-1", "gh не найден: PR не создан")
     proc = subprocess.run(
         ["gh", *pr_args(task_id, base=base, title=title, body=body)],
         cwd=root, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
     )
     if proc.returncode != 0:
-        raise LaneError("R-WAVE-1", f"gh pr create не удался: {proc.stderr.strip()[:300]}")
+        raise LaneError("R-PUSH-1", f"gh pr create не удался: {proc.stderr.strip()[:300]}")
     return {"ok": True, "task_id": task_id, "branch": branch_name(task_id),
             "url": proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""}
 

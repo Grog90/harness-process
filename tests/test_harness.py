@@ -1195,7 +1195,7 @@ class LaneTests(unittest.TestCase):
         with patch.object(lanes.shutil, "which", return_value=None):
             with self.assertRaises(lanes.LaneError) as ctx:
                 lanes.pull_request(self.root, "T-1")
-            self.assertEqual(ctx.exception.rule, "R-WAVE-1")
+            self.assertEqual(ctx.exception.rule, "R-PUSH-1")
 
         def fake_run(*args, **kwargs):
             import subprocess
