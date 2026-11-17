@@ -23,6 +23,7 @@ export const TOOL_ALIASES = {
   read: 'read_file',
   glob: 'read_file',
   grep: 'read_file',
+  list_dir: 'read_file',
   pwsh: 'bash',
   bash: 'bash',
   terminal: 'bash',
@@ -129,7 +130,7 @@ function globToRegex(glob) {
 }
 
 const WRITE_TOOLS = new Set(['write_file', 'edit_file', 'apply_patch', 'create_file']);
-const READ_TOOLS = new Set(['read_file', 'glob', 'grep']);
+const READ_TOOLS = new Set(['read_file', 'glob', 'grep', 'list_dir']);
 
 function allow(rule = '') {
   return { decision: 'allow', rule, reason: '' };
@@ -192,6 +193,9 @@ export function decide(policy, root, req) {
   }
 
   const rawPath = args.path || args.file_path || args.filePath;
+  if (READ_TOOLS.has(tool) && !rawPath && !matchesAny('**', role.can_read || [])) {
+    return deny('R-READ-1', `чтение без пути при ограниченном can_read роли '${roleName}'`);
+  }
   if (rawPath && READ_TOOLS.has(tool)) {
     const rel = normalizeTarget(root, rawPath, req.services || []);
     if (rel === '<outside-root>') {

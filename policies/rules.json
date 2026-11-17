@@ -214,16 +214,15 @@
     },
     {
       "id": "R-READ-1",
-      "statement": "Третий одинаковый read без промежуточного изменения — отказ (ломалка циклов чтения).",
+      "statement": "Чтение вне can_read роли — отказ; can_read исполняется хуком и guard.",
       "event": "pretooluse",
-      "enforcement": "delegated",
-      "implemented": false,
-      "hook": null,
-      "positive_test": "проверяется механизмом рантайма: см. docs/PLUGINS.md",
-      "negative_test": "проверяется механизмом рантайма: см. docs/PLUGINS.md",
+      "enforcement": "blocking",
+      "implemented": true,
+      "hook": "policy.read_scope",
+      "positive_test": "analyst с can_read docs/** читает docs/plan.md",
+      "negative_test": "analyst с can_read docs/** читает src/fee.py — R-READ-1",
       "owner": "policy",
-      "residual_risk": "read-before-edit и version-guarded write на уровне FS; повторные вызовы ловит @deepseek-ai/dsh-repeat-tool-reminder как предупреждение",
-      "delegated_to": "@deepseek-ai/dsh-fs-observation-policy"
+      "residual_risk": "bash/python -c может читать вне can_read; хук ловит только инструменты чтения, не произвольный код"
     },
     {
       "id": "R-GIT-1",

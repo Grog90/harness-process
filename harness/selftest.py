@@ -189,6 +189,24 @@ def c_protected_negative(root: str) -> None:
     assert d["decision"] == "deny" and d["rule"] == "R-PROT-1", d
 
 
+def c_read_scope_negative(root: str) -> None:
+    data = json.loads(json.dumps(_policy(root).data))
+    data["roles"]["analyst"]["can_read"] = ["docs/**"]
+    ctx = HookContext(event="pretooluse", tool="read_file", role="analyst", path="src/fee.py",
+                      policy=Policy(data, root), root=root)
+    d = hooks.run("pretooluse", ctx)
+    assert d["decision"] == "deny" and d["rule"] == "R-READ-1", d
+
+
+def c_read_scope_positive(root: str) -> None:
+    data = json.loads(json.dumps(_policy(root).data))
+    data["roles"]["analyst"]["can_read"] = ["docs/**"]
+    ctx = HookContext(event="pretooluse", tool="read_file", role="analyst", path="docs/plan.md",
+                      policy=Policy(data, root), root=root)
+    d = hooks.run("pretooluse", ctx)
+    assert d["decision"] == "allow", d
+
+
 def c_role_identity_negative(root: str) -> None:
     d = hooks.run("pretooluse", _ctx(root, role="verifier", claimed_role="worker", tool="read_file",
                                      path="src/fee.py"))
@@ -1180,6 +1198,8 @@ CHECKS: list[Check] = [
     Check("R-WORK-2", "воркер не диспетчит", c_worker_tool_negative),
     Check("R-PROT-1", "политика защищена от рабочей роли", c_protected_negative),
     Check("R-ROLE-1", "подмена роли отклоняется", c_role_identity_negative),
+    Check("R-READ-1", "чтение вне can_read отклоняется", c_read_scope_negative),
+    Check("R-READ-1", "чтение внутри can_read разрешено", c_read_scope_positive),
     Check("R-ROLE-2", "роль по агенту и фазе", c_role_per_agent),
     Check("R-GIT-1", "force-push без названного дерева отклоняется", c_git_destructive_negative),
     Check("R-GIT-1", "git с названным деревом и обычный git проходят", c_git_destructive_positive),

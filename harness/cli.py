@@ -454,12 +454,12 @@ def _runtime_role(root: str) -> str:
 
 def _require_capability(root: str, capability: str, json_out: bool) -> bool:
     """R-ROLE-1: may_dispatch/may_commit/may_verify проверяются до выполнения."""
-    from .policy import Policy
+    from .policy import Policy, PolicyError
 
     role = _runtime_role(root)
     try:
         decision = Policy.load(root).check_capability(role, capability)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, PolicyError) as exc:
         print(f"ОТКАЗ [R-ROLE-1] не удалось прочитать политику: {exc}", file=sys.stderr)
         return False
     if not decision.allowed:
@@ -597,6 +597,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     from .run import RunConfig, RunError, Runner, render
 
     root = _root(args)
+    if not _require_capability(root, "dispatch", args.json):
+        return EXIT_DENIED
+    if getattr(args, "commit", False) and not _require_capability(root, "commit", args.json):
+        return EXIT_DENIED
     store = _store(args)
     try:
         engine = Engine(store, Policy.load(_control_root(args)), root)

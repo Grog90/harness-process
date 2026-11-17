@@ -72,7 +72,11 @@ READ_TOOLS = ("read_file", "glob", "grep")
 
 def policy_read_scope(ctx: HookContext) -> Decision:
     assert ctx.policy is not None
-    if ctx.tool not in READ_TOOLS or not ctx.path:
+    if ctx.tool not in READ_TOOLS:
+        return allow("R-READ-1")
+    if not ctx.path:
+        if not any(g == "**" for g in ctx.policy.role(ctx.role).get("can_read", [])):
+            return deny("R-READ-1", f"чтение без пути при ограниченном can_read роли {ctx.role!r}")
         return allow("R-READ-1")
     return ctx.policy.check_read(ctx.role, ctx.path, services=ctx.services)
 

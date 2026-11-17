@@ -174,7 +174,8 @@ export function apply(ctx, config) {
       }
       return undefined;
     } catch (error) {
-      if (!MUTATING.has(tool)) return undefined;
+      // Нет политики — сессия только осматривается; политика есть, но сломана — отказ.
+      if (!resolved.root && !MUTATING.has(tool)) return undefined;
       return `R-HOOK-ERR: harness-guard не смог проверить вызов (${error.message})`;
     }
   };
