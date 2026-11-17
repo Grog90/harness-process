@@ -1,0 +1,23 @@
+{
+  "review_id": "rev_cafde8bc192e",
+  "change_id": "add-harness-panel",
+  "revision": 1,
+  "artifact": "tasks.md",
+  "artifact_hash": "sha256:2cbcd4e9593604bfaf65c091c31447ed9a2a2a41479529268dcc9af2603f2caf",
+  "reviewer_id": "rev-qa",
+  "reviewer_role": "QA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "client-панель в composer.dock, /metrics.json, offline",
+    "read-only, CORS, live occupant"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "тесты статические; визуальный GUI 401"
+    }
+  ],
+  "created_at": 1794914457.042788,
+  "created_at_iso": "2026-11-17T14:20:57+0300"
+}
