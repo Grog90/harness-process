@@ -1076,13 +1076,17 @@ def cmd_pii(args: argparse.Namespace) -> int:
                 print(f"ОТКАЗ [PII] путь вне корня: {path}", file=sys.stderr)
                 return EXIT_DENIED
     from .policy import Policy
+    policy = Policy.load(_control_root(args))
     for path, tool in ((args.file, "read_file"), (args.out, "write_file")):
         if not path:
             continue
         rel = os.path.relpath(os.path.realpath(path), os.path.realpath(root)).replace("\\", "/")
+        if policy.is_protected(rel):
+            print(f"ОТКАЗ [R-PROT-1] {rel} — защищённый путь", file=sys.stderr)
+            return EXIT_DENIED
         decision = run_hooks("pretooluse", HookContext(
             event="pretooluse", tool=tool, role=_runtime_role(root), path=rel,
-            policy=Policy.load(_control_root(args)), root=root,
+            policy=policy, root=root,
         ))
         if decision["decision"] == "deny":
             print(f"ОТКАЗ [{decision['rule']}] {decision['reason']}", file=sys.stderr)
