@@ -1,0 +1,18 @@
+{
+  "change_id": "add-otel-spans",
+  "spec_ref": "94831b8b56f4549c1cc75bcfae24ccd0152ff35e",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "94831b8b56f4549c1cc75bcfae24ccd0152ff35e"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "by": "human",
+  "by_role": "human",
+  "flag": "",
+  "at": "2026-11-17T14:08:48+0300"
+}

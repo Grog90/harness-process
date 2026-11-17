@@ -1,0 +1,25 @@
+{
+  "change_id": "add-otel-spans",
+  "spec_ref": "94831b8b56f4549c1cc75bcfae24ccd0152ff35e",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "94831b8b56f4549c1cc75bcfae24ccd0152ff35e"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "OTLP spans задачи с trace/span id и статусами",
+    "метрики и traces раздельными payload"
+  ],
+  "residual_risks": [
+    "spans плоские; trace_id общий для попыток"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-17T14:08:48+0300"
+}
