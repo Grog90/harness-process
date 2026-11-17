@@ -1,0 +1,25 @@
+{
+  "change_id": "add-p3-governance",
+  "spec_ref": "42423f057cd748270e6c09e8f06cd512b991f293",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "42423f057cd748270e6c09e8f06cd512b991f293"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "PII scan/redact и файловый scope",
+    "SLO confirmed/na, legal inventory"
+  ],
+  "residual_risks": [
+    "scan overlap; --strict CLI без теста"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-17T15:11:00+0300"
+}

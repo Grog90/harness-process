@@ -1,0 +1,18 @@
+{
+  "change_id": "add-p3-governance",
+  "spec_ref": "42423f057cd748270e6c09e8f06cd512b991f293",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "42423f057cd748270e6c09e8f06cd512b991f293"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "by": "human",
+  "by_role": "human",
+  "flag": "",
+  "at": "2026-11-17T15:11:00+0300"
+}
