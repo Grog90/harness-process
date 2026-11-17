@@ -8,6 +8,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -43,6 +44,10 @@ class EvidenceExportTests(unittest.TestCase):
         self.assertFalse(check["ok"])
         self.assertEqual(check["rule"], "R-EVID-1")
         self.assertIn("хэш не совпал", " ".join(check["problems"]))
+
+    def test_inside_handles_different_drives(self) -> None:
+        with patch.object(exp.os.path, "commonpath", side_effect=ValueError("different drive")):
+            self.assertFalse(exp._inside(r"C:\repo", r"\\nas\share"))
 
     def test_change_id_traversal_denied(self) -> None:
         with self.assertRaises(exp.ExportError) as ctx:

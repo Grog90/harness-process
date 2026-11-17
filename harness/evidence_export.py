@@ -38,6 +38,15 @@ def _sha256(path: str) -> str:
     return digest.hexdigest()
 
 
+def _inside(child: str, parent: str) -> bool:
+    """Внутри ли путь; разные диски/UNC — это разные деревья, а не ValueError."""
+    try:
+        return os.path.commonpath([os.path.realpath(child), os.path.realpath(parent)]) \
+            == os.path.realpath(parent)
+    except ValueError:
+        return False
+
+
 def _files(base: str) -> list[str]:
     out: list[str] = []
     for dirpath, _dirs, names in os.walk(base):
@@ -60,17 +69,13 @@ def export(root: str, dest: str, *, change: str | None = None) -> dict[str, Any]
     if not os.path.isdir(source):
         raise ExportError("R-EVID-1", f"evidence не найден: {source}")
     src_real = os.path.realpath(source)
-    if os.path.commonpath([src_real, evidence_root]) != evidence_root:
+    if not _inside(src_real, evidence_root):
         raise ExportError("R-EVID-1", "источник вне evidence", source=src_real)
     dst_real = os.path.realpath(dest)
     root_real = os.path.realpath(root)
-    if os.path.commonpath([dst_real, root_real]) == root_real:
+    if _inside(dst_real, root_real):
         raise ExportError("R-EVID-1", "dest не должен находиться внутри репозитория", dest=dst_real)
-    try:
-        common = os.path.commonpath([src_real, dst_real])
-    except ValueError:
-        common = ""
-    if common in (src_real, dst_real):
+    if _inside(dst_real, src_real) or _inside(src_real, dst_real):
         raise ExportError("R-EVID-1", "источник и назначение не должны совпадать или вкладываться",
                           source=src_real, dest=dst_real)
     os.makedirs(dest, exist_ok=True)
