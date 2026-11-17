@@ -67,6 +67,16 @@ def policy_worker_scope(ctx: HookContext) -> Decision:
                                   services=ctx.services)
 
 
+READ_TOOLS = ("read_file", "glob", "grep")
+
+
+def policy_read_scope(ctx: HookContext) -> Decision:
+    assert ctx.policy is not None
+    if ctx.tool not in READ_TOOLS or not ctx.path:
+        return allow("R-READ-1")
+    return ctx.policy.check_read(ctx.role, ctx.path, services=ctx.services)
+
+
 def policy_protected_paths(ctx: HookContext) -> Decision:
     assert ctx.policy is not None
     if not ctx.path:
@@ -177,6 +187,7 @@ HOOKS: dict[str, Callable[[HookContext], Decision]] = {
     "policy.role_identity": policy_role_identity,
     "policy.tool_scope": policy_tool_scope,
     "policy.write_scope": policy_write_scope,
+    "policy.read_scope": policy_read_scope,
     "policy.worker_scope": policy_worker_scope,
     "policy.protected_paths": policy_protected_paths,
     "bash.write_bypass": bash_write_bypass,
@@ -188,6 +199,7 @@ EVENT_HOOKS: dict[str, list[str]] = {
     "pretooluse": [
         "policy.role_identity",
         "policy.tool_scope",
+        "policy.read_scope",
         "policy.protected_paths",
         "policy.write_scope",
         "policy.worker_scope",

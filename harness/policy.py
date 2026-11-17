@@ -192,6 +192,35 @@ class Policy:
             )
         return allow("R-ROLE-1")
 
+    def check_capability(self, role_name: str, capability: str) -> Decision:
+        """R-ROLE-1: may_dispatch/may_commit/may_verify — исполняемые, не декларации."""
+        role = self.role(role_name)
+        if not bool(role.get(f"may_{capability}", False)):
+            return deny(
+                "R-ROLE-1",
+                f"роль {role_name!r} не имеет права {capability}",
+                role=role_name,
+                capability=capability,
+            )
+        return allow("R-ROLE-1")
+
+    def check_read(self, role_name: str, path: str,
+                   services: Iterable[dict[str, Any]] | None = None) -> Decision:
+        """R-READ-1: can_read роли ограничивает чтение, а не только описывает его."""
+        rel = resolve_target(self.root, path, services)
+        if rel == "<outside-root>":
+            return deny("R-READ-1", f"чтение вне рабочего корня: {path!r}", path=path)
+        role = self.role(role_name)
+        if not matches_any(rel, list(role.get("can_read", []))):
+            return deny(
+                "R-READ-1",
+                f"{rel} вне can_read роли {role_name!r}",
+                role=role_name,
+                path=rel,
+                can_read=role.get("can_read", []),
+            )
+        return allow("R-READ-1")
+
     def check_tool(self, role_name: str, tool: str) -> Decision:
         """R-WORK-2 / R-TOOL-2: набор инструментов роли закрыт, привилегированные — всем рабочим."""
         role = self.role(role_name)

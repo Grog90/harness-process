@@ -445,7 +445,35 @@ def cmd_brief_attach(args: argparse.Namespace) -> int:
     return _apply(eng, args, "attach_brief", {"brief": raw}, event_id=args.event_id)
 
 
+def _runtime_role(root: str) -> str:
+    """Роль процесса: guard-scope приоритетнее env (DSH не выставляет HARNESS_ROLE)."""
+    from . import session as session_mod
+
+    return session_mod.active_role(root) or os.environ.get("HARNESS_ROLE") or "human"
+
+
+def _require_capability(root: str, capability: str, json_out: bool) -> bool:
+    """R-ROLE-1: may_dispatch/may_commit/may_verify проверяются до выполнения."""
+    from .policy import Policy
+
+    role = _runtime_role(root)
+    try:
+        decision = Policy.load(root).check_capability(role, capability)
+    except (OSError, ValueError) as exc:
+        print(f"ОТКАЗ [R-ROLE-1] не удалось прочитать политику: {exc}", file=sys.stderr)
+        return False
+    if not decision.allowed:
+        if json_out:
+            print(json.dumps(decision.to_dict(), ensure_ascii=False))
+        else:
+            print(f"ОТКАЗ [{decision.rule}] {decision.reason}", file=sys.stderr)
+        return False
+    return True
+
+
 def cmd_dispatch(args: argparse.Namespace) -> int:
+    if not _require_capability(_root(args), "dispatch", args.json):
+        return EXIT_DENIED
     eng = _engine(args)
     return _apply(
         eng,
@@ -476,6 +504,8 @@ def cmd_submit(args: argparse.Namespace) -> int:
 
 
 def cmd_verdict(args: argparse.Namespace) -> int:
+    if not _require_capability(_root(args), "verify", args.json):
+        return EXIT_DENIED
     eng = _engine(args)
     with open(args.file, encoding="utf-8") as fh:
         raw = json.load(fh)
@@ -483,6 +513,8 @@ def cmd_verdict(args: argparse.Namespace) -> int:
 
 
 def cmd_commit(args: argparse.Namespace) -> int:
+    if not _require_capability(_root(args), "commit", args.json):
+        return EXIT_DENIED
     eng = _engine(args)
     payload: dict[str, Any] = {}
     if args.snapshot or not args.skip_snapshot_check:
@@ -975,6 +1007,8 @@ def cmd_finalize(args: argparse.Namespace) -> int:
     from .finalize import FinalizeError, finalize
 
     root = _root(args)
+    if not _require_capability(root, "commit", args.json):
+        return EXIT_DENIED
     store = _store(args)
     try:
         engine = Engine(store, Policy.load(_control_root(args)), root)

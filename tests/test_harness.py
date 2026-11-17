@@ -109,6 +109,50 @@ class PolicyTests(unittest.TestCase):
         self.assertFalse(self.policy.check_write("orchestrator", "policies/policy.json").allowed)
         self.assertTrue(self.policy.check_write("system", "policies/policy.json").allowed)
 
+    def test_may_capabilities_are_executable(self) -> None:
+        self.assertFalse(self.policy.check_capability("worker", "dispatch").allowed)
+        self.assertFalse(self.policy.check_capability("worker", "commit").allowed)
+        self.assertFalse(self.policy.check_capability("worker", "verify").allowed)
+        self.assertTrue(self.policy.check_capability("orchestrator", "dispatch").allowed)
+        self.assertTrue(self.policy.check_capability("orchestrator", "commit").allowed)
+        self.assertTrue(self.policy.check_capability("verifier", "verify").allowed)
+        self.assertTrue(self.policy.check_capability("human", "commit").allowed)
+
+    def test_can_read_is_executable(self) -> None:
+        data = json.loads(json.dumps(self.policy.data))
+        data["roles"]["analyst"]["can_read"] = ["docs/**", "openspec/**"]
+        restricted = Policy(data, self.root)
+        self.assertTrue(restricted.check_read("analyst", "docs/plan.md").allowed)
+        denied = restricted.check_read("analyst", "src/a.py")
+        self.assertFalse(denied.allowed)
+        self.assertEqual(denied.rule, "R-READ-1")
+        self.assertFalse(restricted.check_read("analyst", "../secret").allowed)
+
+
+class CapabilityCLITests(unittest.TestCase):
+    def test_worker_cannot_dispatch_commit_or_verdict(self) -> None:
+        import subprocess
+
+        root = make_root()
+        os.makedirs(os.path.join(root, ".harness"), exist_ok=True)
+        with open(os.path.join(root, ".harness", "guard-scope.json"), "w", encoding="utf-8") as fh:
+            json.dump({"task_id": "T1", "role": "worker", "allowed_files": []}, fh)
+        try:
+            for command in (
+                ["dispatch", "--task", "T1", "--worker", "w"],
+                ["commit", "--task", "T1"],
+                ["verdict", "--task", "T1", os.path.join(root, "v.json")],
+            ):
+                proc = subprocess.run(
+                    [sys.executable, "-m", "harness", "--root", root,
+                     "--db", os.path.join(root, ".harness", "state.db"), *command],
+                    cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                )
+                self.assertNotEqual(proc.returncode, 0, command)
+                self.assertIn("R-ROLE-1", proc.stderr + proc.stdout, command)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
 
 class BriefTests(unittest.TestCase):
     def test_valid_brief(self) -> None:
@@ -556,6 +600,20 @@ class GatewayTests(unittest.TestCase):
         )
         self.assertFalse(read_only.allowed)
         self.assertEqual(read_only.rule, "R-PROT-1")
+
+    def test_read_scope_is_denied_outside_can_read(self) -> None:
+        from harness.hooks import HookContext, run as run_hooks
+
+        data = json.loads(json.dumps(Policy.load(self.root).data))
+        data["roles"]["analyst"]["can_read"] = ["docs/**"]
+        restricted = Policy(data, self.root)
+        ctx = HookContext(
+            event="pretooluse", tool="read_file", role="analyst", path="src/a.py",
+            allowed_files=[], services=[], policy=restricted, root=self.root,
+        )
+        result = run_hooks("pretooluse", ctx)
+        self.assertEqual(result["decision"], "deny")
+        self.assertEqual(result["rule"], "R-READ-1")
 
     def test_shell_write_to_control_plane_is_denied(self) -> None:
         from harness.hooks import HookContext, run as run_hooks

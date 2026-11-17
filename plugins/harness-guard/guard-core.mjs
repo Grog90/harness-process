@@ -129,6 +129,7 @@ function globToRegex(glob) {
 }
 
 const WRITE_TOOLS = new Set(['write_file', 'edit_file', 'apply_patch', 'create_file']);
+const READ_TOOLS = new Set(['read_file', 'glob', 'grep']);
 
 function allow(rule = '') {
   return { decision: 'allow', rule, reason: '' };
@@ -191,6 +192,15 @@ export function decide(policy, root, req) {
   }
 
   const rawPath = args.path || args.file_path || args.filePath;
+  if (rawPath && READ_TOOLS.has(tool)) {
+    const rel = normalizeTarget(root, rawPath, req.services || []);
+    if (rel === '<outside-root>') {
+      return deny('R-READ-1', `чтение вне рабочего корня: '${rawPath}'`);
+    }
+    if (!matchesAny(rel, role.can_read || [])) {
+      return deny('R-READ-1', `${rel} вне can_read роли '${roleName}'`);
+    }
+  }
   // Чтение защищённых путей разрешено: R-PROT-1 ограничивает ЗАПИСЬ, иначе агент
   // не может прочитать даже политику, по которой его же и проверяют.
   if (rawPath && WRITE_TOOLS.has(tool)) {
