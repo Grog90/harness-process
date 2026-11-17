@@ -207,6 +207,16 @@ def c_read_scope_positive(root: str) -> None:
     assert d["decision"] == "allow", d
 
 
+def c_capability_negative(root: str) -> None:
+    d = _policy(root).check_capability("worker", "dispatch")
+    assert not d.allowed and d.rule == "R-CAP-1", d
+
+
+def c_capability_positive(root: str) -> None:
+    d = _policy(root).check_capability("human", "commit")
+    assert d.allowed, d
+
+
 def c_role_identity_negative(root: str) -> None:
     d = hooks.run("pretooluse", _ctx(root, role="verifier", claimed_role="worker", tool="read_file",
                                      path="src/fee.py"))
@@ -1198,6 +1208,8 @@ CHECKS: list[Check] = [
     Check("R-WORK-2", "воркер не диспетчит", c_worker_tool_negative),
     Check("R-PROT-1", "политика защищена от рабочей роли", c_protected_negative),
     Check("R-ROLE-1", "подмена роли отклоняется", c_role_identity_negative),
+    Check("R-CAP-1", "worker не имеет may_dispatch", c_capability_negative),
+    Check("R-CAP-1", "human имеет may_commit", c_capability_positive),
     Check("R-READ-1", "чтение вне can_read отклоняется", c_read_scope_negative),
     Check("R-READ-1", "чтение внутри can_read разрешено", c_read_scope_positive),
     Check("R-ROLE-2", "роль по агенту и фазе", c_role_per_agent),

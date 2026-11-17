@@ -81,7 +81,8 @@
         "git_read",
         "bash_readonly",
         "subagent",
-        "workflow"
+        "workflow",
+        "list_dir"
       ]
     },
     "briefer": {
@@ -100,7 +101,8 @@
       "tools": [
         "read_file",
         "write_file",
-        "harness"
+        "harness",
+        "list_dir"
       ]
     },
     "analyst": {
@@ -123,7 +125,8 @@
         "read_file",
         "write_file",
         "harness",
-        "mcp__xerj__*"
+        "mcp__xerj__*",
+        "list_dir"
       ]
     },
     "qa": {
@@ -150,7 +153,8 @@
         "write_file",
         "bash",
         "harness",
-        "mcp__xerj__*"
+        "mcp__xerj__*",
+        "list_dir"
       ]
     },
     "worker": {
@@ -174,7 +178,8 @@
         "subagent_fork",
         "list_agents",
         "send_message",
-        "interrupt_agent"
+        "interrupt_agent",
+        "list_dir"
       ]
     },
     "verifier": {
@@ -194,7 +199,8 @@
         "write_file",
         "bash",
         "bash_readonly",
-        "harness"
+        "harness",
+        "list_dir"
       ]
     },
     "adversarial": {
@@ -213,7 +219,8 @@
         "read_file",
         "write_file",
         "bash",
-        "harness"
+        "harness",
+        "list_dir"
       ]
     },
     "system": {

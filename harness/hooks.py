@@ -67,7 +67,16 @@ def policy_worker_scope(ctx: HookContext) -> Decision:
                                   services=ctx.services)
 
 
-READ_TOOLS = ("read_file", "glob", "grep")
+READ_TOOLS = ("read_file", "glob", "grep", "list_dir")
+
+
+def policy_capability(ctx: HookContext) -> Decision:
+    """R-CAP-1: проверка may_* из контекста (CLI использует тот же Policy)."""
+    assert ctx.policy is not None
+    capability = str(ctx.extra.get("capability") or "")
+    if not capability:
+        return allow("R-CAP-1")
+    return ctx.policy.check_capability(ctx.role, capability)
 
 
 def policy_read_scope(ctx: HookContext) -> Decision:
@@ -190,6 +199,7 @@ def bash_write_bypass(ctx: HookContext) -> Decision:
 HOOKS: dict[str, Callable[[HookContext], Decision]] = {
     "policy.role_identity": policy_role_identity,
     "policy.tool_scope": policy_tool_scope,
+    "policy.capability": policy_capability,
     "policy.write_scope": policy_write_scope,
     "policy.read_scope": policy_read_scope,
     "policy.worker_scope": policy_worker_scope,

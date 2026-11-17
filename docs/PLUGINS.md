@@ -17,11 +17,11 @@ GitHub-топику `dsh-plugin`. Ниже — не список «интере�
 | `dsh-sandbox-policy` | режим по умолчанию: `DSH_PERMISSION_MODE ?? workspace-write`, корень = `process.cwd()` | задаёт границу записи |
 | `dsh-permission-presets` | пресеты «песочница + правило подтверждений» одной ручкой | наш «человек на границе» |
 | `dsh-user-approval` + `dsh-client-ui-approval` | seam подтверждений: `ask` вместо отказа | наш **GAP** умел только deny |
-| `dsh-fs-observation-policy` | наблюдённое состояние, read-before-edit, version-guarded write | **R-READ-1** (наш счётчик чтений — дубль) |
+| `dsh-fs-observation-policy` | наблюдённое состояние, read-before-edit, version-guarded write | не пересекается: наш **R-READ-1** теперь `can_read`, а не счётчик чтений |
 | `dsh-tool-call-timeout-policy` | дедлайн на каждый инструмент → `TOOL_TIMEOUT` | дополняет наш watchdog (**R-TIMEOUT-1**) |
 | `dsh-session-checkpoint-policy` | семантические чекпойнты перед запросами и побочными эффектами | аналог **WAL** из гл. 4 (мы честно писали «это не WAL») |
 | `dsh-plan-mode` | план → ревью человеком → выход из режима | родственник нашего брифа (**R-BRIEF-1/GAP-1**) |
-| `dsh-repeat-tool-reminder` | предупреждения при зацикливании на одинаковых вызовах | **R-READ-1**, но мягче и правильнее |
+| `dsh-repeat-tool-reminder` | предупреждения при зацикливании на одинаковых вызовах | мягче нашего старого счётчика; R-READ-1 больше не про это |
 | `dsh-session-query-sqlite` + `otel`/`session-telemetry-otel` | поиск по журналу сессии, телеметрия | наш `pipeline-log` (остаток Этапа 4) |
 | `dsh-tool-subagent`, `dsh-subagent-spawn/fork` | воркеры и форки агентов | наш «воркер» в драйвере |
 | `dsh-tool-workflow` | JS-оркестрация с фазами | «волна» из гл. 5 |
@@ -63,7 +63,6 @@ configuration inspection» — часть ручных шагов установ
 
 | Наше | Почему |
 |---|---|
-| `R-READ-1` (deny на третий одинаковый read) | `dsh-fs-observation-policy` уже даёт read-before-edit и version-guarded write, а `dsh-repeat-tool-reminder` — мягкое предупреждение. Наш жёсткий deny только мешает |
 | `R-SLEEP-1`, `R-GIT-1` (эвристики по строкам команд) | `dsh-jev-guard` делает это на `tools/pre-execute` с четырьмя состояниями и аудитом; наши regex-эвристики слабее |
 | `lanes.py` (worktree) | есть экспериментальный worktree-bundle; наш остаётся для CI/headless |
 | `R-SANDBOX-1` как «пробел» | sandbox есть в рантайме; пробел теперь не в механизме, а в **режиме сессии** |
@@ -103,7 +102,8 @@ configuration inspection» — часть ручных шагов установ
 2. **Поставить `dsh-jev-guard`** и снять наши bash-эвристики (`R-SLEEP-1`,
    `R-GIT-1`) — иначе два слоя спорят о том, кто отказывает, и непонятно, чей отказ
    видит модель.
-3. **Отключить `R-READ-1`** и полагаться на `fs-observation-policy`.
+3. **Не отключать `R-READ-1`:** это теперь `can_read`, а не счётчик чтений;
+   повторные чтения остаются за `fs-observation-policy`.
 4. **Сделать GAP→`ask`** через `tools/pre-execute` + `ctx.approval`.
 5. **Перед установкой любого стороннего плагина — `@jieai/dsh-plugin-vet`.**
    Маркетплейс говорит «популярно», а не «безопасно».
@@ -112,7 +112,7 @@ configuration inspection» — часть ручных шагов установ
 
 | Шаг | Состояние |
 |---|---|
-| 2, 3 | `R-SLEEP-1`, `R-READ-1` остались `delegated` (дедлайн инструмента и fs-observation); `R-GIT-1` возвращён своим хуком `bash.git_destructive` после удаления `dsh-jev-guard` |
+| 2, 3 | `R-SLEEP-1` остался `delegated`; `R-READ-1` переведён в blocking `can_read`; `R-GIT-1` возвращён своим хуком `bash.git_destructive` после удаления `dsh-jev-guard` |
 | — | `R-SANDBOX-1` тоже `delegated` (наши `checks.sandbox` остались запасным путём для headless) |
 | — | `harness doctor` показывает, если песочница не подтверждена или права висят |
 | 2 | `dsh-jev-guard` поставлен и удалён: платный бэкенд, без ключа работал только L0 |

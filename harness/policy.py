@@ -193,16 +193,16 @@ class Policy:
         return allow("R-ROLE-1")
 
     def check_capability(self, role_name: str, capability: str) -> Decision:
-        """R-ROLE-1: may_dispatch/may_commit/may_verify — исполняемые, не декларации."""
+        """R-CAP-1: may_dispatch/may_commit/may_verify — исполняемые, не декларации."""
         role = self.role(role_name)
         if not bool(role.get(f"may_{capability}", False)):
             return deny(
-                "R-ROLE-1",
+                "R-CAP-1",
                 f"роль {role_name!r} не имеет права {capability}",
                 role=role_name,
                 capability=capability,
             )
-        return allow("R-ROLE-1")
+        return allow("R-CAP-1")
 
     def check_read(self, role_name: str, path: str,
                    services: Iterable[dict[str, Any]] | None = None) -> Decision:

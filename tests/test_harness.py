@@ -150,7 +150,7 @@ class CapabilityCLITests(unittest.TestCase):
                     cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
                 )
                 self.assertNotEqual(proc.returncode, 0, command)
-                self.assertIn("R-ROLE-1", proc.stderr + proc.stdout, command)
+                self.assertIn("R-CAP-1", proc.stderr + proc.stdout, command)
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
@@ -615,6 +615,12 @@ class GatewayTests(unittest.TestCase):
         result = run_hooks("pretooluse", ctx)
         self.assertEqual(result["decision"], "deny")
         self.assertEqual(result["rule"], "R-READ-1")
+
+        listed = HookContext(
+            event="pretooluse", tool="list_dir", role="analyst", path="src",
+            allowed_files=[], services=[], policy=restricted, root=self.root,
+        )
+        self.assertEqual(run_hooks("pretooluse", listed)["rule"], "R-READ-1")
 
     def test_shell_write_to_control_plane_is_denied(self) -> None:
         from harness.hooks import HookContext, run as run_hooks

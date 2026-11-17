@@ -20,6 +20,18 @@
       "residual_risk": "Агент с правом писать в свой процесс может подменить переменную окружения; нужна изоляция запуска."
     },
     {
+      "id": "R-CAP-1",
+      "statement": "may_dispatch/may_commit/may_verify исполняются CLI до перехода.",
+      "event": "pretooluse",
+      "enforcement": "blocking",
+      "implemented": true,
+      "hook": "policy.capability",
+      "positive_test": "human dispatch/commit проходит may_*",
+      "negative_test": "worker dispatch/commit/verdict/finalize — R-CAP-1",
+      "owner": "policy",
+      "residual_risk": "роль берётся из guard-scope/env; подмена процесса с большими правами не ловится"
+    },
+    {
       "id": "R-ROLE-2",
       "statement": "Роль выдаётся по агенту и фазе: primary — оркестратор, дочерние во время работы — worker, на проверке — verifier.",
       "event": "pretooluse",

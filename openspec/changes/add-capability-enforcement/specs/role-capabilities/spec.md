@@ -11,12 +11,12 @@
 
 `harness dispatch|commit|verdict|finalize` ДОЛЖНЫ (MUST) проверять
 `may_dispatch/may_commit/may_verify` роли из `guard-scope`/env до выполнения и
-отказывать с `R-ROLE-1`.
+отказывать с `R-CAP-1`.
 
 #### Scenario: [CASE-CAP-1-1] Worker не диспетчит
 
 - **WHEN** `guard-scope.role=worker` и вызван `harness dispatch`
-- **THEN** отказ `R-ROLE-1`, переход не выполняется
+- **THEN** отказ `R-CAP-1`, переход не выполняется
 
 #### Scenario: [CASE-CAP-1-2] Verifier проверяет
 
@@ -31,7 +31,7 @@
 #### Scenario: [CASE-CAP-1-4] Finalize требует may_commit
 
 - **WHEN** роль без `may_commit` вызывает `harness finalize`
-- **THEN** отказ `R-ROLE-1`
+- **THEN** отказ `R-CAP-1`
 
 ### Requirement: [REQ-CAP-2] can_read исполняется в хуке и guard
 
