@@ -452,13 +452,14 @@ def _runtime_role(root: str) -> str:
     return session_mod.active_role(root) or os.environ.get("HARNESS_ROLE") or "human"
 
 
-def _require_capability(root: str, capability: str, json_out: bool) -> bool:
+def _require_capability(root: str, capability: str, json_out: bool,
+                        policy_root: str | None = None) -> bool:
     """R-CAP-1: may_dispatch/may_commit/may_verify проверяются до выполнения."""
     from .policy import Policy, PolicyError
 
     role = _runtime_role(root)
     try:
-        decision = Policy.load(root).check_capability(role, capability)
+        decision = Policy.load(policy_root or root).check_capability(role, capability)
     except (OSError, ValueError, PolicyError) as exc:
         print(f"ОТКАЗ [R-CAP-1] не удалось прочитать политику: {exc}", file=sys.stderr)
         return False
@@ -472,7 +473,7 @@ def _require_capability(root: str, capability: str, json_out: bool) -> bool:
 
 
 def cmd_dispatch(args: argparse.Namespace) -> int:
-    if not _require_capability(_root(args), "dispatch", args.json):
+    if not _require_capability(_root(args), "dispatch", args.json, _control_root(args)):
         return EXIT_DENIED
     eng = _engine(args)
     return _apply(
@@ -504,7 +505,7 @@ def cmd_submit(args: argparse.Namespace) -> int:
 
 
 def cmd_verdict(args: argparse.Namespace) -> int:
-    if not _require_capability(_root(args), "verify", args.json):
+    if not _require_capability(_root(args), "verify", args.json, _control_root(args)):
         return EXIT_DENIED
     eng = _engine(args)
     with open(args.file, encoding="utf-8") as fh:
@@ -513,7 +514,7 @@ def cmd_verdict(args: argparse.Namespace) -> int:
 
 
 def cmd_commit(args: argparse.Namespace) -> int:
-    if not _require_capability(_root(args), "commit", args.json):
+    if not _require_capability(_root(args), "commit", args.json, _control_root(args)):
         return EXIT_DENIED
     eng = _engine(args)
     payload: dict[str, Any] = {}
@@ -597,9 +598,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     from .run import RunConfig, RunError, Runner, render
 
     root = _root(args)
-    if not _require_capability(root, "dispatch", args.json):
+    if not _require_capability(root, "dispatch", args.json, _control_root(args)):
         return EXIT_DENIED
-    if getattr(args, "commit", False) and not _require_capability(root, "commit", args.json):
+    if getattr(args, "commit", False) and not _require_capability(
+            root, "commit", args.json, _control_root(args)):
         return EXIT_DENIED
     if args.verifier and _runtime_role(root) not in ("human", "orchestrator", "system"):
         print("ОТКАЗ [R-CAP-1] роль не может запускать проверяющего в run", file=sys.stderr)
@@ -1014,7 +1016,7 @@ def cmd_finalize(args: argparse.Namespace) -> int:
     from .finalize import FinalizeError, finalize
 
     root = _root(args)
-    if not _require_capability(root, "commit", args.json):
+    if not _require_capability(root, "commit", args.json, _control_root(args)):
         return EXIT_DENIED
     store = _store(args)
     try:

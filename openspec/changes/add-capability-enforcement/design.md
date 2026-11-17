@@ -30,7 +30,10 @@ delegated в blocking (прежняя delegated-запись про repeat-read 
   доверенная идентичность — отдельный пункт.
 - `bash`/`python -c` может читать вне can_read; хук ловит только инструменты
   чтения, не произвольный код.
-- `cmd_run` проверяет dispatch (+commit при `--commit`), но task_new/brief_attach
-  не ролевые; это отдельный вопрос.
+- `cmd_run` проверяет dispatch (+commit при `--commit`), а verifier-команду может
+  запускать только human/orchestrator/system; task_new/brief_attach не ролевые.
+- Прочие state-mutating команды (`change review/ready/accept/release/close`,
+  `task new`, `brief attach`, watchdog/timed-event) пока без may_* — это
+  отдельный change; здесь они не названы «исполняемыми».
 - Чтение сервиса по ключу `service:<name>/...` тоже подчиняется can_read; при
   ужесточении политики открытый сервис перестанет читаться без глоба.
