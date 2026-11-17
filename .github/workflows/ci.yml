@@ -37,9 +37,11 @@ jobs:
             if ($before -match "^0+$") {
               $signers = "${{ github.workspace }}/.github/allowed_signers"
             } else {
+              git cat-file -e "${before}^{commit}" 2>$null
+              if ($LASTEXITCODE -ne 0) { exit 1 }
               git cat-file -e "${before}:.github/allowed_signers" 2>$null
               if ($LASTEXITCODE -ne 0) {
-                # bootstrap: в before файла ещё нет, доверяем текущему дереву один раз
+                # bootstrap: в before файла ещё нет, доверяем дереву один раз
                 $signers = "${{ github.workspace }}/.github/allowed_signers"
               } else {
                 $content = git show "${before}:.github/allowed_signers"
