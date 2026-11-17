@@ -34,10 +34,10 @@
 
 При `agent/created` плагин ДОЛЖЕН (SHALL), если привязка есть, агент — primary
 (не субагент) и scope пуст, вызвать `harness dispatch --task <id> --primary-agent
-<id>`. Dispatch требует задачу в BRIEF_READY; если она не готова или REWORK_READY,
-причина пишется в `.harness/session-attach.error`. После успеха привязка
-удаляется. Чужой активный scope не перезаписывается; привязка при конфликте
-сохраняется для ручного разбора.
+<id>`. Dispatch допустим из BRIEF_READY и REWORK_READY (во втором случае он
+резервирует попытку); при реальном отказе dispatch причина пишется в
+`.harness/session-attach.error`. После успеха привязка удаляется. Чужой активный
+scope не перезаписывается; привязка при конфликте сохраняется для ручного разбора.
 
 #### Scenario: [CASE-ATTACH-2-1] Автодиспетч
 
@@ -70,6 +70,11 @@
 
 - **WHEN** `agent/created` приходит для субагента
 - **THEN** `subagents.rootOf(agent)` не равен агенту, dispatch не вызывается
+
+#### Scenario: [CASE-ATTACH-2-7] Повторный dispatch из REWORK_READY
+
+- **WHEN** задача в REWORK_READY, есть attach, scope пуст
+- **THEN** dispatch успешен, задача → RUNNING, попытка резервируется
 
 ### Requirement: [REQ-ATTACH-3] Отвязка и границы
 

@@ -26,7 +26,8 @@
 - Запрет shell-записи в `.harness`/protected добавлен в `harness/hooks.py` и
   `plugins/harness-guard/guard-core.mjs`, parity-кейсы — в `tests/test_parity.py`.
 - Новые `harness/session.py`, CLI-команда, правки плагина, тесты.
-- Требует подготовленной задачи с брифом; иначе dispatch откажет.
+- Требует задачи в BRIEF_READY или REWORK_READY; иначе dispatch откажет, причина
+  попадёт в error-файл.
 
 ## Out of Scope
 
