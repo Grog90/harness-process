@@ -148,60 +148,87 @@ def _service_allowed(task: dict[str, Any], name: str) -> list[str]:
     return [p[len(prefix):] for p in _allowed_files(task) if p.startswith(prefix)]
 
 
+def _rollback_records(store: Store, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Откатывает уже сделанные коммиты, сохраняя изменения в индексе (reset --soft)."""
+    rolled: list[dict[str, Any]] = []
+    for rec in reversed(records):
+        previous = rec.get("previous_sha") or ""
+        sha = rec.get("commit_sha") or ""
+        base = rec.get("path")
+        if not previous or not sha or not base:
+            continue
+        proc = _git(base, "reset", "--soft", previous)
+        if proc.returncode == 0:
+            store.delete_commit(sha)
+            rolled.append({"name": rec.get("name"), "sha": sha, "ok": True})
+        else:
+            rolled.append({"name": rec.get("name"), "sha": sha, "ok": False,
+                           "error": proc.stderr.strip()[:200]})
+    return rolled
+
+
 def commit_services(store: Store, root: str, task: dict[str, Any], snapshot_id: str,
                     message: str, author: str = "harness") -> list[dict[str, Any]]:
     """Коммитит каждый writable-сервис отдельно, с write-set-проверкой.
 
     Сервисный репозиторий обязан существовать: молча пропустить коммит нельзя,
-    иначе evidence соврёт о том, что изменение зафиксировано.
+    иначе evidence соврёт о том, что изменение зафиксировано. При ошибке уже
+    сделанные коммиты откатываются (`reset --soft`), а записи в БД удаляются.
     """
     records: list[dict[str, Any]] = []
-    for service in _writable_services(task):
-        name = str(service.get("name"))
-        base = service_base(root, service)
-        if not os.path.isdir(base):
-            raise FinalizeError("R-FINAL-1", f"сервис {name!r} не найден: {base}")
-        root_abs = os.path.abspath(root)
-        inside_main = os.path.normcase(base).startswith(os.path.normcase(root_abs) + os.sep)
-        if inside_main and not _own_git_repo(base):
-            # Вложенный сервис без своего git: файлы уедут главным коммитом.
-            records.append({"name": name, "path": base, "commit_sha": None, "paths": [],
-                            "mode": "main"})
-            continue
-        if not is_git_repo(base):
-            raise FinalizeError("R-FINAL-1", f"сервис {name!r} не git-репозиторий: {base}")
-        allowed = _service_allowed(task, name)
-        changed = write_set(base)
-        unexpected = [p for p in changed if not _within(p, allowed)]
-        if unexpected:
-            raise FinalizeError(
-                "R-WRITESET-1",
-                f"в сервисе {name!r} изменены файлы вне allowed_files",
-                service=name, unexpected=unexpected, allowed=allowed,
+    try:
+        for service in _writable_services(task):
+            name = str(service.get("name"))
+            base = service_base(root, service)
+            if not os.path.isdir(base):
+                raise FinalizeError("R-FINAL-1", f"сервис {name!r} не найден: {base}")
+            root_abs = os.path.abspath(root)
+            inside_main = os.path.normcase(base).startswith(os.path.normcase(root_abs) + os.sep)
+            if inside_main and not _own_git_repo(base):
+                # Вложенный сервис без своего git: файлы уедут главным коммитом.
+                records.append({"name": name, "path": base, "commit_sha": None, "paths": [],
+                                "mode": "main"})
+                continue
+            if not is_git_repo(base):
+                raise FinalizeError("R-FINAL-1", f"сервис {name!r} не git-репозиторий: {base}")
+            allowed = _service_allowed(task, name)
+            changed = write_set(base)
+            unexpected = [p for p in changed if not _within(p, allowed)]
+            if unexpected:
+                raise FinalizeError(
+                    "R-WRITESET-1",
+                    f"в сервисе {name!r} изменены файлы вне allowed_files",
+                    service=name, unexpected=unexpected, allowed=allowed,
+                )
+            if not changed:
+                continue
+            previous = _git(base, "rev-parse", "HEAD").stdout.strip()
+            paths = [p for p in changed if _within(p, allowed)]
+            add = _git(base, "add", "--", *paths)
+            if add.returncode != 0:
+                raise FinalizeError("R-FINAL-1", f"git add сервиса {name!r} не удался: {add.stderr.strip()[:200]}")
+            msg = f"{message} [{name}]"
+            commit = _git(
+                base, "-c", f"user.name={author}", "-c", f"user.email={author}@harness.local",
+                "commit", "-m", msg,
             )
-        if not changed:
-            continue
-        paths = [p for p in changed if _within(p, allowed)]
-        add = _git(base, "add", "--", *paths)
-        if add.returncode != 0:
-            raise FinalizeError("R-FINAL-1", f"git add сервиса {name!r} не удался: {add.stderr.strip()[:200]}")
-        msg = f"{message} [{name}]"
-        commit = _git(
-            base, "-c", f"user.name={author}", "-c", f"user.email={author}@harness.local",
-            "commit", "-m", msg,
-        )
-        if commit.returncode != 0:
-            raise FinalizeError("R-FINAL-1", f"git commit сервиса {name!r} не удался: {commit.stderr.strip()[:300]}")
-        sha = _git(base, "rev-parse", "HEAD").stdout.strip()
-        leftover = write_set(base)
-        if leftover:
-            raise FinalizeError(
-                "R-FINAL-1", f"после коммита сервиса {name!r} остались изменения",
-                service=name, leftover=leftover, commit=sha,
-            )
-        store.record_commit(commit_sha=sha, task_id=task["task_id"], snapshot_id=snapshot_id,
-                            message=msg, finalizer=author)
-        records.append({"name": name, "path": base, "commit_sha": sha, "paths": paths})
+            if commit.returncode != 0:
+                raise FinalizeError("R-FINAL-1", f"git commit сервиса {name!r} не удался: {commit.stderr.strip()[:300]}")
+            sha = _git(base, "rev-parse", "HEAD").stdout.strip()
+            rec = {"name": name, "path": base, "commit_sha": sha, "paths": paths,
+                   "previous_sha": previous}
+            records.append(rec)
+            store.record_commit(commit_sha=sha, task_id=task["task_id"], snapshot_id=snapshot_id,
+                                message=msg, finalizer=author)
+            leftover = write_set(base)
+            if leftover:
+                raise FinalizeError(
+                    "R-FINAL-1", f"после коммита сервиса {name!r} остались изменения",
+                    service=name, leftover=leftover, commit=sha,
+                )
+    except FinalizeError as exc:
+        exc.details["rollback"] = _rollback_records(store, records)
+        raise
     return records
 
 
@@ -270,59 +297,75 @@ def finalize(
     # 0. Сервисные репозитории коммитятся до главного: главный SHA остаётся
     # последним в tasks.commit_sha, а сервисные уже записаны в commits.
     service_records = commit_services(store, root, task, current, msg, author)
+    main_previous = _git(root, "rev-parse", "HEAD").stdout.strip()
+    main_sha: str | None = None
 
-    # 1. Журнал пишется до коммита и едет в нём же (log first).
-    _write_pipeline_log(store, root, task_id)
-    if log_path not in changed:
-        changed = write_set(root)
+    try:
+        # 1. Журнал пишется до коммита и едет в нём же (log first).
+        _write_pipeline_log(store, root, task_id)
+        if log_path not in changed:
+            changed = write_set(root)
 
-    # 2. Коммит содержит только разрешённые пути и журнал.
-    paths_to_commit = [p for p in write_set(root)
-                       if p not in ignored and not _in_nested(p)
-                       and (p == log_path or _within(p, allowed))]
-    if not paths_to_commit:
-        raise FinalizeError("R-FINAL-1", "нет изменений для коммита")
-    add = _git(root, "add", "--", *paths_to_commit)
-    if add.returncode != 0:
-        raise FinalizeError("R-FINAL-1", f"git add не удался: {add.stderr.strip()[:200]}")
+        # 2. Коммит содержит только разрешённые пути и журнал.
+        paths_to_commit = [p for p in write_set(root)
+                           if p not in ignored and not _in_nested(p)
+                           and (p == log_path or _within(p, allowed))]
+        if not paths_to_commit:
+            raise FinalizeError("R-FINAL-1", "нет изменений для коммита")
+        add = _git(root, "add", "--", *paths_to_commit)
+        if add.returncode != 0:
+            raise FinalizeError("R-FINAL-1", f"git add не удался: {add.stderr.strip()[:200]}")
 
-    commit = _git(
-        root, "-c", f"user.name={author}", "-c", f"user.email={author}@harness.local",
-        "commit", "-m", msg,
-    )
-    if commit.returncode != 0:
-        raise FinalizeError("R-FINAL-1", f"git commit не удался: {commit.stderr.strip()[:300]}")
+        commit = _git(
+            root, "-c", f"user.name={author}", "-c", f"user.email={author}@harness.local",
+            "commit", "-m", msg,
+        )
+        if commit.returncode != 0:
+            raise FinalizeError("R-FINAL-1", f"git commit не удался: {commit.stderr.strip()[:300]}")
 
-    sha = _git(root, "rev-parse", "HEAD").stdout.strip()
-    for rec in service_records:
-        if rec.get("mode") == "main":
-            rec["commit_sha"] = sha
+        main_sha = _git(root, "rev-parse", "HEAD").stdout.strip()
+        for rec in service_records:
+            if rec.get("mode") == "main":
+                rec["commit_sha"] = main_sha
 
-    # 3. После коммита ничего из разрешённой области не должно остаться грязным.
-    leftover = [p for p in write_set(root)
-                if p not in ignored and not _in_nested(p)
-                and (p == log_path or _within(p, allowed))]
-    if leftover:
-        raise FinalizeError(
-            "R-FINAL-1", "после коммита остались незакоммиченные изменения разрешённых файлов",
-            leftover=leftover, commit=sha,
+        # 3. После коммита ничего из разрешённой области не должно остаться грязным.
+        leftover = [p for p in write_set(root)
+                    if p not in ignored and not _in_nested(p)
+                    and (p == log_path or _within(p, allowed))]
+        if leftover:
+            raise FinalizeError(
+                "R-FINAL-1", "после коммита остались незакоммиченные изменения разрешённых файлов",
+                leftover=leftover, commit=main_sha,
+            )
+
+        latest = store.latest_verdict(task_id)
+        store.record_commit(
+            commit_sha=main_sha,
+            task_id=task_id,
+            snapshot_id=current,
+            verdict_id=latest["verdict_id"] if latest else None,
+            message=msg,
+            finalizer=author,
         )
 
-    latest = store.latest_verdict(task_id)
-    store.record_commit(
-        commit_sha=sha,
-        task_id=task_id,
-        snapshot_id=current,
-        verdict_id=latest["verdict_id"] if latest else None,
-        message=msg,
-        finalizer=author,
-    )
-
-    out = engine.apply(task_id, "commit", {"snapshot_id": current, "commit_sha": sha}, event_id=f"commit-{sha}")
+        out = engine.apply(task_id, "commit", {"snapshot_id": current, "commit_sha": main_sha},
+                           event_id=f"commit-{main_sha}")
+    except FinalizeError as exc:
+        rolled = _rollback_records(store, service_records)
+        if main_sha:
+            reset = _git(root, "reset", "--soft", main_previous)
+            if reset.returncode == 0:
+                store.delete_commit(main_sha)
+                rolled.append({"name": "main", "sha": main_sha, "ok": True})
+            else:
+                rolled.append({"name": "main", "sha": main_sha, "ok": False,
+                               "error": reset.stderr.strip()[:200]})
+        exc.details["rollback"] = rolled
+        raise
     return {
         "ok": True,
         "task_id": task_id,
-        "commit_sha": sha,
+        "commit_sha": main_sha,
         "snapshot_id": current,
         "state": out.state,
         "message": msg,

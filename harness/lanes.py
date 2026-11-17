@@ -283,6 +283,41 @@ def merge(root: str, store: Store, task_id: str, *, message: str | None = None,
     return {"ok": True, "task_id": task_id, "merge_commit": head, "tree": tree}
 
 
+def pr_args(task_id: str, *, base: str = "main", title: str = "", body: str = "") -> list[str]:
+    """Аргументы gh pr create (без выполнения: тестируемо и без сети)."""
+    return ["pr", "create", "--head", branch_name(task_id), "--base", base,
+            "--title", title or f"harness: {task_id}", "--body", body or f"task {task_id}"]
+
+
+def push(root: str, store: Store, task_id: str, *, remote: str = "origin") -> dict[str, Any]:
+    """Публикует ветку лейна; force не используется."""
+    root = os.path.abspath(root)
+    _require_repo(root)
+    branch = branch_name(task_id)
+    proc = _git(root, "push", "--set-upstream", remote, branch)
+    if proc.returncode != 0:
+        raise LaneError("R-WAVE-1", f"git push {remote} {branch} не удался: {proc.stderr.strip()[:300]}")
+    store.log(task_id, f"лейн опубликован: {remote}/{branch}")
+    return {"ok": True, "task_id": task_id, "remote": remote, "branch": branch}
+
+
+def pull_request(root: str, task_id: str, *, base: str = "main", title: str = "",
+                 body: str = "") -> dict[str, Any]:
+    """Создаёт PR через gh; отсутствие gh — отказ, а не тихий пропуск."""
+    root = os.path.abspath(root)
+    _require_repo(root)
+    if shutil.which("gh") is None:
+        raise LaneError("R-WAVE-1", "gh не найден: PR не создан")
+    proc = subprocess.run(
+        ["gh", *pr_args(task_id, base=base, title=title, body=body)],
+        cwd=root, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
+    )
+    if proc.returncode != 0:
+        raise LaneError("R-WAVE-1", f"gh pr create не удался: {proc.stderr.strip()[:300]}")
+    return {"ok": True, "task_id": task_id, "branch": branch_name(task_id),
+            "url": proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""}
+
+
 def remove(root: str, task_id: str, *, force: bool = True, store: Store | None = None) -> dict[str, Any]:
     root = os.path.abspath(root)
     path = lane_path(root, task_id)
@@ -316,6 +351,7 @@ def _paths(porcelain: bytes | str) -> list[str]:
 # Точки контроля, которые реально существуют в коде (для отчёта о покрытии матрицы).
 CONTROL_POINTS = {
     "lanes.merge": merge,
+    "lanes.push": push,
     "lanes.lock": merge_lock,
     "lanes.slot": reserve_slot,
 }

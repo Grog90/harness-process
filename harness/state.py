@@ -704,6 +704,12 @@ class Store:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def delete_commit(self, commit_sha: str) -> None:
+        """Откат частичного финализатора: запись о коммите не должна пережить reset."""
+        with self.transaction() as c:
+            c.execute("DELETE FROM commits WHERE commit_sha = ?", (commit_sha,))
+            c.execute("UPDATE tasks SET commit_sha = NULL WHERE commit_sha = ?", (commit_sha,))
+
     def get_commit(self, commit_sha: str) -> dict[str, Any]:
         row = self.conn.execute("SELECT * FROM commits WHERE commit_sha = ?", (commit_sha,)).fetchone()
         if row is None:

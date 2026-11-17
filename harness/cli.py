@@ -737,6 +737,14 @@ def cmd_lane(args: argparse.Namespace) -> int:
             out = lanes_mod.create(root, store, args.task, base=args.base)
         elif args.action == "merge":
             out = lanes_mod.merge(root, store, args.task, message=args.message)
+        elif args.action in ("push", "pr"):
+            if not _require_capability(root, "commit", args.json, _control_root(args)):
+                return EXIT_DENIED
+            if args.action == "push":
+                out = lanes_mod.push(root, store, args.task, remote=args.remote)
+            else:
+                out = lanes_mod.pull_request(root, args.task, base=args.target,
+                                             title=args.title or "", body=args.body or "")
         elif args.action == "remove":
             out = lanes_mod.remove(root, args.task, force=not args.keep_branch, store=store)
         elif args.action == "show":
@@ -1331,11 +1339,16 @@ def build_parser() -> argparse.ArgumentParser:
     sb.set_defaults(func=cmd_sandbox)
 
     ln = sub.add_parser("lane", help="параллельные лейны в git worktree")
-    ln.add_argument("action", choices=["create", "list", "merge", "remove", "show", "release"])
+    ln.add_argument("action", choices=["create", "list", "merge", "remove", "show", "release",
+                                       "push", "pr"])
     ln.add_argument("--task", default=None)
     ln.add_argument("--base", default="HEAD")
     ln.add_argument("--message", default=None)
     ln.add_argument("--keep-branch", action="store_true")
+    ln.add_argument("--remote", default="origin")
+    ln.add_argument("--target", default="main")
+    ln.add_argument("--title", default=None)
+    ln.add_argument("--body", default=None)
     ln.set_defaults(func=cmd_lane)
 
     co = sub.add_parser("cost", help="стоимость задачи: запись и отчёт")

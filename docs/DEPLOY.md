@@ -65,6 +65,8 @@ cosign verify-blob --bundle evidence/ci-download/report.json.bundle \
 - **Auto-submit** — opt-in (`--auto-submit`), только для коротких задач: первый
   turn может быть неполным. **Auto-verdict/accept** не автоматизированы; commit —
   отдельный гейт.
+- **Публикация лейна:** `harness lane push --task T` (без force) и
+  `harness lane pr --task T --target main` (через `gh`).
 - **5 старых change** закрываются как исторические (CANCELLED), не через полный
   процесс.
 

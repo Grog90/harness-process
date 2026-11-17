@@ -795,6 +795,101 @@ class FinalizeTests(unittest.TestCase):
         finally:
             store.close()
 
+    def test_rollback_records_restores_previous_head(self) -> None:
+        from harness.finalize import _rollback_records, commit_services
+
+        service = tempfile.mkdtemp(prefix="svc-", dir=os.path.dirname(self.root))
+        self.addCleanup(shutil.rmtree, service, True)
+        subprocess_git(service, "init", "-q", service)
+        os.makedirs(os.path.join(service, "src"), exist_ok=True)
+        with open(os.path.join(service, "src", "a.py"), "w", encoding="utf-8") as fh:
+            fh.write("base\n")
+        subprocess_git(service, "-C", service, "add", "-A")
+        subprocess_git(service, "-C", service, "-c", "user.name=t", "-c", "user.email=t@t",
+                       "commit", "-q", "-m", "base")
+        previous = subprocess_git(service, "-C", service, "rev-parse", "HEAD").strip()
+
+        store = Store(os.path.join(self.root, ".harness", "state.db"))
+        try:
+            task = {
+                "task_id": "T-RB",
+                "brief_json": json.dumps({
+                    "services": [{"name": "api", "path": service, "write": True}],
+                    "allowed_files": ["service:api/src/a.py"],
+                }),
+            }
+            with open(os.path.join(service, "src", "a.py"), "w", encoding="utf-8") as fh:
+                fh.write("changed\n")
+            records = commit_services(store, self.root, task, "snap", "T-RB")
+            sha = records[0]["commit_sha"]
+            self.assertNotEqual(sha, previous)
+            rolled = _rollback_records(store, records)
+            self.assertTrue(rolled[0]["ok"], rolled)
+            self.assertEqual(subprocess_git(service, "-C", service, "rev-parse", "HEAD").strip(), previous)
+            self.assertIn("src/a.py", subprocess_git(service, "-C", service, "status", "--porcelain"))
+            from harness.state import StoreError
+
+            with self.assertRaises(StoreError):
+                store.get_commit(sha)
+        finally:
+            store.close()
+
+    def test_finalize_rolls_back_service_when_main_commit_fails(self) -> None:
+        from unittest.mock import patch
+
+        import harness.finalize as fin
+        from harness.snapshot import snapshot_for_task
+
+        subprocess_git(self.root, "init", "-q", self.root)
+        subprocess_git(self.root, "-C", self.root, "add", "-A")
+        subprocess_git(self.root, "-C", self.root, "-c", "user.name=t", "-c", "user.email=t@t",
+                       "commit", "-q", "-m", "base")
+        root_previous = subprocess_git(self.root, "-C", self.root, "rev-parse", "HEAD").strip()
+        service = tempfile.mkdtemp(prefix="svc-", dir=os.path.dirname(self.root))
+        self.addCleanup(shutil.rmtree, service, True)
+        subprocess_git(service, "init", "-q", service)
+        os.makedirs(os.path.join(service, "src"), exist_ok=True)
+        with open(os.path.join(service, "src", "a.py"), "w", encoding="utf-8") as fh:
+            fh.write("base\n")
+        subprocess_git(service, "-C", service, "add", "-A")
+        subprocess_git(service, "-C", service, "-c", "user.name=t", "-c", "user.email=t@t",
+                       "commit", "-q", "-m", "base")
+        service_previous = subprocess_git(service, "-C", service, "rev-parse", "HEAD").strip()
+
+        store = Store(os.path.join(self.root, ".harness", "state.db"))
+        try:
+            eng = Engine(store, Policy.load(self.root), self.root)
+            eng.store.create_task("T-RB2", policy_version="1.0.0")
+            brief = sample_brief("T-RB2", allowed_files=["service:api/src/a.py"], services=[
+                {"name": "api", "path": service, "base_commit": "a" * 40, "write": True}])
+            eng.apply("T-RB2", "attach_brief", {"brief": brief})
+            eng.apply("T-RB2", "dispatch", {"worker_id": "w"})
+            with open(os.path.join(service, "src", "a.py"), "w", encoding="utf-8") as fh:
+                fh.write("one\n")
+            snapshot = snapshot_for_task(self.root, store.get_task("T-RB2"))
+            eng.apply("T-RB2", "submit", {"attempt": 1, "snapshot_id": snapshot})
+            eng.apply("T-RB2", "verdict", {"verdict": sample_verdict(snapshot, task_id="T-RB2")})
+
+            original = fin._git
+
+            def fake_git(cwd, *args, **kwargs):
+                if os.path.abspath(cwd) == os.path.abspath(self.root) and "commit" in args:
+                    import subprocess
+                    return subprocess.CompletedProcess(["git", *args], 1, "", "boom")
+                return original(cwd, *args, **kwargs)
+
+            with patch.object(fin, "_git", side_effect=fake_git):
+                with self.assertRaises(fin.FinalizeError):
+                    fin.finalize(store, eng, self.root, "T-RB2",
+                                 allow_no_spec="integration", author="t")
+            self.assertEqual(
+                subprocess_git(service, "-C", service, "rev-parse", "HEAD").strip(), service_previous)
+            self.assertEqual(subprocess_git(self.root, "-C", self.root, "rev-parse", "HEAD").strip(),
+                             root_previous)
+            self.assertEqual(store.commits_for("T-RB2"), [])
+        finally:
+            store.close()
+
     def test_commit_services_commits_and_rejects_unexpected(self) -> None:
         from harness.finalize import FinalizeError, commit_services
 
@@ -1043,6 +1138,31 @@ class LaneTests(unittest.TestCase):
         sha = subprocess_git(path, "-C", path, "rev-parse", "HEAD").strip()
         self.store.update_task(task_id, state="COMMITTED", commit_sha=sha)
         return sha
+
+    def test_pr_args_are_stable(self) -> None:
+        from harness import lanes
+
+        args = lanes.pr_args("T-1", base="main", title="t", body="b")
+        self.assertEqual(args[:3], ["pr", "create", "--head"])
+        self.assertIn("harness/T-1", args)
+        self.assertIn("--base", args)
+        self.assertIn("main", args)
+
+    def test_push_publishes_lane_branch(self) -> None:
+        from harness import lanes
+
+        bare = tempfile.mkdtemp(prefix="bare-", dir=os.path.dirname(self.root))
+        self.addCleanup(shutil.rmtree, bare, True)
+        subprocess_git(bare, "init", "-q", "--bare", bare)
+        subprocess_git(self.root, "-C", self.root, "remote", "add", "origin", bare)
+        self.store.create_task("T-PUSH", policy_version="1.0.0")
+        lanes.create(self.root, self.store, "T-PUSH", base=self.base)
+        out = lanes.push(self.root, self.store, "T-PUSH")
+        self.assertTrue(out["ok"], out)
+        self.assertEqual(
+            subprocess_git(bare, "--git-dir", bare, "rev-parse", "refs/heads/harness/T-PUSH").strip(),
+            self.base,
+        )
 
     def test_merge_requires_committed_state(self) -> None:
         from harness import lanes
