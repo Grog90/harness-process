@@ -1,0 +1,17 @@
+{
+  "review_id": "rev_4bac3bdd1737",
+  "change_id": "close-operational-debt",
+  "revision": 1,
+  "artifact": "tasks.md",
+  "artifact_hash": "sha256:1becad3c3f0f3339590b17a2a2f0db2720f7a4951ff6ecc5864a8c6f62430e98",
+  "reviewer_id": "rev-dev",
+  "reviewer_role": "DEV",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "panel live route, public hygiene, attest"
+  ],
+  "findings": [],
+  "created_at": 1794943960.5192962,
+  "created_at_iso": "2026-11-17T22:32:40+0300"
+}
