@@ -1,0 +1,18 @@
+{
+  "review_id": "rev_3ee735f5366b",
+  "change_id": "add-finalizer-signing",
+  "revision": 1,
+  "artifact": "specs",
+  "artifact_hash": "sha256:6391d3a676e4b9f02e94ee111cb99b4316a3cefd53f0bb557e52a6e2221411f9",
+  "reviewer_id": "rev2-ba",
+  "reviewer_role": "BA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "preflight R-FINAL-2, -S/verify main/сервисы/merge",
+    "R-FINAL-2 в матрице, rollback, tests"
+  ],
+  "findings": [],
+  "created_at": 1794923926.7230349,
+  "created_at_iso": "2026-11-17T16:58:46+0300"
+}
