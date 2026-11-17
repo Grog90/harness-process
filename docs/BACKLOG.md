@@ -31,8 +31,9 @@
 
 ## Волна 2 — видимость (нужен дизайн/UI)
 
-5. **OTel traces/spans.** Сейчас только OTLP-метрики; нет span на change/task,
-   `trace_id` в журнале.
+5. **OTel traces/spans.** ✅ Закрыто в `add-otel-spans`: spans переходов,
+   детерминированный `trace_id`, отдельный OTLP traces-payload. Остаётся
+   distributed tracing между задачами (Out of Scope).
 6. **Панель в DSH GUI.** Сейчас live-доска — локальный сервер; client-плагин и
    slots не сделаны.
 7. **Multi-service e2e.** Merge order исполняется для одного лейна; нет

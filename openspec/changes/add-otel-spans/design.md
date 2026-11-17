@@ -11,9 +11,15 @@
 измерение длительности операции, а интервал между переходами; так честнее, чем
 выдумывать end time.
 
-**3. Метрики и spans вместе.**
-`--traces-task` добавляет `resourceSpans` к существующему `resourceMetrics` в
-одном OTLP payload. Без флага — прежний формат.
+**3. Метрики и spans — разные OTLP payload.**
+OTLP/HTTP принимает `resourceMetrics` на `/v1/metrics` и `resourceSpans` на
+`/v1/traces`; смешивать их в одном запросе нельзя. Поэтому `--out`/`--endpoint`
+относятся к метрикам, `--traces-out`/`--traces-endpoint` — к spans; без приёмника
+spans команда отказывает.
+
+**4. trace_id не пишется в журнал, а вычисляется.**
+Problem «trace_id в журнале нет» закрыт детерминизмом: `trace_id(task_id)`
+восстанавливается из журнала без миграции схемы. Запись ID в БД не нужна.
 
 ## Risks
 

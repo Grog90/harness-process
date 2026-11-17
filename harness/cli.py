@@ -918,13 +918,20 @@ def cmd_otel(args: argparse.Namespace) -> int:
         store.close()
     payload = otel.build(data, service_name=args.service_name,
                          service_version=args.service_version or "")
+    traces = None
     if args.traces_task:
         traces = otel.build_traces(events, args.traces_task,
                                    service_name=args.service_name,
                                    service_version=args.service_version or "")
-        payload["resourceSpans"] = traces["resourceSpans"]
     if args.out:
         print(f"OTLP: записано {otel.write(payload, args.out)}")
+    if traces is not None:
+        if args.traces_out:
+            print(f"OTLP traces: записано {otel.write(traces, args.traces_out)}")
+        elif not args.traces_endpoint:
+            print("ОТКАЗ [OTEL] для spans нужен --traces-out или --traces-endpoint",
+                  file=sys.stderr)
+            return EXIT_ERROR
     sent = None
     if args.endpoint:
         try:
@@ -933,8 +940,15 @@ def cmd_otel(args: argparse.Namespace) -> int:
             print(f"ОТКАЗ [OTEL] {exc}", file=sys.stderr)
             return EXIT_DENIED
         print(f"OTLP: отправлено {sent['status']} → {args.endpoint}")
+    if traces is not None and args.traces_endpoint:
+        try:
+            sent = otel.send(traces, args.traces_endpoint, timeout=args.timeout)
+        except OSError as exc:
+            print(f"ОТКАЗ [OTEL traces] {exc}", file=sys.stderr)
+            return EXIT_DENIED
+        print(f"OTLP traces: отправлено {sent['status']} → {args.traces_endpoint}")
     if args.json:
-        _print(payload, True)
+        _print({"metrics": payload, "traces": traces}, True)
     elif not args.out and not args.endpoint:
         metrics_count = len(payload["resourceMetrics"][0]["scopeMetrics"][0]["metrics"])
         print(f"OTLP: {metrics_count} метрик; укажи --out PATH или --endpoint URL")
@@ -1501,7 +1515,9 @@ def build_parser() -> argparse.ArgumentParser:
     ot.add_argument("--service-name", default="harness")
     ot.add_argument("--service-version", default="")
     ot.add_argument("--timeout", type=int, default=10)
-    ot.add_argument("--traces-task", default=None, help="добавить spans задачи в OTLP")
+    ot.add_argument("--traces-task", default=None, help="добавить spans задачи в отдельный OTLP")
+    ot.add_argument("--traces-out", default=None, help="записать OTLP traces в файл")
+    ot.add_argument("--traces-endpoint", default=None, help="POST traces на OTLP/HTTP endpoint")
     ot.set_defaults(func=cmd_otel)
 
     cifn = sub.add_parser("ci", help="CI-снимок: selftest, покрытие, метрики, тесты")

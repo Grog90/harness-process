@@ -95,11 +95,13 @@ python -m harness otel --endpoint http://127.0.0.1:4318/v1/metrics
 Spans процесса задачи:
 
 ```powershell
-python -m harness otel --traces-task T --out evidence/otlp-task.json
+python -m harness otel --traces-task T --traces-out evidence/otlp-task.json
+python -m harness otel --traces-task T --traces-endpoint http://127.0.0.1:4318/v1/traces
 ```
 
-`--traces-task` добавляет `resourceSpans`: один trace на задачу, span на событие,
-`traceId` детерминирован, статус OK/ERROR по `result.ok`.
+`--traces-task` формирует отдельный OTLP traces-payload: один trace на задачу,
+span на событие, `traceId` детерминирован, статус OK/ERROR/UNSET. Метрики и spans
+не смешиваются: у них разные OTLP-сервисы.
 
 ## dsh-headless в CI
 
@@ -143,7 +145,8 @@ Smoke-отчёт: `python tools/headless_smoke.py --out evidence/headless/report
 - `harness ci` — снимок кода и процесса, а не агентский прогон. Headless-путь
   проверен до `final`, но в этой установке упирается в отсутствие ключа; в CI нужен
   `DEEPSEEK_API_KEY`. Отчёт harness остаётся источником правды о гейтах.
-- OTLP-экспорт harness — метрики процесса; агентские трейсы экспортирует DSH.
+- OTLP-экспорт harness — метрики процесса и spans переходов по команде; агентские
+  трейсы экспортирует DSH. Метрики и traces идут разными payload/endpoint.
   Protobuf/gRPC и прямая встройка доски в DSH GUI не реализованы.
 - Поиск по прошлым сессиям — инструмент DSH (`tool-session-query`), в профиле он
   отключён; это не часть harness.
