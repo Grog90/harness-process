@@ -1,0 +1,23 @@
+{
+  "review_id": "rev_58aced143c3d",
+  "change_id": "add-otel-spans",
+  "revision": 1,
+  "artifact": "design.md",
+  "artifact_hash": "sha256:8f369799e39e166656ff156de8858a9bcb3ef1be33ea7b4c9486585cf6511abe",
+  "reviewer_id": "rev-dev",
+  "reviewer_role": "DEV",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "OTLP spans задачи; отдельный traces payload",
+    "trace/span id, OK/ERROR/UNSET, CLI --traces-out"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "spans плоские; trace_id общий для попыток"
+    }
+  ],
+  "created_at": 1794913607.630237,
+  "created_at_iso": "2026-11-17T14:06:47+0300"
+}
