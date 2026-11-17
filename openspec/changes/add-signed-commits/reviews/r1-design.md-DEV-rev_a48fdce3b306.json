@@ -1,0 +1,23 @@
+{
+  "review_id": "rev_a48fdce3b306",
+  "change_id": "add-signed-commits",
+  "revision": 1,
+  "artifact": "design.md",
+  "artifact_hash": "sha256:b56fe8ddd9f761ade04d9dfa3ad9c6edd5da62b621532357176f93f997e57f18",
+  "reviewer_id": "rev-dev",
+  "reviewer_role": "DEV",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "SSH-подпись, allowed_signers, CI verify диапазона",
+    "base-якорь, finalize principal, docs"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "тест verify HEAD статический; сервисные репозитории вне гейта"
+    }
+  ],
+  "created_at": 1794918761.0956156,
+  "created_at_iso": "2026-11-17T15:32:41+0300"
+}
