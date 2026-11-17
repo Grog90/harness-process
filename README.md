@@ -270,7 +270,7 @@ templates/        примеры артефактов
 examples/         учебные агент, верификаторы и размеченный набор evals
 plugins/          harness-guard — host-плагин DSH: ограждение на ctx.tools.guard();
                   harness-session — контекст задачи и read-only статус в DSH
-tests/            446 unittest-проверки свойств, включая паритет плагина и ядра
+tests/            454 unittest-проверки свойств, включая паритет плагина и ядра
 docs/             ANALYSIS, ARCHITECTURE, PROCESS, ROADMAP, RUNNING, PLUGIN, PLUGINS, LESSONS, SKILLS, PROMPT-DEFENSE, RECALL, TRENDSHIFT, BROWSER, XERJ, RULES_MATRIX, CI, DEPLOY
 bin/              обёртки harness / harness.cmd
 tools/            вспомогательное: экстрактор текста PDF, журнал уроков (lessons.py),

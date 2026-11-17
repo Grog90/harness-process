@@ -1,0 +1,25 @@
+{
+  "change_id": "add-forge-status",
+  "spec_ref": "d21edf21f4a1dfe8592531ca32bb6e77724e29d0",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "d21edf21f4a1dfe8592531ca32bb6e77724e29d0"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "PR/check status читается через gh, включая StatusContext",
+    "wait/timeout и отказ без gh"
+  ],
+  "residual_risks": [
+    "пустой rollup/CLOSED PR считаются ok"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-17T13:34:43+0300"
+}
