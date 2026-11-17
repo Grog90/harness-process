@@ -172,6 +172,38 @@ class ParityTests(unittest.TestCase):
                 )
         self.assertEqual(mismatches, [], "\n".join(mismatches))
 
+    def test_read_scope_parity_with_restricted_can_read(self) -> None:
+        """R-READ-1: ограниченный can_read одинаково режется Python и JS."""
+        with open(self.policy_path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        data["roles"]["briefer"]["can_read"] = ["briefs/**", "docs/**"]
+        tmp = tempfile.mkdtemp(prefix="parity-read-")
+        try:
+            restricted = os.path.join(tmp, "policy.json")
+            with open(restricted, "w", encoding="utf-8") as fh:
+                json.dump(data, fh)
+            cases = [
+                {"role": "briefer", "tool": "read_file", "args": {"path": "src/a.py"}},
+                {"role": "briefer", "tool": "read_file", "args": {"path": "docs/plan.md"}},
+            ]
+            payload = json.dumps({"policy_path": restricted, "root": ROOT, "cases": cases})
+            proc = subprocess.run([self.node, PARITY], input=payload, capture_output=True,
+                                  text=True, encoding="utf-8", errors="replace",
+                                  cwd=PLUGIN, timeout=60)
+            self.assertEqual(proc.returncode, 0, proc.stderr[:500])
+            js = json.loads(proc.stdout)
+            policy = Policy.load(ROOT, restricted)
+            for case, js_decision in zip(cases, js):
+                ctx = HookContext(event="pretooluse", role=case["role"], tool=case["tool"],
+                                  path=case["args"]["path"], policy=policy, root=ROOT)
+                py = run_hooks("pretooluse", ctx)
+                self.assertEqual(py["decision"], js_decision["decision"], case)
+                if py["decision"] == "deny":
+                    self.assertEqual(py["rule"], js_decision["rule"], case)
+            self.assertEqual([d["decision"] for d in js], ["deny", "allow"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_policy_file_is_the_single_source(self) -> None:
         """Плагин читает ту же политику, а не свою копию настроек."""
         with open(self.policy_path, encoding="utf-8") as fh:

@@ -141,6 +141,7 @@ class CapabilityCLITests(unittest.TestCase):
             for command in (
                 ["dispatch", "--task", "T1", "--worker", "w"],
                 ["commit", "--task", "T1"],
+                ["finalize", "--task", "T1"],
                 ["verdict", "--task", "T1", os.path.join(root, "v.json")],
             ):
                 proc = subprocess.run(
