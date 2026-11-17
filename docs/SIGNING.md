@@ -57,3 +57,5 @@ key`, тип **Signing Key**), GitHub UI показывает «Unverified». Э
 - ключ без пароля: безопасность машины = безопасность подписи;
 - branch protection на private free недоступна; обязательность — CI/runbook;
 - подпись не заменяет review и evidence.
+
+<!-- PR smoke: проверка base-якоря -->
