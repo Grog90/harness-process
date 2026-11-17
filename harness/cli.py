@@ -1057,6 +1057,49 @@ def cmd_selftest(args: argparse.Namespace) -> int:
     return EXIT_OK if report["ok"] else EXIT_DENIED
 
 
+def cmd_pii(args: argparse.Namespace) -> int:
+    from . import pii
+
+    if args.file:
+        with open(args.file, encoding="utf-8") as fh:
+            text = fh.read()
+    else:
+        text = args.text or ""
+    if args.action == "scan":
+        _print(pii.report(text), args.json)
+    else:
+        out = pii.redact(text)
+        if args.out:
+            path = os.path.abspath(args.out)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(out)
+            print(f"записано: {args.out}")
+        else:
+            print(out, end="" if out.endswith("\n") else "\n")
+    return EXIT_OK
+
+
+def cmd_slo(args: argparse.Namespace) -> int:
+    from . import metrics, slo
+
+    root = _root(args)
+    store = _store(args)
+    try:
+        data = metrics.collect(store, root)
+    finally:
+        store.close()
+    report = slo.evaluate(data)
+    if args.json:
+        _print(report, True)
+    else:
+        print(slo.render_text(report))
+    if args.strict and not report["ok"]:
+        print("ОТКАЗ [SLO] порог нарушен: " + ", ".join(report["breached"]), file=sys.stderr)
+        return EXIT_DENIED
+    return EXIT_OK
+
+
 def cmd_evals(args: argparse.Namespace) -> int:
     report = evals_mod.run(args.cases, args.verifier, root=_root(args))
     if args.json:
@@ -1552,6 +1595,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     st = sub.add_parser("selftest", help="исполняемые проверки правил")
     st.set_defaults(func=cmd_selftest)
+
+    pii_p = sub.add_parser("pii", help="поиск/редакция персональных данных")
+    pii_p.add_argument("action", choices=["scan", "redact"])
+    pii_p.add_argument("--text", default=None)
+    pii_p.add_argument("--file", default=None)
+    pii_p.add_argument("--out", default=None)
+    pii_p.set_defaults(func=cmd_pii)
+
+    sl = sub.add_parser("slo", help="SLO процесса по метрикам")
+    sl.add_argument("--strict", action="store_true", help="exit 2 при нарушении порога")
+    sl.set_defaults(func=cmd_slo)
 
     ev2 = sub.add_parser("evals", help="измерение верификатора")
     esub = ev2.add_subparsers(dest="evals_cmd", required=True)
