@@ -40,6 +40,40 @@ class PiiTests(unittest.TestCase):
         self.assertEqual(report["total"], 0)
 
 
+    def test_scan_clean_text(self) -> None:
+        self.assertTrue(pii.report("просто текст")["ok"])
+
+    def test_cli_requires_input_and_refuses_overwrite(self) -> None:
+        import subprocess
+
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        proc = subprocess.run([sys.executable, "-m", "harness", "--root", root, "pii", "scan"],
+                              cwd=root, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
+        self.assertNotEqual(proc.returncode, 0)
+        with open(os.path.join(root, "tests", "test_p3.py"), encoding="utf-8") as fh:
+            path = fh.name
+        proc = subprocess.run([sys.executable, "-m", "harness", "--root", root, "pii", "redact",
+                               "--file", path, "--out", path],
+                              cwd=root, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("перезаписывать", proc.stderr)
+
+    def test_cli_slo_json(self) -> None:
+        import json
+        import subprocess
+
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        proc = subprocess.run([sys.executable, "-m", "harness", "--root", root, "--json", "slo"],
+                              cwd=root, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        data = json.loads(proc.stdout)
+        self.assertIn("rows", data)
+        self.assertIn("confirmed", data)
+
+
 class SloTests(unittest.TestCase):
     def _data(self, **over):
         data = {

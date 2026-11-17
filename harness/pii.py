@@ -38,6 +38,3 @@ def redact(text: str) -> str:
 def report(text: str) -> dict[str, Any]:
     counts = scan(text)
     return {"ok": not counts, "counts": counts, "total": sum(counts.values())}
-
-
-CONTROL_POINTS = {"pii.redact": redact}

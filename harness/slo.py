@@ -48,7 +48,8 @@ def evaluate(data: dict[str, Any], targets: dict[str, dict[str, Any]] | None = N
                      "target": target["value"], "op": op, "ok": ok})
     breached = [r for r in rows if r["ok"] is False]
     return {"ok": not breached, "rows": rows, "breached": [r["name"] for r in breached],
-            "na": [r["name"] for r in rows if r["ok"] is None]}
+            "na": [r["name"] for r in rows if r["ok"] is None],
+            "confirmed": any(r["ok"] is not None for r in rows)}
 
 
 def render_text(report: dict[str, Any]) -> str:
@@ -60,4 +61,4 @@ def render_text(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-CONTROL_POINTS = {"slo.evaluate": evaluate}
+# Публичного контрольного хука нет: SLO — отчёт, а не гейт в rules.json.

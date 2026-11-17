@@ -1063,8 +1063,15 @@ def cmd_pii(args: argparse.Namespace) -> int:
     if args.file:
         with open(args.file, encoding="utf-8") as fh:
             text = fh.read()
+    elif args.text is not None:
+        text = args.text
     else:
-        text = args.text or ""
+        print("ОТКАЗ [PII] нужен --text или --file", file=sys.stderr)
+        return EXIT_DENIED
+    if args.action == "redact" and args.out and args.file:
+        if os.path.abspath(args.out) == os.path.abspath(args.file):
+            print("ОТКАЗ [PII] нельзя перезаписывать исходный файл", file=sys.stderr)
+            return EXIT_DENIED
     if args.action == "scan":
         _print(pii.report(text), args.json)
     else:
