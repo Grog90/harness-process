@@ -1,0 +1,23 @@
+{
+  "review_id": "rev_f099d8e35b3d",
+  "change_id": "add-forge-status",
+  "revision": 1,
+  "artifact": "design.md",
+  "artifact_hash": "sha256:bf01a2cfe49af91865baa6bacc9ad582f5c13b7d75cba1b88178762437052b76",
+  "reviewer_id": "rev-sa",
+  "reviewer_role": "SA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "PR/check status read-only через gh",
+    "CheckRun и StatusContext, wait/timeout, R-FORGE-1"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "пустой rollup и CLOSED PR пока считаются ok"
+    }
+  ],
+  "created_at": 1794911564.8508344,
+  "created_at_iso": "2026-11-17T13:32:44+0300"
+}
