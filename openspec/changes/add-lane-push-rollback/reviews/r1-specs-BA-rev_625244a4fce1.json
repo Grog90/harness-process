@@ -1,0 +1,23 @@
+{
+  "review_id": "rev_625244a4fce1",
+  "change_id": "add-lane-push-rollback",
+  "revision": 1,
+  "artifact": "specs",
+  "artifact_hash": "sha256:c563a735eee7287c92de26a2aeea4534cbad2338eb131766cd8c5bc2d3fce251",
+  "reviewer_id": "rev-ba",
+  "reviewer_role": "BA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "push/PR без force; gh обязателен",
+    "rollback reset --soft, delete_commit, main rollback"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "неуспешный reset оставляет запись с ok:false"
+    }
+  ],
+  "created_at": 1794910847.3178065,
+  "created_at_iso": "2026-11-17T13:20:47+0300"
+}
