@@ -947,8 +947,8 @@ def cmd_otel(args: argparse.Namespace) -> int:
             return EXIT_DENIED
         print(f"OTLP traces: отправлено {sent['status']} → {args.traces_endpoint}")
     if args.json:
-        _print({"metrics": payload, "traces": traces}, True)
-    elif not args.out and not args.endpoint:
+        _print({"metrics": payload, "traces": traces} if traces is not None else payload, True)
+    elif not args.out and not args.endpoint and traces is None:
         metrics_count = len(payload["resourceMetrics"][0]["scopeMetrics"][0]["metrics"])
         print(f"OTLP: {metrics_count} метрик; укажи --out PATH или --endpoint URL")
     return EXIT_OK
