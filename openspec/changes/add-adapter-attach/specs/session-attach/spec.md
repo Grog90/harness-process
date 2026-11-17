@@ -10,8 +10,9 @@
 ### Requirement: [REQ-ATTACH-1] Привязка пишется явной командой оператора
 
 `harness session attach --task <id>` ДОЛЖЕН (MUST) проверить существование задачи,
-отказать роли worker/verifier и записать `.harness/session-attach.json` с `task_id`,
-`auto_dispatch=true` и временем; `session status|detach` показывают/снимают привязку.
+отказать ролям worker/verifier/analyst/qa (разрешены human/system/orchestrator) и
+записать `.harness/session-attach.json` с `task_id`, `auto_dispatch=true` и временем;
+`session status|detach` показывают/снимают привязку; detach ограничен теми же ролями.
 
 #### Scenario: [CASE-ATTACH-1-1] Привязка существующей задачи
 
@@ -23,18 +24,19 @@
 - **WHEN** `session attach --task missing`
 - **THEN** команда завершается ошибкой и файл не создаётся
 
-#### Scenario: [CASE-ATTACH-1-3] Worker не привязывает
+#### Scenario: [CASE-ATTACH-1-3] Рабочая роль не привязывает
 
-- **WHEN** `HARNESS_ROLE=worker` вызывает `session attach`
-- **THEN** команда отказывает, файл не создаётся
+- **WHEN** `HARNESS_ROLE=worker` или `guard-scope.role=worker`
+- **THEN** команда отказывает, файл не создаётся; env не перебивает scope
 
 ### Requirement: [REQ-ATTACH-2] Плагин диспетчит сессию один раз
 
 При `agent/created` плагин ДОЛЖЕН (SHALL), если привязка есть, агент — primary
 (не субагент), scope пуст и задача в BRIEF_READY, вызвать
 `harness dispatch --task <id> --primary-agent <id>`; после успеха привязка
-удаляется. Чужой активный scope не перезаписывается; ошибка пишется в
-`.harness/session-attach.error` и не роняет сессию.
+удаляется. Если задача не в BRIEF_READY, dispatch отказывает, причина пишется в
+`.harness/session-attach.error`. Чужой активный scope не перезаписывается;
+привязка при конфликте сохраняется для ручного разбора.
 
 #### Scenario: [CASE-ATTACH-2-1] Автодиспетч
 
@@ -55,12 +57,18 @@
 #### Scenario: [CASE-ATTACH-2-4] Чужой активный scope
 
 - **WHEN** scope относится к другой задаче
-- **THEN** dispatch не вызывается, в `.harness/session-attach.error` записан конфликт
+- **THEN** dispatch не вызывается, в `.harness/session-attach.error` записан конфликт,
+  привязка остаётся для ручного разбора
 
 #### Scenario: [CASE-ATTACH-2-5] Ошибка dispatch
 
 - **WHEN** dispatch завершился ошибкой или spawn/timeout
 - **THEN** причина записана в `.harness/session-attach.error`, сессия не падает
+
+#### Scenario: [CASE-ATTACH-2-6] Субагент не становится primary
+
+- **WHEN** `agent/created` приходит для субагента
+- **THEN** `subagents.rootOf(agent)` не равен агенту, dispatch не вызывается
 
 ### Requirement: [REQ-ATTACH-3] Отвязка и границы
 
@@ -74,6 +82,12 @@ attach — control-plane вход, shell-запись в `.harness` запрещ
 
 #### Scenario: [CASE-ATTACH-3-2] Нет автоматических гейтов
 
-- **WHEN** проверяется набор действий плагина
-- **THEN** есть только dispatch при attach и read-only status; verdict/commit/accept
+- **WHEN** проверяется регистрация плагина
+- **THEN** есть только dispatch по attach и read-only status; verdict/commit/accept
   не регистрируются
+
+#### Scenario: [CASE-ATTACH-3-3] Shell не пишет control-plane
+
+- **WHEN** worker выполняет `echo x > .harness/session-attach.json` или
+  `echo x > policies/policy.json`
+- **THEN** Python-хук и JS-guard дают R-PROT-1 (parity-кейс)

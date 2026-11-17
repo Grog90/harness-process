@@ -89,7 +89,9 @@ export function apply(ctx, config) {
             writeAttachError(root, proc.stderr || proc.stdout || `dispatch exit ${proc.status}`);
             return;
           }
-          consumeAttach(root);
+          if (!consumeAttach(root)) {
+            writeAttachError(root, 'dispatch succeeded but attach could not be consumed');
+          }
           try {
             fs.rmSync(path.join(root, '.harness', 'session-attach.error'), { force: true });
           } catch {

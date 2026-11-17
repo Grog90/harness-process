@@ -346,6 +346,10 @@ function checkBash(policy, root, roleName, role, req) {
     if (rel.startsWith('service:')) {
       return deny('R-PROT-1', `shell-запись в сервис не открыта: '${cand}'`);
     }
+    if (rel === '.harness' || rel.startsWith('.harness/')
+        || matchesAny(rel, policy.protected_globs || [])) {
+      return deny('R-PROT-1', `shell-запись в control-plane/.harness или protected запрещена: '${cand}'`);
+    }
     if (matchesAny(rel, policy.product_globs || [])) {
       const decision = checkWrite(policy, root, roleName, role, 'write_file', rel,
                                   req.allowed_files, req.services || []);

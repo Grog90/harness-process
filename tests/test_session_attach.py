@@ -89,6 +89,16 @@ class SessionAttachTests(unittest.TestCase):
         self.assertNotEqual(scoped.returncode, 0)
         self.assertIsNone(session.read_attach(self.root))
 
+        # env не должен перебивать scope: worker + HARNESS_ROLE=human всё равно deny.
+        spoof = subprocess.run(
+            [sys.executable, "-m", "harness", "--root", self.root, "--db", db,
+             "session", "attach", "--task", "T-3"],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env={**os.environ, "HARNESS_ROLE": "human"},
+        )
+        self.assertNotEqual(spoof.returncode, 0)
+        self.assertIsNone(session.read_attach(self.root))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

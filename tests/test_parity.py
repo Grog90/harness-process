@@ -69,6 +69,9 @@ CASES: list[dict] = [
     {"role": "orchestrator", "tool": "bash", "args": {"command": "echo hi >> src/a.py"}},
     {"role": "orchestrator", "tool": "bash", "args": {"command": "sed -i 's/a/b/' src/a.py"}},
     {"role": "orchestrator", "tool": "bash", "args": {"command": "echo hi >> docs/plan.md"}},
+    # shell не пишет control-plane/protected: parity Python↔JS
+    {"role": "worker", "tool": "bash", "args": {"command": "echo x > .harness/session-attach.json"}},
+    {"role": "worker", "tool": "bash", "args": {"command": "echo x > policies/policy.json"}},
     # процессные роли: analyst пишет спеку, qa — тесты, worker — только код
     {"role": "analyst", "tool": "write_file", "args": {"path": "openspec/changes/x/spec.md"}},
     {"role": "analyst", "tool": "write_file", "args": {"path": "src/a.py"}},
