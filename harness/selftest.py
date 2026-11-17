@@ -685,6 +685,25 @@ def c_sandbox_degrades_honestly(root: str) -> None:
     assert report["results"][0]["isolation"] == info["mode"]
 
 
+def c_evidence_export(root: str) -> None:
+    from . import evidence_export as exp_mod
+
+    src = os.path.join(root, "evidence", "change-self")
+    os.makedirs(src, exist_ok=True)
+    with open(os.path.join(src, "manifest.json"), "w", encoding="utf-8") as fh:
+        fh.write("{}\n")
+    dest = os.path.join(root, "..", "evidence-export-" + os.path.basename(root))
+    dest = os.path.abspath(dest)
+    shutil.rmtree(dest, ignore_errors=True)
+    try:
+        out = exp_mod.export(root, dest, change="self")
+        assert out["ok"] and out["total"] == 1, out
+        check = exp_mod.verify(dest)
+        assert check["ok"], check
+    finally:
+        shutil.rmtree(dest, ignore_errors=True)
+
+
 def c_forge_status(root: str) -> None:
     from . import forge as forge_mod
 
@@ -1278,6 +1297,7 @@ CHECKS: list[Check] = [
     Check("R-WAVE-1", "лейн: worktree, коммит, слияние", c_lane_merge),
     Check("R-PUSH-1", "лейн публикуется в remote без force", c_lane_push),
     Check("R-FORGE-1", "упавший check делает PR не готовым", c_forge_status),
+    Check("R-EVID-1", "evidence экспортируется с манифестом и проверяется", c_evidence_export),
     Check("R-SPEC-1", "код без спеки не коммитится", c_spec_gate),
     Check("R-CHG-1", "Ready-гейт не пропускает без review", c_change_ready_gate),
     Check("R-CHG-1", "диспетч по change только из READY", c_change_dispatch),

@@ -763,6 +763,26 @@ def cmd_lane(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_evidence(args: argparse.Namespace) -> int:
+    """Экспорт и проверка evidence в доверенном каталоге."""
+    from . import evidence_export as exp
+
+    root = _root(args)
+    try:
+        if args.action == "export":
+            if not args.dest:
+                print("нужен --dest", file=sys.stderr)
+                return EXIT_ERROR
+            out = exp.export(root, args.dest, change=args.change)
+        else:
+            out = exp.verify(args.dest)
+    except exp.ExportError as exc:
+        _print(exc.to_dict(), args.json) if args.json else _deny_text(exc)
+        return EXIT_DENIED
+    _print(out, args.json)
+    return EXIT_OK if out.get("ok") else EXIT_DENIED
+
+
 def cmd_forge(args: argparse.Namespace) -> int:
     """Статус PR/checks через gh; --wait ждёт завершения."""
     from . import forge as forge_mod
@@ -1378,6 +1398,12 @@ def build_parser() -> argparse.ArgumentParser:
     fg.add_argument("--wait", action="store_true")
     fg.add_argument("--timeout", type=float, default=300.0)
     fg.set_defaults(func=cmd_forge)
+
+    ev = sub.add_parser("evidence", help="экспорт/проверка evidence в доверенном каталоге")
+    ev.add_argument("action", choices=["export", "verify"])
+    ev.add_argument("--dest", default=None)
+    ev.add_argument("--change", default=None)
+    ev.set_defaults(func=cmd_evidence)
 
     co = sub.add_parser("cost", help="стоимость задачи: запись и отчёт")
     co.add_argument("action", choices=["record", "report"])

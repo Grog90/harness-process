@@ -69,6 +69,8 @@ cosign verify-blob --bundle evidence/ci-download/report.json.bundle \
   `harness lane pr --task T --target main` (через `gh`).
 - **Статус PR:** `harness forge status --task T [--wait --timeout 300]` — читает
   checks через `gh`, без `gh` отказывает.
+- **Вывоз evidence:** `harness evidence export --dest <каталог> [--change C]`,
+  проверка — `harness evidence verify --dest <каталог>`.
 - **5 старых change** закрываются как исторические (CANCELLED), не через полный
   процесс.
 

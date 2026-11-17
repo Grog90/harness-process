@@ -54,6 +54,16 @@ python -m harness forge status --task T --wait --timeout 300
 Читает PR ветки `harness/T` и checks через `gh`; без `gh` — отказ `R-FORGE-1`.
 Это только чтение: required checks на free-private GitHub недоступны.
 
+## Вывоз evidence
+
+```powershell
+python -m harness evidence export --dest \\nas\harness --change add-x
+python -m harness evidence verify --dest \\nas\harness
+```
+
+Копия с `evidence-export.json` (sha256 каждого файла); `verify` ловит порчу и
+пропажу. Каталог — доверенное место оператора, не GitHub artifact.
+
 ## Доска и метрики
 
 ```powershell

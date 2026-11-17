@@ -386,6 +386,18 @@
       "residual_risk": "gh/API может отдать неполный statusCheckRollup; branch protection недоступна"
     },
     {
+      "id": "R-EVID-1",
+      "statement": "Evidence вывозится с sha256-манифестом; verify ловит порчу и пропажу.",
+      "event": "precommit",
+      "enforcement": "blocking",
+      "implemented": true,
+      "hook": "evidence.export",
+      "positive_test": "export+verify копии evidence проходит",
+      "negative_test": "подмена файла → verify ok=false, R-EVID-1",
+      "owner": "evidence",
+      "residual_risk": "доверенность каталога — ответственность оператора; облачный SDK не используется"
+    },
+    {
       "id": "R-EVAL-1",
       "statement": "Верификатор измеряется: пропуск дефекта, ложный отказ, неполная проверка, стоимость принятой задачи.",
       "event": "process",
