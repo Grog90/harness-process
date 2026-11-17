@@ -39,7 +39,21 @@ DRAFT → READY → IN_PROGRESS → IMPLEMENTED → VERIFIED → RELEASED → AC
   `task_commits`; ACCEPTED → ARCHIVED, дельта в `openspec/specs/multi-root-commit/`;
 - `add-session-adapter` — контекст задачи и read-only `harness_task` в DSH;
   плагин установлен в профиль `desktop`; ACCEPTED → ARCHIVED, дельта в
-  `openspec/specs/session-adapter/`.
+  `openspec/specs/session-adapter/`;
+- пять ранних change (`add-change-layer`, `add-process-roles`,
+  `add-acceptance-gates`, `add-observability-board`, `add-multi-service`)
+  закрыты как исторические (`CANCELLED`), без фиктивных review.
+
+## Deployment v1 (17.11.2026)
+
+- GitHub: <https://github.com/Grog90/harness-process> (private), workflow `ci`;
+- CI: unittest + `harness ci` + `rule verify` + cosign keyless sign/verify,
+  evidence artifact;
+- DSH: `harness session attach` + автодиспетч на `agent/created`; привязка
+  одноразовая, чужой scope — конфликт, роль attach — только оператор;
+- runbook: [`DEPLOY.md`](DEPLOY.md).
+- Ограничение: branch protection на free-private GitHub недоступен (403);
+  зелёный `ci` обязателен по runbook, не технически.
 
 ## Проверки на момент закрытия
 

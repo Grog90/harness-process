@@ -2,6 +2,8 @@
 
 Только то, что осталось. P0 закрыт: baseline-коммит `486ae9a`, security-фиксы
 `7299ed4`/`06abde2`, пилот `add-multi-root-write` проведён и архивирован.
+Пять ранних change закрыты как исторические (`CANCELLED`); deployment v1 —
+GitHub CI + cosign + attach (см. [`STATUS.md`](STATUS.md), [`DEPLOY.md`](DEPLOY.md)).
 
 ## P1 — технические долги, которые меняют корректность
 

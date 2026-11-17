@@ -91,6 +91,7 @@ export function apply(ctx, config) {
           }
           if (!consumeAttach(root)) {
             writeAttachError(root, 'dispatch succeeded but attach could not be consumed');
+            return;
           }
           try {
             fs.rmSync(path.join(root, '.harness', 'session-attach.error'), { force: true });

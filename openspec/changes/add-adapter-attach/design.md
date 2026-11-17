@@ -31,10 +31,10 @@ spawnSync с таймаутом 15 с; при `proc.error`, timeout, ненул�
 
 **5. Граница и актор.**
 Attach — действие оператора: CLI отказывает роли worker/verifier/analyst/qa;
-разрешены human/system/orchestrator. Detach ограничен теми же ролями.
-Автоматизируется только dispatch (задача → RUNNING, change → IN_PROGRESS, резерв
-попытки). Submit остаётся действием воркера, verdict — проверяющего, accept —
-человека.
+разрешены human/system/orchestrator. Detach намеренно не ограничен ролью: при
+конфликте с чужим scope привязку надо снять. Автоматизируется только dispatch
+(задача → RUNNING, change → IN_PROGRESS, резерв попытки). Submit остаётся действием
+воркера, verdict — проверяющего, accept — человека.
 
 ## Risks
 
@@ -44,4 +44,9 @@ Attach — действие оператора: CLI отказывает рол�
 - Если задача не в BRIEF_READY, dispatch откажет; причина в error-файле.
 - Attach-файл — control-plane input; защита держится на запрете shell-записи в
   `.harness` и отказе CLI для рабочих ролей.
+- Fallback `agent.parent` не гарантирован контрактом DSH: если `subagents.rootOf`
+  недоступен, субагент теоретически может стать primary. Основной механизм —
+  `rootOf`; fallback остаётся только для совместимости.
+- Задача в REWORK_READY тоже диспатчится и тратит попытку; это допустимо, но
+  причина отказа/расхода видна в error-файле.
 

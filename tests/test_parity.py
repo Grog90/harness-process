@@ -72,6 +72,7 @@ CASES: list[dict] = [
     # shell не пишет control-plane/protected: parity Python↔JS
     {"role": "worker", "tool": "bash", "args": {"command": "echo x > .harness/session-attach.json"}},
     {"role": "worker", "tool": "bash", "args": {"command": "echo x > policies/policy.json"}},
+    {"role": "system", "tool": "bash", "args": {"command": "echo x > policies/policy.json"}},
     # процессные роли: analyst пишет спеку, qa — тесты, worker — только код
     {"role": "analyst", "tool": "write_file", "args": {"path": "openspec/changes/x/spec.md"}},
     {"role": "analyst", "tool": "write_file", "args": {"path": "src/a.py"}},

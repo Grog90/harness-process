@@ -12,7 +12,8 @@
 `harness session attach --task <id>` ДОЛЖЕН (MUST) проверить существование задачи,
 отказать ролям worker/verifier/analyst/qa (разрешены human/system/orchestrator) и
 записать `.harness/session-attach.json` с `task_id`, `auto_dispatch=true` и временем;
-`session status|detach` показывают/снимают привязку; detach ограничен теми же ролями.
+`session status|detach` показывают/снимают привязку; detach не ограничен ролью —
+иначе конфликтную привязку нельзя снять при активном чужом scope.
 
 #### Scenario: [CASE-ATTACH-1-1] Привязка существующей задачи
 
@@ -32,11 +33,11 @@
 ### Requirement: [REQ-ATTACH-2] Плагин диспетчит сессию один раз
 
 При `agent/created` плагин ДОЛЖЕН (SHALL), если привязка есть, агент — primary
-(не субагент), scope пуст и задача в BRIEF_READY, вызвать
-`harness dispatch --task <id> --primary-agent <id>`; после успеха привязка
-удаляется. Если задача не в BRIEF_READY, dispatch отказывает, причина пишется в
-`.harness/session-attach.error`. Чужой активный scope не перезаписывается;
-привязка при конфликте сохраняется для ручного разбора.
+(не субагент) и scope пуст, вызвать `harness dispatch --task <id> --primary-agent
+<id>`. Dispatch требует задачу в BRIEF_READY; если она не готова или REWORK_READY,
+причина пишется в `.harness/session-attach.error`. После успеха привязка
+удаляется. Чужой активный scope не перезаписывается; привязка при конфликте
+сохраняется для ручного разбора.
 
 #### Scenario: [CASE-ATTACH-2-1] Автодиспетч
 

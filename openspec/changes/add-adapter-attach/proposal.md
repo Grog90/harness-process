@@ -21,7 +21,10 @@
 
 - Класс риска: **L1** (задача переходит в RUNNING, change — в IN_PROGRESS;
   резервируется попытка).
-- Привязку делает оператор/человек; CLI отказывает роли worker/verifier.
+- Привязку делает оператор/человек; CLI отказывает worker/verifier/analyst/qa,
+  detach разрешён всем (иначе конфликтную привязку не снять).
+- Запрет shell-записи в `.harness`/protected добавлен в `harness/hooks.py` и
+  `plugins/harness-guard/guard-core.mjs`, parity-кейсы — в `tests/test_parity.py`.
 - Новые `harness/session.py`, CLI-команда, правки плагина, тесты.
 - Требует подготовленной задачи с брифом; иначе dispatch откажет.
 

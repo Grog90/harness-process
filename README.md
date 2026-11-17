@@ -1,5 +1,7 @@
 # harness — управляемый агентный цикл
 
+[![ci](https://github.com/Grog90/harness-process/actions/workflows/ci.yml/badge.svg)](https://github.com/Grog90/harness-process/actions/workflows/ci.yml)
+
 Реализация практик из учебника «Агентные пайплайны» (Антон / Астра, издание 1):
 роли с ограниченными правами, обязательный бриф, независимая проверка с вердиктом-объектом,
 бюджет попыток, автомат состояний, матрица `RULE → HOOK → ENFORCEMENT` и измерение

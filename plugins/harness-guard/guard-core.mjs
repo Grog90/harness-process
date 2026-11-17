@@ -314,6 +314,7 @@ const NAMED_TREE = /\bgit\s+(-C\s+\S+|--worktree[= ]\S+|--git-dir[= ]\S+)/i;
 function checkBash(policy, root, roleName, role, req) {
   const command = String((req.args && (req.args.command || req.args.cmd)) || '');
   if (!command) return null;
+  if (roleName === 'system') return null;  // parity: Python bash hook пропускает system
 
   const namedTree = NAMED_TREE.test(command);
   for (const [rx, label] of DESTRUCTIVE_GIT) {
