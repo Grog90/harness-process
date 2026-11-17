@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   ci:
@@ -25,6 +26,17 @@ jobs:
         run: python -m harness ci --report evidence/ci/report.json
       - name: Rules have not drifted
         run: python -m harness rule verify
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Sign CI evidence (keyless)
+        run: cosign sign-blob --yes --bundle evidence/ci/report.json.bundle evidence/ci/report.json
+      - name: Verify CI evidence signature
+        run: >-
+          cosign verify-blob
+          --bundle evidence/ci/report.json.bundle
+          --certificate-identity-regexp "https://github.com/Grog90/harness-process/.*"
+          --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          evidence/ci/report.json
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
