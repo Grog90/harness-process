@@ -1402,6 +1402,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Windows CI без UTF-8 в консоли: русский вывод не должен ронять команду.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
