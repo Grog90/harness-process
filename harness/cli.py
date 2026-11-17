@@ -768,11 +768,11 @@ def cmd_evidence(args: argparse.Namespace) -> int:
     from . import evidence_export as exp
 
     root = _root(args)
+    if not args.dest:
+        print("нужен --dest", file=sys.stderr)
+        return EXIT_ERROR
     try:
         if args.action == "export":
-            if not args.dest:
-                print("нужен --dest", file=sys.stderr)
-                return EXIT_ERROR
             out = exp.export(root, args.dest, change=args.change)
         else:
             out = exp.verify(args.dest)

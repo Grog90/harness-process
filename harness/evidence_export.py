@@ -55,16 +55,28 @@ def export(root: str, dest: str, *, change: str | None = None) -> dict[str, Any]
         source = os.path.join(source, f"change-{change}")
     if not os.path.isdir(source):
         raise ExportError("R-EVID-1", f"evidence не найден: {source}")
-    if os.path.normcase(source) == os.path.normcase(dest):
-        raise ExportError("R-EVID-1", "источник и назначение совпадают")
+    src_real = os.path.realpath(source)
+    dst_real = os.path.realpath(dest)
+    try:
+        common = os.path.commonpath([src_real, dst_real])
+    except ValueError:
+        common = ""
+    if common in (src_real, dst_real):
+        raise ExportError("R-EVID-1", "источник и назначение не должны совпадать или вкладываться",
+                          source=src_real, dest=dst_real)
     os.makedirs(dest, exist_ok=True)
     copied: list[dict[str, Any]] = []
     for rel in _files(source):
         src = os.path.join(source, rel)
         dst = os.path.join(dest, rel)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
+        source_hash = _sha256(src)
         shutil.copy2(src, dst)
-        copied.append({"path": rel, "sha256": _sha256(dst), "bytes": os.path.getsize(dst)})
+        dest_hash = _sha256(dst)
+        if source_hash != dest_hash:
+            raise ExportError("R-EVID-1", f"копия не совпала с источником: {rel}")
+        copied.append({"path": rel, "sha256": source_hash, "copied_sha256": dest_hash,
+                       "bytes": os.path.getsize(dst)})
     manifest = {
         "ok": True,
         "source": source,
@@ -91,11 +103,15 @@ def verify(dest: str) -> dict[str, Any]:
         raise ExportError("R-EVID-1", f"манифест не прочитан: {exc}") from exc
     problems: list[str] = []
     for item in manifest.get("files", []):
-        target = os.path.join(dest, str(item.get("path")))
+        rel = str(item.get("path"))
+        if os.path.isabs(rel) or ".." in rel.replace("\\", "/").split("/"):
+            problems.append(f"недопустимый путь в манифесте: {rel}")
+            continue
+        target = os.path.join(dest, rel)
         if not os.path.isfile(target):
-            problems.append(f"нет файла: {item.get('path')}")
+            problems.append(f"нет файла: {rel}")
         elif _sha256(target) != item.get("sha256"):
-            problems.append(f"хэш не совпал: {item.get('path')}")
+            problems.append(f"хэш не совпал: {rel}")
     return {"ok": not problems, "files": len(manifest.get("files", [])),
             "problems": problems, "source": manifest.get("source", "")}
 

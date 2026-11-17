@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import shutil
 import sys
 import tempfile
@@ -41,6 +42,32 @@ class EvidenceExportTests(unittest.TestCase):
         check = exp.verify(self.dest)
         self.assertFalse(check["ok"])
         self.assertIn("хэш не совпал", " ".join(check["problems"]))
+
+    def test_source_dest_same_or_nested_denied(self) -> None:
+        with self.assertRaises(exp.ExportError):
+            exp.export(self.root, self.src, change="x")
+        nested = os.path.join(self.src, "export")
+        with self.assertRaises(exp.ExportError):
+            exp.export(self.root, nested, change="x")
+
+    def test_missing_file_in_copy_detected(self) -> None:
+        exp.export(self.root, self.dest, change="x")
+        os.unlink(os.path.join(self.dest, "manifest.json"))
+        check = exp.verify(self.dest)
+        self.assertFalse(check["ok"])
+        self.assertIn("нет файла", " ".join(check["problems"]))
+
+    def test_manifest_traversal_denied(self) -> None:
+        exp.export(self.root, self.dest, change="x")
+        manifest_path = os.path.join(self.dest, exp.MANIFEST)
+        with open(manifest_path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        data["files"][0]["path"] = "../outside"
+        with open(manifest_path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh)
+        check = exp.verify(self.dest)
+        self.assertFalse(check["ok"])
+        self.assertIn("недопустимый путь", " ".join(check["problems"]))
 
     def test_missing_source_denied(self) -> None:
         with self.assertRaises(exp.ExportError) as ctx:
