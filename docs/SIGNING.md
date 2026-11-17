@@ -48,9 +48,13 @@ tamper-proof: финализатор живёт в том же дереве.
 
 ## GitHub
 
-Пока публичный ключ не загружен в GitHub (`Settings → SSH and GPG keys → New SSH
-key`, тип **Signing Key**), GitHub UI показывает «Unverified». Это не отменяет
-проверку в CI; загрузка — отдельное действие владельца.
+Публичный ключ загружен в GitHub как **Signing Key** (id `1340700`, title
+«harness signing key», 17.11.2026). Коммиты после `c84537a` отображаются как
+**Verified**; проверка: `gh api repos/Grog90/harness-process/commits/<sha>
+--jq '.commit.verification.verified'`.
+
+При ротации новый публичный ключ нужно загрузить в GitHub заново (старый можно
+оставить до проверки старых коммитов).
 
 ## Ротация (два push)
 
