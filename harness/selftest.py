@@ -685,6 +685,19 @@ def c_sandbox_degrades_honestly(root: str) -> None:
     assert report["results"][0]["isolation"] == info["mode"]
 
 
+def c_e2e_parse(root: str) -> None:
+    from . import e2e as e2e_mod
+
+    services = e2e_mod.parse_services(["api=services/api@abc"])
+    assert services[0]["name"] == "api" and services[0]["sha"] == "abc", services
+    try:
+        e2e_mod.parse_services(["bad"])
+    except e2e_mod.E2EError:
+        pass
+    else:
+        raise AssertionError("некорректный сервис принят")
+
+
 def c_evidence_export(root: str) -> None:
     from . import evidence_export as exp_mod
 
@@ -1298,6 +1311,7 @@ CHECKS: list[Check] = [
     Check("R-PUSH-1", "лейн публикуется в remote без force", c_lane_push),
     Check("R-FORGE-1", "упавший check делает PR не готовым", c_forge_status),
     Check("R-EVID-1", "evidence экспортируется с манифестом и проверяется", c_evidence_export),
+    Check("R-E2E-1", "e2e принимает только name=PATH[@SHA]", c_e2e_parse),
     Check("R-SPEC-1", "код без спеки не коммитится", c_spec_gate),
     Check("R-CHG-1", "Ready-гейт не пропускает без review", c_change_ready_gate),
     Check("R-CHG-1", "диспетч по change только из READY", c_change_dispatch),

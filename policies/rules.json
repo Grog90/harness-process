@@ -398,6 +398,18 @@
       "residual_risk": "доверенность каталога — ответственность оператора; облачный SDK не используется"
     },
     {
+      "id": "R-E2E-1",
+      "statement": "Multi-service e2e работает на копиях сервисов и пишет отчёт; без сервисов/команды — отказ.",
+      "event": "precommit",
+      "enforcement": "blocking",
+      "implemented": true,
+      "hook": "e2e.run",
+      "positive_test": "parse + run на копиях с env HARNESS_E2E_*_DIR",
+      "negative_test": "битый --service или пустой --command → R-E2E-1",
+      "owner": "e2e",
+      "residual_risk": "копия без .git/node_modules; тестовая среда не поднимает реальные зависимости"
+    },
+    {
       "id": "R-EVAL-1",
       "statement": "Верификатор измеряется: пропуск дефекта, ложный отказ, неполная проверка, стоимость принятой задачи.",
       "event": "process",

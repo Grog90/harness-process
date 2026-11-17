@@ -74,6 +74,8 @@ cosign verify-blob --bundle evidence/ci-download/report.json.bundle \
 - **Панель в DSH:** бандл `plugins/harness-panel` ставится в профиль `desktop`;
   данные читает с `harness board --serve --port 8765`, offline показывает команду
   запуска. Адрес можно задать в `localStorage.harnessBoardUrl`.
+- **Multi-service e2e:** `harness e2e run --change C --command "..." --service api=services/api --service web=services/web`;
+  копии сервисов, env `HARNESS_E2E_<NAME>_DIR/_SHA`, отчёт `evidence/e2e-C.json`.
 - **5 старых change** закрываются как исторические (CANCELLED), не через полный
   процесс.
 

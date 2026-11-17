@@ -763,6 +763,23 @@ def cmd_lane(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_e2e(args: argparse.Namespace) -> int:
+    """Интеграционный прогон по копиям сервисов."""
+    from . import e2e as e2e_mod
+
+    root = _root(args)
+    if not _require_capability(root, "commit", args.json, _control_root(args)):
+        return EXIT_DENIED
+    try:
+        services = e2e_mod.parse_services(args.service or [])
+        out = e2e_mod.run(root, args.change, args.command, services, timeout=args.timeout)
+    except e2e_mod.E2EError as exc:
+        _print(exc.to_dict(), args.json) if args.json else _deny_text(exc)
+        return EXIT_DENIED
+    _print(out, args.json)
+    return EXIT_OK if out.get("ok") else EXIT_DENIED
+
+
 def cmd_evidence(args: argparse.Namespace) -> int:
     """Экспорт и проверка evidence в доверенном каталоге."""
     from . import evidence_export as exp
@@ -1427,6 +1444,14 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("--dest", default=None)
     ev.add_argument("--change", default=None)
     ev.set_defaults(func=cmd_evidence)
+
+    e2 = sub.add_parser("e2e", help="multi-service e2e на копиях сервисов")
+    e2.add_argument("action", choices=["run"])
+    e2.add_argument("--change", required=True)
+    e2.add_argument("--command", required=True)
+    e2.add_argument("--service", action="append", default=[])
+    e2.add_argument("--timeout", type=int, default=600)
+    e2.set_defaults(func=cmd_e2e)
 
     co = sub.add_parser("cost", help="стоимость задачи: запись и отчёт")
     co.add_argument("action", choices=["record", "report"])
