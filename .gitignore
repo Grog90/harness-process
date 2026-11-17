@@ -37,3 +37,7 @@ discord-session.txt
 # локальные данные и бэкапы конфигов
 data/
 .dsh/backups/
+
+# signing keys never belong in the tree
+harness_signing*
+*.pem

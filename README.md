@@ -433,3 +433,12 @@ python -m harness evals run --cases examples/evals/fee --verifier "python exampl
 неполные проверки; поведенческий на том же наборе — ни одного пропуска. Это и есть
 смысл измерения: «верификатор существует» и «верификатор работает» — разные утверждения.
 
+## Безопасность и лицензия
+
+- уязвимости — приватно, см. [`SECURITY.md`](SECURITY.md);
+- публичный код без открытой лицензии: [`LICENSE`](LICENSE);
+- подпись коммитов и проверка: [`docs/SIGNING.md`](docs/SIGNING.md),
+  `python -m harness attest --ref HEAD`;
+- данные и PII: [`docs/LEGAL.md`](docs/LEGAL.md).
+
+

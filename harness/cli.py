@@ -1057,6 +1057,19 @@ def cmd_selftest(args: argparse.Namespace) -> int:
     return EXIT_OK if report["ok"] else EXIT_DENIED
 
 
+def cmd_attest(args: argparse.Namespace) -> int:
+    from . import attest
+
+    root = _root(args)
+    try:
+        out = attest.verify(root, args.ref)
+    except attest.AttestError as exc:
+        _print({"ok": False, "rule": exc.rule, "reason": str(exc), "details": exc.details}, args.json)
+        return EXIT_DENIED
+    _print(out, args.json)
+    return EXIT_OK if out["ok"] else EXIT_DENIED
+
+
 def cmd_pii(args: argparse.Namespace) -> int:
     from . import pii
 
@@ -1647,6 +1660,10 @@ def build_parser() -> argparse.ArgumentParser:
     pii_p.add_argument("--file", default=None)
     pii_p.add_argument("--out", default=None)
     pii_p.set_defaults(func=cmd_pii)
+
+    at = sub.add_parser("attest", help="независимая проверка подписи коммита")
+    at.add_argument("--ref", default="HEAD")
+    at.set_defaults(func=cmd_attest)
 
     sl = sub.add_parser("slo", help="SLO процесса по метрикам")
     sl.add_argument("--strict", action="store_true", help="exit 2 при нарушении порога")

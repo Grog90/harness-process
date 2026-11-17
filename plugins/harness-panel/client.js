@@ -3,7 +3,7 @@ window.__ModuleLoader__.load({
   factory(require) {
     const React = require('react');
     const h = React.createElement;
-    const DEFAULT_URL = 'http://127.0.0.1:8765/metrics.json';
+    const DEFAULT_URL = '/harness-panel/metrics.json';
 
     function badge(color) {
       return {

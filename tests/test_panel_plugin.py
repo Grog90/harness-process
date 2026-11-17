@@ -36,6 +36,18 @@ class PanelPluginTests(unittest.TestCase):
         for forbidden in ("accept", "release", "commit"):
             self.assertNotIn("ctx." + forbidden, client)
 
+    def test_client_same_origin_path(self) -> None:
+        client = self._read("client.js")
+        self.assertIn("'/harness-panel/metrics.json'", client)
+        self.assertNotIn("DEFAULT_URL = 'http://127.0.0.1:8765", client)
+
+    def test_host_proxy_route(self) -> None:
+        host = self._read("index.js")
+        self.assertIn("ctx.webServer.register", host)
+        self.assertIn("/harness-panel/metrics.json", host)
+        self.assertIn("HARNESS_BOARD_URL", host)
+        self.assertIn("AbortSignal.timeout", host)
+
     def test_client_reads_attempts_and_active_states(self) -> None:
         client = self._read("client.js")
         self.assertIn("attempts.rework_rate", client)
