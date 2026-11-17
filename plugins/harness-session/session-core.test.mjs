@@ -6,6 +6,8 @@ import test from 'node:test';
 
 import {
   buildStatusArgs,
+  dispatchArgs,
+  readAttach,
   readScope,
   resolveHarnessRoot,
   resolveStatusTask,
@@ -76,4 +78,15 @@ test('buildStatusArgs ставит глобальные флаги до subcomma
   const args = buildStatusArgs({ root: '/work', taskId: 'T-3' });
   assert.deepEqual(args, ['-m', 'harness', '--root', '/work', '--json', 'task', 'status', '--task', 'T-3']);
   assert.throws(() => buildStatusArgs({ root: '', taskId: 'T-3' }));
+});
+
+test('readAttach и dispatchArgs', () => {
+  const root = tempRoot();
+  fs.writeFileSync(path.join(root, '.harness', 'session-attach.json'),
+    JSON.stringify({ task_id: 'T-9', auto_dispatch: true }));
+  assert.equal(readAttach(root).task_id, 'T-9');
+  assert.deepEqual(dispatchArgs({ root, taskId: 'T-9', agentId: 'A' }),
+    ['-m', 'harness', '--root', root, 'dispatch', '--task', 'T-9', '--primary-agent', 'A']);
+  fs.rmSync(path.join(root, '.harness', 'session-attach.json'));
+  assert.equal(readAttach(root), null);
 });

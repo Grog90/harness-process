@@ -8,9 +8,13 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   TASK_TOOL_ACTIONS,
   buildStatusArgs,
+  dispatchArgs,
+  readAttach,
   readScope,
   resolveHarnessRoot,
   resolveStatusTask,
@@ -38,6 +42,34 @@ export function apply(ctx, config) {
         return taskContext(scope) || '';
       },
     }));
+
+    // Автодиспетч: привязка есть, задача ещё не в scope — вызываем CLI один раз.
+    if (typeof ctx.on === 'function') {
+      disposers.push(ctx.on('agent/created', async (payload) => {
+        try {
+          const attach = readAttach(root);
+          if (!attach?.auto_dispatch || !attach.task_id) return;
+          const scope = readScope(root);
+          if (scope && String(scope.task_id) === String(attach.task_id)) return;
+          const agentId = payload?.agent?.id;
+          if (!agentId) return;
+          const python = config?.python || process.env.HARNESS_PYTHON || 'python';
+          const proc = spawnSync(python, dispatchArgs({
+            root, taskId: attach.task_id, agentId: String(agentId),
+          }), { encoding: 'utf8', timeout: 15000, windowsHide: true });
+          if (proc.status !== 0) {
+            fs.mkdirSync(path.join(root, '.harness'), { recursive: true });
+            fs.writeFileSync(
+              path.join(root, '.harness', 'session-attach.error'),
+              String(proc.stderr || proc.stdout || `dispatch exit ${proc.status}`).slice(0, 4000),
+              'utf8',
+            );
+          }
+        } catch {
+          // Привязка не должна ронять создание агента; причина останется в error-файле.
+        }
+      }));
+    }
   }
 
   disposers.push(ctx.tools.register({

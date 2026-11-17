@@ -69,6 +69,28 @@ export function resolveStatusTask({ root, scope, taskId = '' } = {}) {
   return { ok: true, taskId: id };
 }
 
+export const ATTACH_FILE = '.harness/session-attach.json';
+
+/** Привязка сессии к задаче; null — файла нет или он битый. */
+export function readAttach(root) {
+  if (!root) return null;
+  try {
+    const data = JSON.parse(fs.readFileSync(path.join(root, ATTACH_FILE), 'utf8'));
+    return data && typeof data === 'object' ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Аргументы dispatch из привязки. */
+export function dispatchArgs({ root, taskId, agentId }) {
+  if (!root) throw new Error('root не задан');
+  if (!taskId) throw new Error('task_id не задан');
+  if (!agentId) throw new Error('agent_id не задан');
+  return ['-m', 'harness', '--root', root, 'dispatch', '--task', String(taskId),
+    '--primary-agent', String(agentId)];
+}
+
 /** Текст системного контекста. null — задачи нет, контекст не добавляется. */
 export function taskContext(scope) {
   if (!scope || !scope.task_id) return null;

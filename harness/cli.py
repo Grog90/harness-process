@@ -18,6 +18,7 @@ from . import evals as evals_mod
 from . import findings as findings_mod
 from . import rules as rules_mod
 from . import selftest as selftest_mod
+from . import session as session_mod
 from . import verdict as verdict_mod
 from .fsm import Engine, TransitionError, check_watchdog
 from .hooks import HookContext, run as run_hooks
@@ -356,6 +357,19 @@ def cmd_task_status(args: argparse.Namespace) -> int:
         "events": [{"type": e["type"], "at": e["created_at"]} for e in eng.store.events_for(args.task)],
     }
     _print(payload, args.json)
+    return EXIT_OK
+
+
+def cmd_session(args: argparse.Namespace) -> int:
+    root = _root(args)
+    store = _store(args)
+    if args.session_cmd == "attach":
+        out = session_mod.attach(root, args.task, store)
+    elif args.session_cmd == "detach":
+        out = session_mod.detach(root)
+    else:
+        out = session_mod.status(root)
+    _print(out, args.json)
     return EXIT_OK
 
 
@@ -1072,6 +1086,16 @@ def build_parser() -> argparse.ArgumentParser:
     ts = tsub.add_parser("status", help="состояние задачи")
     ts.add_argument("--task", required=True)
     ts.set_defaults(func=cmd_task_status)
+
+    session = sub.add_parser("session", help="привязка DSH-сессии к задаче")
+    ssub = session.add_subparsers(dest="session_cmd", required=True)
+    sa = ssub.add_parser("attach", help="привязать сессию к задаче")
+    sa.add_argument("--task", required=True)
+    sa.set_defaults(func=cmd_session)
+    sd = ssub.add_parser("detach", help="убрать привязку")
+    sd.set_defaults(func=cmd_session)
+    ss = ssub.add_parser("status", help="показать привязку")
+    ss.set_defaults(func=cmd_session)
 
     brief = sub.add_parser("brief", help="бриф")
     bsub = brief.add_subparsers(dest="brief_cmd", required=True)

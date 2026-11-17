@@ -1,5 +1,21 @@
 # CI и наблюдаемость
 
+## GitHub Actions
+
+Рабочий репозиторий: <https://github.com/Grog90/harness-process> (private).
+Workflow `.github/workflows/ci.yml` на `windows-latest`:
+
+1. `python -m unittest discover -s tests -q`;
+2. `python -m harness ci --report evidence/ci/report.json` (selftest, coverage, metrics);
+3. `python -m harness rule verify`;
+4. cosign keyless подписывает `report.json` через GitHub OIDC;
+5. подпись проверяется тем же workflow;
+6. `evidence/ci` (отчёт + `.bundle`) уходит в artifact.
+
+Branch protection на private-репозитории free-аккаунта GitHub недоступен (API 403:
+нужен Pro или public). Поэтому зелёный `ci` пока обязателен по runbook, а не
+технически; это названо в [`DEPLOY.md`](DEPLOY.md).
+
 ## Один отчёт вместо пяти логов
 
 `harness ci` собирает снимок процесса и кода:
