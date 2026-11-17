@@ -275,9 +275,10 @@ def merge(root: str, store: Store, task_id: str, *, message: str | None = None,
         proc = _git(root, *merge_args)
         if proc.returncode != 0:
             text = proc.stdout + proc.stderr
-            if signing_ctx and any(word in text.lower() for word in ("gpg", "sign", "подпис")):
+            unmerged = _git(root, "ls-files", "-u").stdout.strip()
+            if signing_ctx and not unmerged:
                 _git(root, "reset", "--hard", previous)
-                raise LaneError("R-FINAL-2", "merge не подписан: " + text.strip()[:300])
+                raise LaneError("R-FINAL-2", "merge не создан: " + text.strip()[:300])
             conflicts = [
                 line.strip() for line in (proc.stdout + proc.stderr).splitlines()
                 if "CONFLICT" in line or "конфликт" in line
