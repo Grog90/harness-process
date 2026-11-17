@@ -38,6 +38,11 @@ verdict/commit/accept.
 - **WHEN** turn-stopping приходит для субагента
 - **THEN** submit не вызывается
 
+#### Scenario: [CASE-AUTO-2-4] Маркер и scope расходятся
+
+- **WHEN** маркер указывает на одну задачу, а scope — на другую
+- **THEN** submit не вызывается; маркер остаётся оператору для разбора
+
 ### Requirement: [REQ-AUTO-3] Гейты не расширяются
 
 Авто-submit НЕ ДОЛЖЕН (MUST NOT) выносить verdict, commit или accept; он только

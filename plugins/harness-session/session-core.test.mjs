@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   buildStatusArgs,
   autoSubmitArgs,
+  autoSubmitDecision,
   dispatchDecision,
   dispatchArgs,
   consumeAttach,
@@ -126,6 +127,15 @@ test('auto-submit marker и аргументы', () => {
   assert.throws(() => autoSubmitArgs({ root, taskId: 'T-5', attempt: 0 }));
   assert.equal(consumeAutoSubmit(root), true);
   assert.equal(readAutoSubmit(root), null);
+});
+
+test('autoSubmitDecision', () => {
+  const marker = { task_id: 'T-1' };
+  assert.equal(autoSubmitDecision(marker, { task_id: 'T-1' }, true), 'submit');
+  assert.equal(autoSubmitDecision(marker, { task_id: 'T-2' }, true), 'skip');
+  assert.equal(autoSubmitDecision(marker, { task_id: 'T-1' }, false), 'skip');
+  assert.equal(autoSubmitDecision(null, { task_id: 'T-1' }, true), 'skip');
+  assert.equal(autoSubmitDecision(marker, null, true), 'skip');
 });
 
 test('writeAttachError пишет в .harness', () => {

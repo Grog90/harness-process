@@ -120,6 +120,13 @@ export function consumeAutoSubmit(root) {
   }
 }
 
+/** Решение авто-submit: submit | skip. */
+export function autoSubmitDecision(marker, scope, isRoot) {
+  if (!marker?.task_id || !scope || !isRoot) return 'skip';
+  if (String(scope.task_id) !== String(marker.task_id)) return 'skip';
+  return 'submit';
+}
+
 export function autoSubmitArgs({ root, taskId, attempt }) {
   if (!root) throw new Error('root не задан');
   if (!taskId) throw new Error('task_id не задан');

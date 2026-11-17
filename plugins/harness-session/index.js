@@ -14,6 +14,7 @@ import path from 'node:path';
 import {
   TASK_TOOL_ACTIONS,
   autoSubmitArgs,
+  autoSubmitDecision,
   buildStatusArgs,
   consumeAttach,
   consumeAutoSubmit,
@@ -117,8 +118,7 @@ export function apply(ctx, config) {
           if (!marker?.task_id) return;
           const scope = readScope(root);
           const agent = payload?.agent;
-          if (!scope || String(scope.task_id) !== String(marker.task_id)) return;
-          if (!isRootAgent(ctx, agent)) return;
+          if (autoSubmitDecision(marker, scope, isRootAgent(ctx, agent)) !== 'submit') return;
           const python = config?.python || process.env.HARNESS_PYTHON || 'python';
           const proc = spawnSync(python, autoSubmitArgs({
             root, taskId: marker.task_id, attempt: scope.attempt,
