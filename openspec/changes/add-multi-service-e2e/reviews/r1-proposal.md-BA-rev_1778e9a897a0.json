@@ -1,0 +1,23 @@
+{
+  "review_id": "rev_1778e9a897a0",
+  "change_id": "add-multi-service-e2e",
+  "revision": 1,
+  "artifact": "proposal.md",
+  "artifact_hash": "sha256:9414d64c6f4cb91d763ae2c386cd723fba20668f475b30238011034682ef028b",
+  "reviewer_id": "rev-ba",
+  "reviewer_role": "BA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "e2e на копиях, git archive SHA, env, отчёт",
+    "timeout/worker/имена, R-E2E-1"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "POSIX kill только shell; отчёт перезаписывается"
+    }
+  ],
+  "created_at": 1794915563.3479254,
+  "created_at_iso": "2026-11-17T14:39:23+0300"
+}
