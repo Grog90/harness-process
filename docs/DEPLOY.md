@@ -11,7 +11,7 @@
 | Artifact `harness-ci-evidence` | `report.json` + `report.json.bundle`, retention GitHub |
 | DSH-плагин `harness-session` | установлен в профиль `desktop`, `harness_task` жив |
 | Привязка сессии | `harness session attach --task` + автодиспетч на `agent/created` |
-| Branch protection | **недоступен** на free-private; зелёный CI — по runbook |
+| Branch protection | **включён** (public): `ci` + signed + no force-push |
 
 ## Запуск изменения
 
@@ -51,11 +51,10 @@ cosign verify-blob --bundle evidence/ci-download/report.json.bundle \
 
 ## Ограничения
 
-- **Branch protection** требует GitHub Pro или public. Решение: оставить private
-  и не публиковать код ради защиты; зелёный `ci` обязателен по runbook, а не
-  технически. Branch protection — защита git-репозитория (прямой push/force-push/
-  merge красного PR), а не замена harness-гейтам. Вернуться к вопросу при появлении
-  команды или GitHub Pro.
+- **Branch protection** включён после перевода репозитория в public: обязательный
+  check `ci`, подписанные коммиты, запрет force-push/удаления, `enforce_admins`.
+  Это защита git-репозитория, а не замена harness-гейтам. Репозиторий публичный:
+  история проверена на секреты, но код и переписка видны всем.
 - **DEEPSEEK_API_KEY** в CI не задан: headless smoke не входит в workflow.
   Детерминированные тесты ключ не требуют.
 - **Windows checks** работают в copy-only: docker Linux bind-mount на Windows

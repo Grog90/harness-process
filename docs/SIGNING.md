@@ -73,5 +73,5 @@ tamper-proof: финализатор живёт в том же дереве.
 - merge/squash через GitHub UI создаёт неподписанный коммит на main; вливать
   нужно локальным подписанным merge, иначе CI покраснеет;
 - ключ без пароля: безопасность машины = безопасность подписи;
-- branch protection на private free недоступна; обязательность — CI/runbook;
+- branch protection включён (public): подпись обязательна, force-push запрещён;
 - подпись не заменяет review и evidence.

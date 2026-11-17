@@ -14,9 +14,9 @@ Workflow `.github/workflows/ci.yml` на `windows-latest`:
 6. подпись проверяется тем же workflow;
 7. `evidence/ci` (отчёт + `.bundle`) уходит в artifact.
 
-Branch protection на private-репозитории free-аккаунта GitHub недоступен (API 403:
-нужен Pro или public). Поэтому зелёный `ci` пока обязателен по runbook, а не
-технически; это названо в [`DEPLOY.md`](DEPLOY.md).
+`main` защищён (public-репозиторий): обязательный check `ci`, `strict` (ветка
+должна быть up-to-date), подписанные коммиты, запрет force-push и удаления,
+`enforce_admins=true`. Это защита git-репозитория, а не замена harness-гейтам.
 
 ## Один отчёт вместо пяти логов
 

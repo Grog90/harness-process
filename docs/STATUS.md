@@ -56,8 +56,7 @@ DRAFT → READY → IN_PROGRESS → IMPLEMENTED → VERIFIED → RELEASED → AC
 - `add-adapter-autosubmit` — opt-in auto-submit, ACCEPTED → ARCHIVED, дельта в
   `openspec/specs/session-autosubmit/`; evidence в `evidence/change-add-adapter-attach/`;
 - runbook: [`DEPLOY.md`](DEPLOY.md).
-- Ограничение: branch protection на free-private GitHub недоступен (403);
-  зелёный `ci` обязателен по runbook, не технически.
+- Branch protection включён (public): `ci` + signed + запрет force-push.
 
 ## Проверки на момент закрытия
 
