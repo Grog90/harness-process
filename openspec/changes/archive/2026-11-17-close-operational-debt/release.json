@@ -1,0 +1,18 @@
+{
+  "change_id": "close-operational-debt",
+  "spec_ref": "4897aa9117e4acf5ac954506211cc851030dd407",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "4897aa9117e4acf5ac954506211cc851030dd407"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "by": "human",
+  "by_role": "human",
+  "flag": "",
+  "at": "2026-11-17T22:35:04+0300"
+}

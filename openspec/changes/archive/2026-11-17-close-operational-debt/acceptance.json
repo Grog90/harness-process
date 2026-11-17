@@ -1,0 +1,26 @@
+{
+  "change_id": "close-operational-debt",
+  "spec_ref": "4897aa9117e4acf5ac954506211cc851030dd407",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "4897aa9117e4acf5ac954506211cc851030dd407"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "панель live через same-origin route",
+    "public гигиена и secret scanning",
+    "attest проверяет подпись"
+  ],
+  "residual_risks": [
+    "полный tamper-proof finalizer — внешний процесс/HSM, не в этом change"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-17T22:35:04+0300"
+}
