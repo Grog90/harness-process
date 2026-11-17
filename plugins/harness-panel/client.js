@@ -34,8 +34,15 @@ window.__ModuleLoader__.load({
       }, [tick]);
 
       const summary = data && data.summary || {};
-      const changes = (data && data.changes || []).slice(0, 4);
-      const tasks = (data && data.tasks || []).filter((t) => t.state !== 'DONE').slice(0, 3);
+      const attempts = data && data.attempts || {};
+      const changes = (data && data.changes || [])
+        .slice()
+        .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+        .slice(0, 4);
+      const activeStates = new Set(['RUNNING', 'VERIFYING', 'VERIFY_BLOCKED', 'REWORK_READY']);
+      const tasks = (data && data.tasks || [])
+        .filter((t) => activeStates.has(String(t.state || '')))
+        .slice(0, 3);
       const box = {
         border: '1px solid var(--dsh-color-border, #d9dee5)',
         borderRadius: 8, padding: '6px 10px', margin: '4px 0',
@@ -49,8 +56,11 @@ window.__ModuleLoader__.load({
             ? h('span', { style: badge('#b42318') }, 'доска offline')
             : h('span', { style: badge('#067647') }, 'live'),
           h('span', { style: { opacity: 0.7 } },
-            'changes ' + (summary.changes || 0) + ' · tasks ' + (summary.tasks || 0)
-            + ' · rework ' + (summary.rework_rate || 0)),
+            data
+              ? 'changes ' + (summary.changes || 0) + ' · tasks ' + (summary.tasks || 0)
+                + ' · rework ' + (attempts.rework_rate || 0)
+              : 'нет данных'),
+          error && data ? h('span', { style: { opacity: 0.7 } }, 'stale') : null,
           h('button', {
             type: 'button',
             onClick: () => setTick((n) => n + 1),

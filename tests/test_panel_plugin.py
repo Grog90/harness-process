@@ -36,6 +36,18 @@ class PanelPluginTests(unittest.TestCase):
         for forbidden in ("accept", "release", "commit"):
             self.assertNotIn("ctx." + forbidden, client)
 
+    def test_client_reads_attempts_and_active_states(self) -> None:
+        client = self._read("client.js")
+        self.assertIn("attempts.rework_rate", client)
+        self.assertIn("VERIFY_BLOCKED", client)
+        self.assertIn(".sort(", client)
+        self.assertIn("15000", client)
+
+    def test_server_sends_cors(self) -> None:
+        with open(os.path.join(ROOT, "harness", "metrics.py"), encoding="utf-8") as fh:
+            source = fh.read()
+        self.assertIn("Access-Control-Allow-Origin", source)
+
     def test_offline_state_and_icon(self) -> None:
         client = self._read("client.js")
         self.assertIn("доска offline", client)

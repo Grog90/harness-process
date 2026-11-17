@@ -34,8 +34,9 @@
 5. **OTel traces/spans.** ✅ Закрыто в `add-otel-spans`: spans переходов,
    детерминированный `trace_id`, отдельный OTLP traces-payload. Остаётся
    distributed tracing между задачами (Out of Scope).
-6. **Панель в DSH GUI.** Сейчас live-доска — локальный сервер; client-плагин и
-   slots не сделаны.
+6. **Панель в DSH GUI.** ✅ Закрыто в `add-harness-panel`: client-бандл в
+   `conversation.composer.dock`, читает `/metrics.json` доски, offline-состояние.
+   HTML-доска остаётся для headless/браузера.
 7. **Multi-service e2e.** Merge order исполняется для одного лейна; нет
    интеграционной среды и барьера волны для нескольких сервисов.
 
