@@ -32,7 +32,15 @@ jobs:
             $ref = "HEAD"
           }
           git config --global gpg.ssh.allowedSignersFile $signers
-          git verify-commit $ref
+          if ("${{ github.event_name }}" -eq "pull_request") {
+            $range = "origin/${{ github.base_ref }}..$ref"
+          } else {
+            $range = "${{ github.event.before }}..HEAD"
+          }
+          $revs = @()
+          if ($range -notmatch "^0+\.\.") { $revs = git rev-list $range }
+          if ($revs.Count -eq 0) { $revs = @($ref) }
+          foreach ($rev in $revs) { git verify-commit $rev; if ($LASTEXITCODE -ne 0) { exit 1 } }
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
