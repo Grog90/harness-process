@@ -15,8 +15,11 @@ Workflow `.github/workflows/ci.yml` на `windows-latest`:
 7. `evidence/ci` (отчёт + `.bundle`) уходит в artifact.
 
 `main` защищён (public-репозиторий): обязательный check `ci`, `strict` (ветка
-должна быть up-to-date), подписанные коммиты, запрет force-push и удаления,
-`enforce_admins=true`. Это защита git-репозитория, а не замена harness-гейтам.
+должна быть up-to-date), подписанные коммиты, запрет force-push и удаления.
+`enforce_admins=false`: владелец может сделать локальный подписанный push в обход
+required check (иначе GitHub-merge создаёт неподписанный коммит и сам блокируется);
+force-push/удаление по-прежнему запрещены. Это защита git-репозитория, а не замена
+harness-гейтам.
 
 ## Один отчёт вместо пяти логов
 
