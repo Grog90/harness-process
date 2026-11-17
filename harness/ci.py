@@ -47,7 +47,7 @@ def run_tests(root: str, timeout: int) -> dict[str, Any]:
                 "tail": "timeout"}
 
 
-def collect(root: str, *, run_tests: bool = False, timeout: int = 900) -> dict[str, Any]:
+def collect(root: str, *, with_tests: bool = False, timeout: int = 900) -> dict[str, Any]:
     root = os.path.abspath(root)
     selftest_report = selftest.run_all(root)
     registry = rules.load_registry(root, None)
@@ -61,7 +61,7 @@ def collect(root: str, *, run_tests: bool = False, timeout: int = 900) -> dict[s
     finally:
         store.close()
 
-    tests = run_tests(root, timeout) if run_tests else None
+    tests = run_tests(root, timeout) if with_tests else None
     ok = bool(selftest_report["ok"]) and sums["broken"] == 0 and (tests is None or tests["ok"])
     return {
         "generated_at": metrics._iso(),

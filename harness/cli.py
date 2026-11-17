@@ -879,7 +879,7 @@ def cmd_ci(args: argparse.Namespace) -> int:
     from . import ci
 
     root = _root(args)
-    report = ci.collect(root, run_tests=args.run_tests, timeout=args.timeout)
+    report = ci.collect(root, with_tests=args.run_tests, timeout=args.timeout)
     path = ci.write_report(root, report, args.report)
     print(f"CI: {'OK' if report['ok'] else 'FAIL'} · selftest {report['selftest']['passed']}/"
           f"{report['selftest']['total']} · правил {report['coverage']['total']} · "

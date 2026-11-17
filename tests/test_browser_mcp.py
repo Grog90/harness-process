@@ -22,6 +22,14 @@ import browser_mcp as bm  # noqa: E402
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
 
 
+def _moli_available() -> bool:
+    try:
+        bm.find_binary()
+        return True
+    except Exception:
+        return False
+
+
 def call(payload: dict) -> list[dict]:
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
@@ -358,6 +366,7 @@ class SessionTest(unittest.TestCase):
     def test_status_without_session(self):
         self.assertIn("не запущена", bm.tool_session_status({}))
 
+    @unittest.skipUnless(_moli_available(), "moli не установлен: проверка запуска пропущена")
     def test_start_returns_endpoint(self):
         proc = unittest.mock.Mock()
         proc.poll.return_value = None
@@ -379,6 +388,7 @@ class SessionTest(unittest.TestCase):
         popen.assert_not_called()
         self.assertIn("уже работает", out)
 
+    @unittest.skipUnless(_moli_available(), "moli не установлен: проверка отказа CDP пропущена")
     def test_start_fails_when_cdp_never_answers(self):
         proc = unittest.mock.Mock()
         proc.poll.return_value = None
