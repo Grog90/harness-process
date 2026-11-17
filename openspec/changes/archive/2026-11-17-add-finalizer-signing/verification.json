@@ -1,0 +1,68 @@
+{
+  "change_id": "add-finalizer-signing",
+  "created_at": 1794924014.1607497,
+  "results": {
+    "baseline": {
+      "mode": "baseline",
+      "service": "repo",
+      "command": "\"C:\\Users\\ownag\\.dsh\\dsh-runtimes\\dsh-primary-runtime\\dependencies\\python\\python.exe\" -m unittest discover -s tests -q",
+      "ref": "1c83d9b9cfcae1bb8cacee954bdf3f60af623556",
+      "cwd": ".",
+      "runner": "unittest",
+      "environment": "local",
+      "started_at": 1794923945.778597,
+      "duration_s": 68.38,
+      "result": "pass",
+      "exit_code": 0,
+      "tests_ran": 517,
+      "failures": [],
+      "stdout_tail": "",
+      "stderr_tail": "'utf-8'>\n  open(allowed, \"w\", encoding=\"utf-8\").write(\"owner ssh-ed25519 AAAA\\n\")\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nC:\\Users\\ownag\\OneDrive\\Документы\\deepseek-harness\\default-workspace\\tests\\test_finalizer_signing.py:62: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\\\Users\\\\ownag\\\\AppData\\\\Local\\\\Temp\\\\sign-root-m93wamyu\\\\sign_key.pub' mode='r' encoding='utf-8'>\n  pub = open(key + \".pub\", encoding=\"utf-8\").read().strip()\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nC:\\Users\\ownag\\OneDrive\\Документы\\deepseek-harness\\default-workspace\\tests\\test_finalizer_signing.py:103: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\\\Users\\\\ownag\\\\AppData\\\\Local\\\\Temp\\\\sign-root-t4vf2s13\\\\.ssh\\\\key' mode='w' encoding='utf-8'>\n  open(key, \"w\", encoding=\"utf-8\").write(\"key\\n\")\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nC:\\Users\\ownag\\OneDrive\\Документы\\deepseek-harness\\default-workspace\\tests\\test_finalizer_signing.py:104: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\\\Users\\\\ownag\\\\AppData\\\\Local\\\\Temp\\\\sign-root-t4vf2s13\\\\.ssh\\\\allowed' mode='w' encoding='utf-8'>\n  open(allowed, \"w\", encoding=\"utf-8\").write(\"owner ssh-ed25519 AAAA\\n\")\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nC:\\Users\\ownag\\OneDrive\\Документы\\deepseek-harness\\default-workspace\\tests\\test_harness.py:1289: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\\\Users\\\\ownag\\\\AppData\\\\Local\\\\Temp\\\\merge-key-pbt5w3_k\\\\key.pub' mode='r' encoding='utf-8'>\n  pub = open(key + \".pub\", encoding=\"utf-8\").read().strip()\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n[trendshift] initialize: protocol=2026-07-28\n[trendshift] initialize: protocol=2025-06-18\n[trendshift] сбой trending: TrendshiftError('сеть недоступна')\n----------------------------------------------------------------------\nRan 517 tests in 67.958s\n\nOK (skipped=9)\n"
+    },
+    "candidate": {
+      "mode": "candidate",
+      "service": "repo",
+      "command": "\"C:\\Users\\ownag\\.dsh\\dsh-runtimes\\dsh-primary-runtime\\dependencies\\python\\python.exe\" -m unittest discover -s tests -q",
+      "ref": "1c83d9b9cfcae1bb8cacee954bdf3f60af623556",
+      "cwd": ".",
+      "runner": "unittest",
+      "environment": "local",
+      "started_at": 1794924014.2789245,
+      "duration_s": 65.56,
+      "result": "pass",
+      "exit_code": 0,
+      "tests_ran": 517,
+      "failures": [],
+      "stdout_tail": "",
+      "stderr_tail": "'utf-8'>\n  open(allowed, \"w\", encoding=\"utf-8\").write(\"owner ssh-ed25519 AAAA\\n\")\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nC:\\Users\\ownag\\OneDrive\\Документы\\deepseek-harness\\default-workspace\\tests\\test_finalizer_signing.py:62: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\\\Users\\\\ownag\\\\AppData\\\\Local\\\\Temp\\\\sign-root-0rkyhnmh\\\\sign_key.pub' mode='r' encoding='utf-8'>\n  pub = open(key + \".pub\", encoding=\"utf-8\").read().strip()\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nC:\\Users\\ownag\\OneDrive\\Документы\\deepseek-harness\\default-workspace\\tests\\test_finalizer_signing.py:103: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\\\Users\\\\ownag\\\\AppData\\\\Local\\\\Temp\\\\sign-root-kdzwx8m0\\\\.ssh\\\\key' mode='w' encoding='utf-8'>\n  open(key, \"w\", encoding=\"utf-8\").write(\"key\\n\")\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nC:\\Users\\ownag\\OneDrive\\Документы\\deepseek-harness\\default-workspace\\tests\\test_finalizer_signing.py:104: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\\\Users\\\\ownag\\\\AppData\\\\Local\\\\Temp\\\\sign-root-kdzwx8m0\\\\.ssh\\\\allowed' mode='w' encoding='utf-8'>\n  open(allowed, \"w\", encoding=\"utf-8\").write(\"owner ssh-ed25519 AAAA\\n\")\nResourceWarning: Enable tracemalloc to get the object allocation traceback\nC:\\Users\\ownag\\OneDrive\\Документы\\deepseek-harness\\default-workspace\\tests\\test_harness.py:1289: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\\\Users\\\\ownag\\\\AppData\\\\Local\\\\Temp\\\\merge-key-eyunxpag\\\\key.pub' mode='r' encoding='utf-8'>\n  pub = open(key + \".pub\", encoding=\"utf-8\").read().strip()\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n[trendshift] initialize: protocol=2026-07-28\n[trendshift] initialize: protocol=2025-06-18\n[trendshift] сбой trending: TrendshiftError('сеть недоступна')\n----------------------------------------------------------------------\nRan 517 tests in 65.236s\n\nOK (skipped=9)\n"
+    }
+  },
+  "commands": {
+    "baseline": "\"C:\\Users\\ownag\\.dsh\\dsh-runtimes\\dsh-primary-runtime\\dependencies\\python\\python.exe\" -m unittest discover -s tests -q",
+    "candidate": "\"C:\\Users\\ownag\\.dsh\\dsh-runtimes\\dsh-primary-runtime\\dependencies\\python\\python.exe\" -m unittest discover -s tests -q"
+  },
+  "revision": 1,
+  "spec_ref": "1c83d9b9cfcae1bb8cacee954bdf3f60af623556",
+  "environment": "local",
+  "runner": "unittest",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "1c83d9b9cfcae1bb8cacee954bdf3f60af623556"
+    }
+  ],
+  "diffs": {
+    "repo": {
+      "new_failures": [],
+      "fixed": [],
+      "regression": false
+    }
+  },
+  "diff": {
+    "new_failures": [],
+    "fixed": [],
+    "regression": false
+  },
+  "problems": [],
+  "ok": true
+}

@@ -1,0 +1,25 @@
+{
+  "change_id": "add-finalizer-signing",
+  "spec_ref": "1c83d9b9cfcae1bb8cacee954bdf3f60af623556",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "1c83d9b9cfcae1bb8cacee954bdf3f60af623556"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "preflight R-FINAL-2 и -S/verify для main/сервисов/merge",
+    "R-FINAL-2 в матрице, rollback"
+  ],
+  "residual_risks": [
+    "finalize integration test отсутствует; сервисные репо вне CI"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-17T17:01:20+0300"
+}

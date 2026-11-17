@@ -1,0 +1,18 @@
+{
+  "change_id": "add-finalizer-signing",
+  "spec_ref": "1c83d9b9cfcae1bb8cacee954bdf3f60af623556",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "1c83d9b9cfcae1bb8cacee954bdf3f60af623556"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "by": "human",
+  "by_role": "human",
+  "flag": "",
+  "at": "2026-11-17T17:01:20+0300"
+}
