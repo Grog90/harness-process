@@ -773,6 +773,8 @@ def cmd_evidence(args: argparse.Namespace) -> int:
         return EXIT_ERROR
     try:
         if args.action == "export":
+            if not _require_capability(root, "commit", args.json, _control_root(args)):
+                return EXIT_DENIED
             out = exp.export(root, args.dest, change=args.change)
         else:
             out = exp.verify(args.dest)

@@ -41,7 +41,18 @@ class EvidenceExportTests(unittest.TestCase):
             fh.write("tampered\n")
         check = exp.verify(self.dest)
         self.assertFalse(check["ok"])
+        self.assertEqual(check["rule"], "R-EVID-1")
         self.assertIn("хэш не совпал", " ".join(check["problems"]))
+
+    def test_change_id_traversal_denied(self) -> None:
+        with self.assertRaises(exp.ExportError) as ctx:
+            exp.export(self.root, self.dest, change="../../..")
+        self.assertEqual(ctx.exception.rule, "R-EVID-1")
+
+    def test_dest_inside_repo_denied(self) -> None:
+        inside = os.path.join(self.root, "export")
+        with self.assertRaises(exp.ExportError):
+            exp.export(self.root, inside, change="x")
 
     def test_source_dest_same_or_nested_denied(self) -> None:
         with self.assertRaises(exp.ExportError):

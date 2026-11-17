@@ -25,8 +25,9 @@
    commit-записей. Остаётся push/PR сервисных репозиториев в их remote.
 3. **PR-статус и forge.** ✅ Закрыто в `add-forge-status`: `harness forge status`
    читает checks через `gh` (CheckRun и StatusContext), без `gh` — отказ. CI есть.
-4. **Внешнее хранилище evidence.** Cosign есть, но artifact живёт по срокам
-   GitHub; нет доверенного вывоза.
+4. **Внешнее хранилище evidence.** ✅ Закрыто в `add-evidence-export`:
+   `evidence export/verify` копирует в указанный каталог с sha256-манифестом.
+   Остаётся только облачный API/шифрование (Out of Scope).
 
 ## Волна 2 — видимость (нужен дизайн/UI)
 

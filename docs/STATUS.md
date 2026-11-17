@@ -80,7 +80,8 @@ rule verify: current
 - merge order записывается и сверяется, но не исполняется как очередь; e2e-среды нет;
 - `can_read`/`may_*` исполняются (`add-capability-enforcement`), но доверенная
   идентичность роли остаётся допущением;
-- evidence подписан cosign, но не вывозится во внешнее хранилище;
+- evidence подписан cosign и вывозится `evidence export` в доверенный каталог;
+  облачного API/шифрования нет (Out of Scope);
 - live-доска — локальный сервер, не панель DSH GUI; OTel — только метрики;
 - headless в CI требует `DEEPSEEK_API_KEY` в окружении job.
 

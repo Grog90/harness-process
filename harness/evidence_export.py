@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 from datetime import datetime, timezone
 from typing import Any
@@ -50,13 +51,21 @@ def export(root: str, dest: str, *, change: str | None = None) -> dict[str, Any]
     """Копирует evidence/<change>|evidence целиком в dest и пишет манифест."""
     root = os.path.abspath(root)
     dest = os.path.abspath(dest)
-    source = os.path.join(root, "evidence")
+    evidence_root = os.path.realpath(os.path.join(root, "evidence"))
+    if change and not re.fullmatch(r"[A-Za-z0-9._-]+", change):
+        raise ExportError("R-EVID-1", f"недопустимый change id: {change!r}")
+    source = evidence_root
     if change:
-        source = os.path.join(source, f"change-{change}")
+        source = os.path.join(evidence_root, f"change-{change}")
     if not os.path.isdir(source):
         raise ExportError("R-EVID-1", f"evidence не найден: {source}")
     src_real = os.path.realpath(source)
+    if os.path.commonpath([src_real, evidence_root]) != evidence_root:
+        raise ExportError("R-EVID-1", "источник вне evidence", source=src_real)
     dst_real = os.path.realpath(dest)
+    root_real = os.path.realpath(root)
+    if os.path.commonpath([dst_real, root_real]) == root_real:
+        raise ExportError("R-EVID-1", "dest не должен находиться внутри репозитория", dest=dst_real)
     try:
         common = os.path.commonpath([src_real, dst_real])
     except ValueError:
@@ -69,10 +78,13 @@ def export(root: str, dest: str, *, change: str | None = None) -> dict[str, Any]
     for rel in _files(source):
         src = os.path.join(source, rel)
         dst = os.path.join(dest, rel)
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-        source_hash = _sha256(src)
-        shutil.copy2(src, dst)
-        dest_hash = _sha256(dst)
+        try:
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            source_hash = _sha256(src)
+            shutil.copy2(src, dst)
+            dest_hash = _sha256(dst)
+        except OSError as exc:
+            raise ExportError("R-EVID-1", f"копирование {rel} не удалось: {exc}") from exc
         if source_hash != dest_hash:
             raise ExportError("R-EVID-1", f"копия не совпала с источником: {rel}")
         copied.append({"path": rel, "sha256": source_hash, "copied_sha256": dest_hash,
@@ -112,8 +124,9 @@ def verify(dest: str) -> dict[str, Any]:
             problems.append(f"нет файла: {rel}")
         elif _sha256(target) != item.get("sha256"):
             problems.append(f"хэш не совпал: {rel}")
-    return {"ok": not problems, "files": len(manifest.get("files", [])),
-            "problems": problems, "source": manifest.get("source", "")}
+    return {"ok": not problems, "rule": "" if not problems else "R-EVID-1",
+            "files": len(manifest.get("files", [])), "problems": problems,
+            "source": manifest.get("source", "")}
 
 
 CONTROL_POINTS = {"evidence.export": export, "evidence.verify": verify}
