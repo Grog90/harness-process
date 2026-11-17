@@ -1,0 +1,18 @@
+{
+  "review_id": "rev_f2c536efa121",
+  "change_id": "add-signed-commits",
+  "revision": 1,
+  "artifact": "proposal.md",
+  "artifact_hash": "sha256:897ef182a8d331be4a91e5a2323a78eed2992e5a298a2573a5902ae4af4d0f63",
+  "reviewer_id": "rev2-ba",
+  "reviewer_role": "BA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "SSH-подпись, before/base-якорь, PR run",
+    "fail-closed, bootstrap, docs"
+  ],
+  "findings": [],
+  "created_at": 1794920309.9382758,
+  "created_at_iso": "2026-11-17T15:58:29+0300"
+}

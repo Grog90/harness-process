@@ -1,0 +1,18 @@
+{
+  "review_id": "rev_9a3716420285",
+  "change_id": "add-signed-commits",
+  "revision": 1,
+  "artifact": "tasks.md",
+  "artifact_hash": "sha256:42a4c142dba4ff8ace9cf35e62c57a6ac0696469ae65b659d2296e2b422a712a",
+  "reviewer_id": "rev-sa",
+  "reviewer_role": "SA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "SSH-подпись, before/base-якорь, PR run",
+    "fail-closed, bootstrap, docs"
+  ],
+  "findings": [],
+  "created_at": 1794920309.9667964,
+  "created_at_iso": "2026-11-17T15:58:29+0300"
+}
