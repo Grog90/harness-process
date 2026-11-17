@@ -1,0 +1,19 @@
+{
+  "review_id": "rev_d8afbdcdfa17",
+  "change_id": "add-adapter-attach",
+  "revision": 1,
+  "artifact": "proposal.md",
+  "artifact_hash": "sha256:4e9a380ab0e611b450693840ec9daca683bdc32eb20808d4c4e15aff0046b6d4",
+  "reviewer_id": "rev-ba",
+  "reviewer_role": "BA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "attach/status/detach и автодиспетч сверены с кодом",
+    "статусы RUNNING/IN_PROGRESS, актор и shell-граница",
+    "REWORK_READY описан как допустимый dispatch"
+  ],
+  "findings": [],
+  "created_at": 1794897402.5422935,
+  "created_at_iso": "2026-11-17T09:36:42+0300"
+}

@@ -1,0 +1,17 @@
+{
+  "review_id": "rev_4d5e903702fe",
+  "change_id": "add-adapter-attach",
+  "revision": 1,
+  "artifact": "specs",
+  "artifact_hash": "sha256:c0dff73a699fe6ed83da4424dab3bdf2b557dd5d834f960f756a7b366d847385",
+  "reviewer_id": "rev-qa",
+  "reviewer_role": "QA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "MODIFIED REQ-ADAPT-3: один dispatch, без verdict/commit/accept"
+  ],
+  "findings": [],
+  "created_at": 1794897402.5628755,
+  "created_at_iso": "2026-11-17T09:36:42+0300"
+}

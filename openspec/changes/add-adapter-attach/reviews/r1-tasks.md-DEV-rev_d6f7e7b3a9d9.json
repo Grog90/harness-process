@@ -1,0 +1,17 @@
+{
+  "review_id": "rev_d6f7e7b3a9d9",
+  "change_id": "add-adapter-attach",
+  "revision": 1,
+  "artifact": "tasks.md",
+  "artifact_hash": "sha256:8c9baa8c89ecbaf719760996448ccf19be30d65eb8d585c2ab366efbaadd99bd",
+  "reviewer_id": "rev-dev",
+  "reviewer_role": "DEV",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "задачи соответствуют коду, тестам и docs"
+  ],
+  "findings": [],
+  "created_at": 1794897402.5804129,
+  "created_at_iso": "2026-11-17T09:36:42+0300"
+}

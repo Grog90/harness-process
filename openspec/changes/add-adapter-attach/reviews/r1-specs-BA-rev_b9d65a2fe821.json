@@ -1,0 +1,24 @@
+{
+  "review_id": "rev_b9d65a2fe821",
+  "change_id": "add-adapter-attach",
+  "revision": 1,
+  "artifact": "specs",
+  "artifact_hash": "sha256:c0dff73a699fe6ed83da4424dab3bdf2b557dd5d834f960f756a7b366d847385",
+  "reviewer_id": "rev-ba",
+  "reviewer_role": "BA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "REQ-ATTACH-1..3 и CASE проверяемы",
+    "one-shot, conflict, error, primary, shell parity",
+    "REWORK_READY → CASE-2-7"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "CASE-2-6/2-7 без теста уровня плагина; listener не исполняется тестами"
+    }
+  ],
+  "created_at": 1794897402.5478008,
+  "created_at_iso": "2026-11-17T09:36:42+0300"
+}

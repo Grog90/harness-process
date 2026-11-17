@@ -1,0 +1,23 @@
+{
+  "review_id": "rev_56d472b80547",
+  "change_id": "add-adapter-attach",
+  "revision": 1,
+  "artifact": "design.md",
+  "artifact_hash": "sha256:3fc4ea0c297a73871c27588224d8eabbbc948614b61b5b2f330b6361f0493d73",
+  "reviewer_id": "rev-sa",
+  "reviewer_role": "SA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "scope-first роль, consumeAttach, conflict без перезаписи",
+    "primary через subagents.rootOf, error semantics, Risks"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "fallback agent.parent и REWORK_READY названы рисками"
+    }
+  ],
+  "created_at": 1794897402.5678833,
+  "created_at_iso": "2026-11-17T09:36:42+0300"
+}
