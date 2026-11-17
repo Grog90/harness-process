@@ -328,7 +328,7 @@ read-only сервис — отказ; verifier не пишет сервис. П
 ## Как проверять, что этап закрыт
 
 ```powershell
-python -m unittest discover -s tests -v      # 434 проверок свойств
+python -m unittest discover -s tests -v      # 435 проверок свойств
 python -m harness selftest                   # 61 исполняемая проверка
 python -m harness demo                       # 50 сквозных проверок
 python -m harness coverage                   # покрытие и наличие тестов

@@ -1,0 +1,25 @@
+{
+  "change_id": "add-adapter-autosubmit",
+  "spec_ref": "fe617c12a653c1df0f93f54e02981a79dafe48ef",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "fe617c12a653c1df0f93f54e02981a79dafe48ef"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "Opt-in --auto-submit: маркер, один submit на turn-stopping, root-only",
+    "Ошибки в session-attach.error; verdict/commit/accept не автоматизируются"
+  ],
+  "residual_risks": [
+    "Listener turn-stopping проверен чистыми функциями, не end-to-end"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-17T10:13:39+0300"
+}

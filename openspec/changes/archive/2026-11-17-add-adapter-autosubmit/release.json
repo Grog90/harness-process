@@ -1,0 +1,18 @@
+{
+  "change_id": "add-adapter-autosubmit",
+  "spec_ref": "fe617c12a653c1df0f93f54e02981a79dafe48ef",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "fe617c12a653c1df0f93f54e02981a79dafe48ef"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "by": "human",
+  "by_role": "human",
+  "flag": "",
+  "at": "2026-11-17T10:13:28+0300"
+}

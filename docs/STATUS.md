@@ -52,7 +52,9 @@ DRAFT → READY → IN_PROGRESS → IMPLEMENTED → VERIFIED → RELEASED → AC
 - DSH: `harness session attach` + автодиспетч на `agent/created`; привязка
   одноразовая, чужой scope — конфликт, роль attach — только оператор;
 - `add-adapter-attach` — ACCEPTED → ARCHIVED, дельта в
-  `openspec/specs/session-attach/`; evidence в `evidence/change-add-adapter-attach/`;
+  `openspec/specs/session-attach/`;
+- `add-adapter-autosubmit` — opt-in auto-submit, ACCEPTED → ARCHIVED, дельта в
+  `openspec/specs/session-autosubmit/`; evidence в `evidence/change-add-adapter-attach/`;
 - runbook: [`DEPLOY.md`](DEPLOY.md).
 - Ограничение: branch protection на free-private GitHub недоступен (403);
   зелёный `ci` обязателен по runbook, не технически.
@@ -60,7 +62,7 @@ DRAFT → READY → IN_PROGRESS → IMPLEMENTED → VERIFIED → RELEASED → AC
 ## Проверки на момент закрытия
 
 ```
-unittest: 434 теста — OK (9 skipped)
+unittest: 435 тестов — OK (9 skipped)
 selftest: 61/61
 demo:     50/50
 coverage: 47 правил: 44 наших, 3 delegated, 94%
