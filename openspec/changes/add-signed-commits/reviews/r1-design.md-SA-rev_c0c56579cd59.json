@@ -1,0 +1,18 @@
+{
+  "review_id": "rev_c0c56579cd59",
+  "change_id": "add-signed-commits",
+  "revision": 1,
+  "artifact": "design.md",
+  "artifact_hash": "sha256:b56fe8ddd9f761ade04d9dfa3ad9c6edd5da62b621532357176f93f997e57f18",
+  "reviewer_id": "rev-sa",
+  "reviewer_role": "SA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "SSH-подпись, allowed_signers, CI verify диапазона",
+    "base-якорь, finalize principal, docs"
+  ],
+  "findings": [],
+  "created_at": 1794918775.5005507,
+  "created_at_iso": "2026-11-17T15:32:55+0300"
+}
