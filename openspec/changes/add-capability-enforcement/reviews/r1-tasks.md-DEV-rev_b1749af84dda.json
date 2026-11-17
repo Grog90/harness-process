@@ -1,0 +1,22 @@
+{
+  "review_id": "rev_b1749af84dda",
+  "change_id": "add-capability-enforcement",
+  "revision": 1,
+  "artifact": "tasks.md",
+  "artifact_hash": "sha256:cdbb9a962b6262723ea1ca207b963360dbbed6ece95da59fd341bae5b3c7b330",
+  "reviewer_id": "rev-dev",
+  "reviewer_role": "DEV",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "1.1-1.4 соответствуют коду и проверкам"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "run-capability не в CLI-тесте"
+    }
+  ],
+  "created_at": 1794909696.6093376,
+  "created_at_iso": "2026-11-17T13:01:36+0300"
+}
