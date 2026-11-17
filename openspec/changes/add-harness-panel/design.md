@@ -12,7 +12,7 @@ id `harness-panel`, order 20. Встроенные `activity`/`usage` не за�
 `localStorage.harnessBoardUrl`. Сервер доски отдаёт `Access-Control-Allow-Origin: *`,
 иначе браузер режет запрос. `rework_rate` берётся из `attempts`, а не `summary`;
 changes сортируются по `created_at` (свежие сверху), активные задачи — по
-состояниям BRIEF_READY/RUNNING/VERIFYING/REWORK_READY/TIMED_OUT.
+состояниям RUNNING/VERIFYING/VERIFY_BLOCKED/REWORK_READY (как `TASK_ACTIVE`).
 
 **3. Offline честный.**
 Ошибка fetch показывается как `доска offline` и команда запуска; при отсутствии
