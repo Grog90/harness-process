@@ -37,8 +37,9 @@
 6. **Панель в DSH GUI.** ✅ Закрыто в `add-harness-panel`: client-бандл в
    `conversation.composer.dock`, читает `/metrics.json` доски, offline-состояние.
    HTML-доска остаётся для headless/браузера.
-7. **Multi-service e2e.** Merge order исполняется для одного лейна; нет
-   интеграционной среды и барьера волны для нескольких сервисов.
+7. **Multi-service e2e.** ✅ Закрыто в `add-multi-service-e2e`: прогон на копиях
+   сервисов (`@SHA` через `git archive`), env `HARNESS_E2E_*`, отчёт. Остаётся
+   merge order как очередь и реальные зависимости (Out of Scope).
 
 ## Волна 3 — доверие и подпись (нужны ключи/решение)
 

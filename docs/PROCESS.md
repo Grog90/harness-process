@@ -1358,7 +1358,8 @@ product-specs (spec_ref = SHA)
    разрешена (`--service-write`, `service:`-ключи) с realpath и защитой in-root путей.
    Snapshot/commit сервисов закрыты (`add-service-commit`), merge order записывается
    и сверяется; push/PR лейна и откат частичного коммита закрыты
-   (`add-lane-push-rollback`); не сделаны push/PR сервисных репозиториев и multi-service e2e.
+   (`add-lane-push-rollback`); multi-service e2e закрыт (`add-multi-service-e2e`);
+   остаются push/PR сервисных репозиториев и merge order как очередь.
 6. **Нет baseline/candidate.** ✅ Закрыто: `verification.py`, два прогона с версиями,
    diff падений; нулевой прогон блокирует VERIFIED.
 7. **Review-запись — не объект.** ✅ Закрыто для артефактов плана; вердикт задачи остаётся

@@ -7,14 +7,19 @@
 
 from __future__ import annotations
 
+import io
 import json
 import os
+import re
 import shutil
 import subprocess
+import tarfile
 import tempfile
 import time
 from datetime import datetime, timezone
 from typing import Any
+
+NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class E2EError(RuntimeError):
@@ -38,6 +43,28 @@ def _service_sha(path: str, fallback: str) -> str:
     return proc.stdout.strip() if proc.returncode == 0 else fallback
 
 
+def _dirty(path: str) -> bool:
+    proc = subprocess.run(
+        ["git", "-C", path, "status", "--porcelain"], capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=30,
+    )
+    return proc.returncode != 0 or bool(proc.stdout.strip())
+
+
+def _copy_commit(path: str, sha: str, dest: str) -> None:
+    """Копия ровно коммита: рабочее дерево может быть грязным, evidence — нет."""
+    proc = subprocess.run(
+        ["git", "-C", path, "archive", "--format=tar", sha],
+        capture_output=True, timeout=120,
+    )
+    if proc.returncode != 0:
+        raise E2EError("R-E2E-1", f"git archive {sha[:12]} не удался: "
+                       f"{proc.stderr.decode('utf-8', 'replace').strip()[:200]}")
+    os.makedirs(dest, exist_ok=True)
+    with tarfile.open(fileobj=io.BytesIO(proc.stdout)) as archive:
+        archive.extractall(dest)
+
+
 def parse_services(items: list[str]) -> list[dict[str, str]]:
     services: list[dict[str, str]] = []
     for item in items:
@@ -45,8 +72,10 @@ def parse_services(items: list[str]) -> list[dict[str, str]]:
             raise E2EError("R-E2E-1", f"сервис должен быть name=PATH[@SHA]: {item!r}")
         name, spec = item.split("=", 1)
         name = name.strip()
-        if not name or "/" in name or "\\" in name:
+        if not NAME_RE.fullmatch(name):
             raise E2EError("R-E2E-1", f"недопустимое имя сервиса: {name!r}")
+        if any(s["name"] == name for s in services):
+            raise E2EError("R-E2E-1", f"дубликат имени сервиса: {name!r}")
         path, sha = (spec.rsplit("@", 1) if "@" in spec else (spec, ""))
         services.append({"name": name, "path": path.strip(), "sha": sha.strip()})
     if not services:
@@ -75,9 +104,19 @@ def run(root: str, change_id: str, command: str, services: list[dict[str, str]],
             work = tempfile.mkdtemp(prefix=f"harness-e2e-{name}-")
             tmpdirs.append(work)
             copy_to = os.path.join(work, name)
-            shutil.copytree(path, copy_to, ignore=shutil.ignore_patterns(".git", ".harness", "node_modules"))
             sha = service.get("sha") or _service_sha(path, "")
-            prepared.append({"name": name, "source": path, "dir": copy_to, "sha": sha})
+            dirty = False
+            try:
+                if service.get("sha"):
+                    _copy_commit(path, sha, copy_to)
+                else:
+                    dirty = _dirty(path)
+                    shutil.copytree(path, copy_to,
+                                    ignore=shutil.ignore_patterns(".git", ".harness", "node_modules"))
+            except OSError as exc:
+                raise E2EError("R-E2E-1", f"копирование сервиса {name!r} не удалось: {exc}") from exc
+            prepared.append({"name": name, "source": path, "dir": copy_to, "sha": sha,
+                             "dirty": dirty})
             env[f"HARNESS_E2E_{name.upper()}_DIR"] = copy_to
             env[f"HARNESS_E2E_{name.upper()}_SHA"] = sha
         started = time.monotonic()
@@ -92,6 +131,9 @@ def run(root: str, change_id: str, command: str, services: list[dict[str, str]],
             exit_code, timed_out = -1, True
             stdout = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
             stderr = (exc.stderr or "") if isinstance(exc.stderr, str) else ""
+            if os.name == "nt" and getattr(exc, "pid", None):
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(exc.pid)],
+                               capture_output=True, timeout=30)
         duration = round(time.monotonic() - started, 3)
     finally:
         for work in tmpdirs:
@@ -104,7 +146,8 @@ def run(root: str, change_id: str, command: str, services: list[dict[str, str]],
         "exit_code": exit_code,
         "timed_out": timed_out,
         "duration_seconds": duration,
-        "services": [{"name": s["name"], "sha": s["sha"]} for s in prepared],
+        "services": [{"name": s["name"], "sha": s["sha"], "dirty": s["dirty"]}
+                     for s in prepared],
         "stdout_tail": stdout[-4000:],
         "stderr_tail": stderr[-4000:],
         "created_at": datetime.now(timezone.utc).isoformat(),

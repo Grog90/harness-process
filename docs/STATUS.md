@@ -77,7 +77,8 @@ rule verify: current
 - адаптер DSH: автодиспетч и opt-in auto-submit работают; verdict/accept
   не автоматизированы, один attach на корень;
 - shell-эвристика не ловит `python -c open(...,'w')`; TOCTOU между realpath и записью;
-- merge order записывается и сверяется, но не исполняется как очередь; e2e-среды нет;
+- merge order записывается и сверяется, но не исполняется как очередь; e2e
+  запускается на копиях сервисов, реальные БД/Docker не поднимаются;
 - `can_read`/`may_*` исполняются (`add-capability-enforcement`), но доверенная
   идентичность роли остаётся допущением;
 - evidence подписан cosign и вывозится `evidence export` в доверенный каталог;
