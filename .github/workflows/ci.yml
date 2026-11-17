@@ -17,11 +17,21 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Verify signed commit
         run: |
           git config --global gpg.format ssh
-          git config --global gpg.ssh.allowedSignersFile "${{ github.workspace }}/.github/allowed_signers"
-          $ref = if ("${{ github.event_name }}" -eq "pull_request") { "${{ github.event.pull_request.head.sha }}" } else { "HEAD" }
+          if ("${{ github.event_name }}" -eq "pull_request") {
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            $signers = Join-Path $env:RUNNER_TEMP "allowed_signers"
+            git show FETCH_HEAD:.github/allowed_signers | Set-Content -LiteralPath $signers -Encoding utf8
+            $ref = "${{ github.event.pull_request.head.sha }}"
+          } else {
+            $signers = "${{ github.workspace }}/.github/allowed_signers"
+            $ref = "HEAD"
+          }
+          git config --global gpg.ssh.allowedSignersFile $signers
           git verify-commit $ref
       - uses: actions/setup-python@v5
         with:

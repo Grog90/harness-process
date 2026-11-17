@@ -24,7 +24,9 @@ git config --local gpg.ssh.allowedSignersFile .github/allowed_signers
 ## CI
 
 Workflow настраивает `gpg.ssh.allowedSignersFile` и выполняет
-`git verify-commit HEAD`; неподписанный коммит валит job.
+`git verify-commit`; неподписанный коммит валит job. Для PR доверенный ключ
+берётся из base-ветки, а не из ветки PR — иначе автор мог бы подписать свой же
+коммит своим ключом.
 
 ## GitHub
 

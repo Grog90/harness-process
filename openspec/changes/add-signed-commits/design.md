@@ -10,10 +10,10 @@
 `~/.ssh/harness_signing`; в репозитории только `.github/allowed_signers` с
 публичным ключом. Это позволяет `git verify-commit` локально и в CI.
 
-**3. CI проверяет HEAD.**
-Настройка `gpg.ssh.allowedSignersFile` + `git verify-commit HEAD`; шаг падает при
-неподписанном коммите. GitHub UI покажет «Unverified», пока ключ не загружен в
-аккаунт — это отдельное действие владельца.
+**3. CI проверяет HEAD, доверие — из base.**
+Для push allowed_signers берётся из коммита; для PR — из base-ветки, иначе автор
+PR мог бы добавить свой ключ в ветке и подписать свой же коммит. Checkout —
+`fetch-depth: 0`, чтобы head.sha был доступен.
 
 ## Risks
 

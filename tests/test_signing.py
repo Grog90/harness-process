@@ -23,6 +23,8 @@ class SigningTests(unittest.TestCase):
         workflow = self._read(".github/workflows/ci.yml")
         self.assertIn("git verify-commit", workflow)
         self.assertIn("allowed_signers", workflow)
+        self.assertIn("fetch-depth: 0", workflow)
+        self.assertIn("FETCH_HEAD:.github/allowed_signers", workflow)
 
     def test_docs_cover_rotation_and_github(self) -> None:
         doc = self._read("docs/SIGNING.md")
