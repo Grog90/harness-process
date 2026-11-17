@@ -817,7 +817,7 @@ class ChecksTests(unittest.TestCase):
         brief = {"acceptance": {"check_commands": ["python touch.py"],
                                 "criteria": [{"id": "A", "check": "python touch.py"}]}}
         report = checks.run(self.root, brief, timeout=60)
-        self.assertTrue(report["all_ok"])
+        self.assertTrue(report["all_ok"], report)
         self.assertFalse(os.path.exists(os.path.join(self.root, "artifact.txt")))
         verdict = checks.build_verdict(brief, report, task_id="T", attempt=1, snapshot_id="s")
         self.assertEqual(verdict["verdict"], "PASS")

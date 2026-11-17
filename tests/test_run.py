@@ -89,7 +89,8 @@ class RunnerTests(unittest.TestCase):
         with open(os.path.join(self.root, "src", "fee.py"), encoding="utf-8") as fh:
             self.assertIn("FEE_NEGATIVE", fh.read())
         log = subprocess.run(
-            ["git", "-C", self.root, "log", "--oneline"], capture_output=True, text=True
+            ["git", "-C", self.root, "log", "--oneline"], capture_output=True,
+            text=True, encoding="utf-8", errors="replace",
         ).stdout
         self.assertIn("RUN-1", log)
 
