@@ -1,0 +1,25 @@
+{
+  "change_id": "add-evidence-export",
+  "spec_ref": "0e9e3d6c464a0d1f68c55f8eda9152bb5a62cae0",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "6a8557223ada0052d16a48bde27122085327f568"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "evidence export/verify с sha256, защита change/dest, role-gate",
+    "кросс-диск/UNC не падает"
+  ],
+  "residual_risks": [
+    "облачный API/шифрование и retention вне области"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-17T13:50:08+0300"
+}
