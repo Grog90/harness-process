@@ -66,3 +66,14 @@ def detach(root: str) -> dict[str, Any]:
 def status(root: str) -> dict[str, Any]:
     data = read_attach(root)
     return {"ok": True, "attach": data, "path": attach_path(root)}
+
+
+def active_role(root: str) -> str | None:
+    """Роль из guard-scope: в DSH HARNESS_ROLE не выставляется."""
+    try:
+        with open(os.path.join(os.path.abspath(root), ".harness", "guard-scope.json"),
+                  encoding="utf-8") as fh:
+            scope = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    return str(scope.get("role") or "") or None

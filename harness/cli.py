@@ -364,7 +364,7 @@ def cmd_session(args: argparse.Namespace) -> int:
     root = _root(args)
     store = _store(args)
     if args.session_cmd == "attach":
-        role = os.environ.get("HARNESS_ROLE", "human")
+        role = os.environ.get("HARNESS_ROLE") or session_mod.active_role(root) or "human"
         if role not in ("human", "system", "orchestrator"):
             print(f"session attach запрещён роли {role!r}: привязку делает оператор", file=sys.stderr)
             return EXIT_DENIED

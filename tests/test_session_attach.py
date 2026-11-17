@@ -77,6 +77,18 @@ class SessionAttachTests(unittest.TestCase):
         self.assertNotEqual(denied.returncode, 0)
         self.assertIsNone(session.read_attach(self.root))
 
+        # DSH-сессия не выставляет HARNESS_ROLE: роль живёт в guard-scope.json.
+        self.store.create_task("T-3", policy_version="1.0.0")
+        with open(os.path.join(self.root, ".harness", "guard-scope.json"), "w", encoding="utf-8") as fh:
+            json.dump({"task_id": "T-3", "role": "worker", "allowed_files": []}, fh)
+        scoped = subprocess.run(
+            [sys.executable, "-m", "harness", "--root", self.root, "--db", db,
+             "session", "attach", "--task", "T-3"],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+        self.assertNotEqual(scoped.returncode, 0)
+        self.assertIsNone(session.read_attach(self.root))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
