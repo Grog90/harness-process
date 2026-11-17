@@ -28,6 +28,35 @@ def _data() -> dict:
     }
 
 
+class OtelTracesTest(unittest.TestCase):
+    def _events(self) -> list[dict]:
+        return [
+            {"event_id": "e1", "type": "dispatch", "created_at": 100.0, "result": {"ok": True, "state": "RUNNING"}},
+            {"event_id": "e2", "type": "submit", "created_at": 101.0, "result": {"ok": False}},
+            {"event_id": "e3", "type": "commit", "created_at": 102.0, "result": {"ok": True}},
+        ]
+
+    def test_spans_have_trace_and_status(self) -> None:
+        payload = otel.build_traces(self._events(), "T-1", service_name="h")
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        self.assertEqual(len(spans), 3)
+        self.assertEqual(len({s["traceId"] for s in spans}), 1)
+        self.assertEqual(len(spans[0]["traceId"]), 32)
+        self.assertEqual(len(spans[0]["spanId"]), 16)
+        self.assertEqual(spans[0]["status"]["code"], 1)
+        self.assertEqual(spans[1]["status"]["code"], 2)
+        self.assertEqual(spans[0]["startTimeUnixNano"], "100000000000")
+        self.assertEqual(spans[0]["endTimeUnixNano"], "101000000000")
+
+    def test_empty_events_still_shape(self) -> None:
+        payload = otel.build_traces([], "T-2")
+        self.assertEqual(payload["resourceSpans"][0]["scopeSpans"][0]["spans"], [])
+
+    def test_trace_id_is_stable(self) -> None:
+        self.assertEqual(otel.trace_id("T-1"), otel.trace_id("T-1"))
+        self.assertNotEqual(otel.trace_id("T-1"), otel.trace_id("T-2"))
+
+
 class OtelTest(unittest.TestCase):
     def test_payload_shape_and_names(self) -> None:
         payload = otel.build(_data(), service_name="harness-test", service_version="9.9",

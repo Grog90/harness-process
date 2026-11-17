@@ -92,6 +92,15 @@ python -m harness otel --endpoint http://127.0.0.1:4318/v1/metrics
 `harness.verification.ok`, `harness.findings.open` и т.п.; ресурс — `service.name`,
 `service.version`, `host.name`, `vcs.revision`. Агентские трейсы экспортирует сам DSH.
 
+Spans процесса задачи:
+
+```powershell
+python -m harness otel --traces-task T --out evidence/otlp-task.json
+```
+
+`--traces-task` добавляет `resourceSpans`: один trace на задачу, span на событие,
+`traceId` детерминирован, статус OK/ERROR по `result.ok`.
+
 ## dsh-headless в CI
 
 Headless-профиль установлен и запускается:

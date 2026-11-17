@@ -909,12 +909,20 @@ def cmd_otel(args: argparse.Namespace) -> int:
 
     root = _root(args)
     store = _store(args)
+    events: list[dict[str, Any]] = []
     try:
         data = metrics.collect(store, root)
+        if args.traces_task:
+            events = store.events_for(args.traces_task)
     finally:
         store.close()
     payload = otel.build(data, service_name=args.service_name,
                          service_version=args.service_version or "")
+    if args.traces_task:
+        traces = otel.build_traces(events, args.traces_task,
+                                   service_name=args.service_name,
+                                   service_version=args.service_version or "")
+        payload["resourceSpans"] = traces["resourceSpans"]
     if args.out:
         print(f"OTLP: записано {otel.write(payload, args.out)}")
     sent = None
@@ -1493,6 +1501,7 @@ def build_parser() -> argparse.ArgumentParser:
     ot.add_argument("--service-name", default="harness")
     ot.add_argument("--service-version", default="")
     ot.add_argument("--timeout", type=int, default=10)
+    ot.add_argument("--traces-task", default=None, help="добавить spans задачи в OTLP")
     ot.set_defaults(func=cmd_otel)
 
     cifn = sub.add_parser("ci", help="CI-снимок: selftest, покрытие, метрики, тесты")
