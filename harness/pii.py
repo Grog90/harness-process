@@ -10,29 +10,32 @@ import re
 from typing import Any
 
 PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("email", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")),
-    ("phone", re.compile(r"(?<!\d)\+?[78][\s\-()]*\d{3}[\s\-()]*\d{3}[\s\-()]*\d{2}[\s\-()]*\d{2}(?!\d)")),
-    ("card", re.compile(r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)")),
-    ("iban", re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b")),
-    ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")),
     ("private_key", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----",
                                re.DOTALL)),
+    ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")),
+    ("iban", re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b")),
+    ("email", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")),
+    ("phone", re.compile(r"(?<!\d)(?:\+[1-9][0-9\s\-()]{6,18}[0-9]|\+?[78][\s\-()]*\d{3}[\s\-()]*\d{3}[\s\-()]*\d{2}[\s\-()]*\d{2})(?!\d)")),
+    ("card", re.compile(r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)")),
 ]
 
 
-def scan(text: str) -> dict[str, int]:
+def _mask(text: str) -> tuple[str, dict[str, int]]:
     counts: dict[str, int] = {}
     for name, pattern in PATTERNS:
         found = pattern.findall(text)
         if found:
             counts[name] = len(found)
-    return counts
+        text = pattern.sub(f"[REDACTED:{name}]", text)
+    return text, counts
+
+
+def scan(text: str) -> dict[str, int]:
+    return _mask(text)[1]
 
 
 def redact(text: str) -> str:
-    for name, pattern in PATTERNS:
-        text = pattern.sub(f"[REDACTED:{name}]", text)
-    return text
+    return _mask(text)[0]
 
 
 def report(text: str) -> dict[str, Any]:

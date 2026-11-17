@@ -40,6 +40,18 @@ class PiiTests(unittest.TestCase):
         self.assertEqual(report["total"], 0)
 
 
+    def test_iban_redacted_before_card(self) -> None:
+        text = "IBAN GB82WEST12345698765432"
+        counts = pii.scan(text)
+        self.assertEqual(counts.get("iban"), 1)
+        self.assertNotIn("card", counts)
+        out = pii.redact(text)
+        self.assertIn("[REDACTED:iban]", out)
+        self.assertNotIn("GB82WEST", out)
+
+    def test_international_phone(self) -> None:
+        self.assertEqual(pii.scan("call +1 415 555 1234")["phone"], 1)
+
     def test_scan_clean_text(self) -> None:
         self.assertTrue(pii.report("просто текст")["ok"])
 
@@ -59,6 +71,21 @@ class PiiTests(unittest.TestCase):
                               encoding="utf-8", errors="replace")
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("перезаписывать", proc.stderr)
+
+    def test_cli_rejects_path_outside_root(self) -> None:
+        import subprocess
+        import tempfile
+
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        outside = os.path.join(tempfile.gettempdir(), "pii-outside.txt")
+        with open(outside, "w", encoding="utf-8") as fh:
+            fh.write("a@b.ru")
+        proc = subprocess.run([sys.executable, "-m", "harness", "--root", root, "pii", "scan",
+                               "--file", outside],
+                              cwd=root, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("вне корня", proc.stderr)
 
     def test_cli_slo_json(self) -> None:
         import json

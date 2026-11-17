@@ -10,7 +10,8 @@
 
 `pii.scan/redact` ДОЛЖНЫ (SHALL) находить email, телефон, карту, IBAN, JWT и
 приватный ключ и заменять их на `[REDACTED:<класс>]`. CLI без `--text/--file` —
-отказ; `redact --out` не перезаписывает исходный файл.
+отказ; `--file/--out` — только внутри корня и только с `may_commit`; `redact
+--out` не перезаписывает исходный файл.
 
 #### Scenario: [CASE-PII-1-1] Скан
 
@@ -25,8 +26,9 @@
 ### Requirement: [REQ-SLO-1] Пороговый отчёт
 
 `slo.evaluate` ДОЛЖЕН (SHALL) возвращать строки значение/цель/вердикт и флаг
-`confirmed`; пустая выборка — `ok=null` (`n/a`), а не успех; `--strict` — exit 2
-при нарушении.
+`confirmed`; при пустой выборке `ok=true`, `breached=[]`, строки `na`, а
+`confirmed=false` — это «нет данных», а не подтверждённый успех; `--strict` —
+exit 2 только при нарушении.
 
 #### Scenario: [CASE-SLO-1-1] Нарушение
 

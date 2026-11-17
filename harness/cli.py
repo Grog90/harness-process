@@ -1060,6 +1060,21 @@ def cmd_selftest(args: argparse.Namespace) -> int:
 def cmd_pii(args: argparse.Namespace) -> int:
     from . import pii
 
+    root = _root(args)
+    if (args.file or args.out) and not _require_capability(
+            root, "commit", args.json, _control_root(args)):
+        return EXIT_DENIED
+    for path in (args.file, args.out):
+        if path:
+            real = os.path.realpath(path)
+            root_real = os.path.realpath(root)
+            try:
+                inside = os.path.commonpath([real, root_real]) == root_real
+            except ValueError:
+                inside = False
+            if not inside:
+                print(f"ОТКАЗ [PII] путь вне корня: {path}", file=sys.stderr)
+                return EXIT_DENIED
     if args.file:
         with open(args.file, encoding="utf-8") as fh:
             text = fh.read()
