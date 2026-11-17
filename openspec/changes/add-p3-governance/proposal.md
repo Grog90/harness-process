@@ -9,17 +9,20 @@ P3 закрывает доверие к данным и качеству: PII м
 ## What Changes
 
 - `harness/pii.py` + `harness pii scan|redact`: email, телефон, карта, IBAN, JWT,
-  приватный ключ → `[REDACTED:<класс>]`;
+  приватный ключ → `[REDACTED:<класс>]`; файловые `--file/--out` — только
+  оператор, только внутри корня и через pretooluse (запись в protected запрещена);
 - `harness/slo.py` + `harness slo [--strict]`: acceptance/rework/verification/open
-  findings с порогами; пустая выборка — `n/a`, не успех;
-- `docs/LEGAL.md`: инвентарь данных, хранение/вывоз, PII, лицензии, границы;
+  findings с порогами; пустая выборка — `n/a`, `confirmed=false`, не успех;
+- `docs/LEGAL.md`: инвентарь данных, включая DSH → LLM-провайдер, хранение/вывоз,
+  PII, лицензии, границы;
 - `docs/SLO.md`: пороги и evals как отдельный контроль.
 
 ## Impact
 
-- Класс риска: **L1** (read-only команды и документация).
+- Класс риска: **L1** для `scan`; **L2** для `redact --out` (запись файла внутри
+  корня под `may_commit` и pretooluse).
 - Автоматической редакции при записи нет: PII надо вычищать до коммита/экспорта.
-- `slo --strict` — exit 2 только при реальном нарушении.
+- `slo --strict` — exit 2 только при реальном нарушении; пустая выборка не успех.
 
 ## Out of Scope
 

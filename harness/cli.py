@@ -1103,6 +1103,9 @@ def cmd_pii(args: argparse.Namespace) -> int:
     else:
         print("ОТКАЗ [PII] нужен --text или --file", file=sys.stderr)
         return EXIT_DENIED
+    if args.action == "scan" and args.out:
+        print("ОТКАЗ [PII] --out применим только к redact", file=sys.stderr)
+        return EXIT_DENIED
     if args.action == "redact" and args.out and args.file:
         if os.path.abspath(args.out) == os.path.abspath(args.file):
             print("ОТКАЗ [PII] нельзя перезаписывать исходный файл", file=sys.stderr)
