@@ -23,7 +23,7 @@ jobs:
         run: |
           git config --global gpg.format ssh
           if ("${{ github.event_name }}" -eq "pull_request") {
-            git fetch origin "${{ github.base_ref }}" --depth=1
+            git fetch origin "${{ github.base_ref }}"
             if ($LASTEXITCODE -ne 0) { exit 1 }
             $content = git show FETCH_HEAD:.github/allowed_signers
             if ($LASTEXITCODE -ne 0) { exit 1 }
