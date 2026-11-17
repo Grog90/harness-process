@@ -1081,7 +1081,7 @@ def cmd_pii(args: argparse.Namespace) -> int:
         if not path:
             continue
         rel = os.path.relpath(os.path.realpath(path), os.path.realpath(root)).replace("\\", "/")
-        if policy.is_protected(rel):
+        if tool == "write_file" and policy.is_protected(rel):
             print(f"ОТКАЗ [R-PROT-1] {rel} — защищённый путь", file=sys.stderr)
             return EXIT_DENIED
         decision = run_hooks("pretooluse", HookContext(

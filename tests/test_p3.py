@@ -99,6 +99,16 @@ class PiiTests(unittest.TestCase):
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("R-PROT-1", proc.stderr)
 
+    def test_cli_can_scan_protected_file_for_read(self) -> None:
+        import subprocess
+
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        proc = subprocess.run([sys.executable, "-m", "harness", "--root", root, "pii", "scan",
+                               "--file", "policies/rules.json"],
+                              cwd=root, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_cli_slo_json(self) -> None:
         import json
         import subprocess

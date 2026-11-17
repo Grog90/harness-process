@@ -11,7 +11,8 @@
 `pii.scan/redact` ДОЛЖНЫ (SHALL) находить email, телефон, карту, IBAN, JWT и
 приватный ключ и заменять их на `[REDACTED:<класс>]`. CLI без `--text/--file` —
 отказ; `--file/--out` — только внутри корня, только с `may_commit` и через
-pretooluse-проверку read_file/write_file; `redact --out` не перезаписывает исходник.
+pretooluse-проверку; запись в защищённый путь запрещена, чтение — по can_read;
+`redact --out` не перезаписывает исходник.
 
 #### Scenario: [CASE-PII-1-1] Скан
 
