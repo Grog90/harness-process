@@ -24,8 +24,9 @@ class ForgeError(RuntimeError):
         return {"ok": False, "rule": self.rule, "reason": str(self), "details": self.details}
 
 
-FAIL_CONCLUSIONS = {"FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"}
-PENDING_STATUSES = {"QUEUED", "IN_PROGRESS", "PENDING", "WAITING", "REQUESTED"}
+FAIL_CONCLUSIONS = {"FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE",
+                    "ERROR"}
+PENDING_STATUSES = {"QUEUED", "IN_PROGRESS", "PENDING", "WAITING", "REQUESTED", "EXPECTED"}
 
 
 def require_gh() -> None:
@@ -40,11 +41,13 @@ def summarize_checks(pr: dict[str, Any]) -> dict[str, Any]:
     pending: list[str] = []
     for check in checks:
         name = str(check.get("name") or check.get("context") or check.get("__typename") or "check")
-        status = str(check.get("status") or "").upper()
-        conclusion = str(check.get("conclusion") or "").upper()
+        # CheckRun: status+conclusion; StatusContext (legacy): state.
+        status = str(check.get("status") or check.get("state") or "").upper()
+        conclusion = str(check.get("conclusion") or check.get("state") or "").upper()
         if conclusion in FAIL_CONCLUSIONS:
             failing.append(name)
-        elif status in PENDING_STATUSES or (status and status != "COMPLETED" and not conclusion):
+        elif status in PENDING_STATUSES or (status and status != "COMPLETED"
+                                             and status != "SUCCESS" and not conclusion):
             pending.append(name)
     return {
         "failing": failing,
@@ -54,16 +57,17 @@ def summarize_checks(pr: dict[str, Any]) -> dict[str, Any]:
         "state": str(pr.get("state") or ""),
         "mergeable": str(pr.get("mergeable") or ""),
         "review_decision": str(pr.get("reviewDecision") or ""),
+        "reviewDecision": str(pr.get("reviewDecision") or ""),
         "number": pr.get("number"),
         "url": str(pr.get("url") or ""),
     }
 
 
-def _gh_json(root: str, args: list[str]) -> Any:
+def _gh_json(root: str, args: list[str], *, timeout: float = 60) -> Any:
     require_gh()
     proc = subprocess.run(
         ["gh", *args], cwd=root, capture_output=True, text=True,
-        encoding="utf-8", errors="replace", timeout=60,
+        encoding="utf-8", errors="replace", timeout=timeout,
     )
     if proc.returncode != 0:
         raise ForgeError("R-FORGE-1", f"gh {' '.join(args)} не удался: {proc.stderr.strip()[:300]}")
@@ -73,11 +77,11 @@ def _gh_json(root: str, args: list[str]) -> Any:
         raise ForgeError("R-FORGE-1", f"gh вернул не JSON: {exc}") from exc
 
 
-def pr_status(root: str, branch: str) -> dict[str, Any]:
+def pr_status(root: str, branch: str, *, timeout: float = 60) -> dict[str, Any]:
     """Статус PR для ветки; отсутствие PR — отказ."""
     data = _gh_json(root, ["pr", "list", "--head", branch, "--state", "all",
                            "--json", "number,url,state,statusCheckRollup,mergeable,reviewDecision",
-                           "--limit", "1"])
+                           "--limit", "1"], timeout=timeout)
     if not isinstance(data, list) or not data:
         raise ForgeError("R-FORGE-1", f"PR для ветки {branch!r} не найден")
     summary = summarize_checks(data[0])
@@ -91,7 +95,8 @@ def wait_status(root: str, branch: str, *, timeout: float = 300.0, interval: flo
     deadline = time.monotonic() + timeout
     last: dict[str, Any] | None = None
     while True:
-        last = pr_status(root, branch)
+        remaining = deadline - time.monotonic()
+        last = pr_status(root, branch, timeout=max(1.0, min(60.0, remaining)))
         if last["ok"] or last["failing"]:
             return last
         if time.monotonic() >= deadline:

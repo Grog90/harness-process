@@ -23,8 +23,8 @@
 2. **Push/PR и частичный откат.** ✅ Закрыто в `add-lane-push-rollback`:
    `lane push/pr`, `reset --soft` для сервисных и главного коммита, удаление
    commit-записей. Остаётся push/PR сервисных репозиториев в их remote.
-3. **PR-статус и forge.** CI есть, но нет статуса PR и абстракции forge;
-   `DEEPSEEK_API_KEY` в job не настроен.
+3. **PR-статус и forge.** ✅ Закрыто в `add-forge-status`: `harness forge status`
+   читает checks через `gh` (CheckRun и StatusContext), без `gh` — отказ. CI есть.
 4. **Внешнее хранилище evidence.** Cosign есть, но artifact живёт по срокам
    GitHub; нет доверенного вывоза.
 

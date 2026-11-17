@@ -8,9 +8,10 @@
 
 ### Requirement: [REQ-FORGE-1] Статус PR читается и сводится
 
-`harness forge status --task T` ДОЛЖЕН (SHALL) найти PR ветки `harness/T` через
-`gh` и вернуть `ok/failing/pending/mergeable/reviewDecision`; без `gh` или PR —
-отказ `R-FORGE-1`.
+`harness forge status --task T` (или `--branch B`) ДОЛЖЕН (SHALL) найти PR ветки
+`harness/T` через `gh` и вернуть `ok/failing/pending/mergeable/reviewDecision`;
+без `gh` или PR — отказ `R-FORGE-1`. Понимаются обе формы checks: CheckRun
+(`status`/`conclusion`) и StatusContext (`state`).
 
 #### Scenario: [CASE-FORGE-1-1] Успешные checks
 
