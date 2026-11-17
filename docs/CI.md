@@ -45,6 +45,15 @@ jobs:
       - run: python -m harness ci --run-tests
 ```
 
+## Статус PR
+
+```powershell
+python -m harness forge status --task T --wait --timeout 300
+```
+
+Читает PR ветки `harness/T` и checks через `gh`; без `gh` — отказ `R-FORGE-1`.
+Это только чтение: required checks на free-private GitHub недоступны.
+
 ## Доска и метрики
 
 ```powershell

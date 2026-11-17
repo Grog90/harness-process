@@ -374,6 +374,18 @@
       "residual_risk": "push — внешняя публикация кода; non-fast-forward и права remote не отменяются"
     },
     {
+      "id": "R-FORGE-1",
+      "statement": "PR не считается готовым, пока checks не завершены успешно; без gh — отказ, не пустой ok.",
+      "event": "precommit",
+      "enforcement": "blocking",
+      "implemented": true,
+      "hook": "forge.status",
+      "positive_test": "summarize_checks: FAILURE → ok=false, failing=[ci]",
+      "negative_test": "pr_status без gh → R-FORGE-1",
+      "owner": "forge",
+      "residual_risk": "gh/API может отдать неполный statusCheckRollup; branch protection недоступна"
+    },
+    {
       "id": "R-EVAL-1",
       "statement": "Верификатор измеряется: пропуск дефекта, ложный отказ, неполная проверка, стоимость принятой задачи.",
       "event": "process",

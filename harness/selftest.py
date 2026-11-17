@@ -685,6 +685,14 @@ def c_sandbox_degrades_honestly(root: str) -> None:
     assert report["results"][0]["isolation"] == info["mode"]
 
 
+def c_forge_status(root: str) -> None:
+    from . import forge as forge_mod
+
+    out = forge_mod.summarize_checks({"statusCheckRollup": [
+        {"name": "ci", "status": "COMPLETED", "conclusion": "FAILURE"}]})
+    assert not out["ok"] and out["failing"] == ["ci"], out
+
+
 def c_lane_push(root: str) -> None:
     """R-PUSH-1: ветка лейна публикуется в bare-remote без force."""
     import subprocess
@@ -1269,6 +1277,7 @@ CHECKS: list[Check] = [
     Check("R-SANDBOX-1", "изоляция честно помечена", c_sandbox_degrades_honestly),
     Check("R-WAVE-1", "лейн: worktree, коммит, слияние", c_lane_merge),
     Check("R-PUSH-1", "лейн публикуется в remote без force", c_lane_push),
+    Check("R-FORGE-1", "упавший check делает PR не готовым", c_forge_status),
     Check("R-SPEC-1", "код без спеки не коммитится", c_spec_gate),
     Check("R-CHG-1", "Ready-гейт не пропускает без review", c_change_ready_gate),
     Check("R-CHG-1", "диспетч по change только из READY", c_change_dispatch),

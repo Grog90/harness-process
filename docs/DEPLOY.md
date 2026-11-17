@@ -67,6 +67,8 @@ cosign verify-blob --bundle evidence/ci-download/report.json.bundle \
   отдельный гейт.
 - **Публикация лейна:** `harness lane push --task T` (без force) и
   `harness lane pr --task T --target main` (через `gh`).
+- **Статус PR:** `harness forge status --task T [--wait --timeout 300]` — читает
+  checks через `gh`, без `gh` отказывает.
 - **5 старых change** закрываются как исторические (CANCELLED), не через полный
   процесс.
 

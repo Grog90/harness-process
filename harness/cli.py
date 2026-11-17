@@ -763,6 +763,26 @@ def cmd_lane(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_forge(args: argparse.Namespace) -> int:
+    """Статус PR/checks через gh; --wait ждёт завершения."""
+    from . import forge as forge_mod
+    from . import lanes as lanes_mod
+
+    root = _root(args)
+    branch = args.branch or (lanes_mod.branch_name(args.task) if args.task else "")
+    if not branch:
+        print("нужен --task или --branch", file=sys.stderr)
+        return EXIT_ERROR
+    try:
+        out = forge_mod.wait_status(root, branch, timeout=args.timeout) if args.wait \
+            else forge_mod.pr_status(root, branch)
+    except forge_mod.ForgeError as exc:
+        _print(exc.to_dict(), args.json) if args.json else _deny_text(exc)
+        return EXIT_DENIED
+    _print(out, args.json)
+    return EXIT_OK if out.get("ok") else EXIT_DENIED
+
+
 def cmd_hook(args: argparse.Namespace) -> int:
     root = _root(args)
     if args.stdin:
@@ -1350,6 +1370,14 @@ def build_parser() -> argparse.ArgumentParser:
     ln.add_argument("--title", default=None)
     ln.add_argument("--body", default=None)
     ln.set_defaults(func=cmd_lane)
+
+    fg = sub.add_parser("forge", help="статус PR и checks через gh")
+    fg.add_argument("action", choices=["status"])
+    fg.add_argument("--task", default=None)
+    fg.add_argument("--branch", default=None)
+    fg.add_argument("--wait", action="store_true")
+    fg.add_argument("--timeout", type=float, default=300.0)
+    fg.set_defaults(func=cmd_forge)
 
     co = sub.add_parser("cost", help="стоимость задачи: запись и отчёт")
     co.add_argument("action", choices=["record", "report"])
