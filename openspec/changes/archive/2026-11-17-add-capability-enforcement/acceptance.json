@@ -1,0 +1,25 @@
+{
+  "change_id": "add-capability-enforcement",
+  "spec_ref": "81aeb67286a067d95d90bb4636d24825ea6fad74",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "81aeb67286a067d95d90bb4636d24825ea6fad74"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "can_read и may_* исполняются в CLI, hook и guard",
+    "list_dir/pathless/parity покрыты; R-CAP-1/R-READ-1 в реестре"
+  ],
+  "residual_risks": [
+    "state-mutating change-команды и task_new/brief_attach пока без may_*"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-17T13:03:18+0300"
+}

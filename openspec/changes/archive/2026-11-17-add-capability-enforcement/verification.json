@@ -1,0 +1,68 @@
+{
+  "change_id": "add-capability-enforcement",
+  "created_at": 1794909748.3460817,
+  "results": {
+    "baseline": {
+      "mode": "baseline",
+      "service": "repo",
+      "command": "\"C:\\Users\\ownag\\.dsh\\dsh-runtimes\\dsh-primary-runtime\\dependencies\\python\\python.exe\" -m unittest discover -s tests -q",
+      "ref": "81aeb67286a067d95d90bb4636d24825ea6fad74",
+      "cwd": ".",
+      "runner": "unittest",
+      "environment": "local",
+      "started_at": 1794909705.353568,
+      "duration_s": 42.99,
+      "result": "pass",
+      "exit_code": 0,
+      "tests_ran": 440,
+      "failures": [],
+      "stdout_tail": "",
+      "stderr_tail": "[browser] сбой fetch_page: RuntimeError('нежданчик')\n[desktop] initialize: protocol=2025-06-18\n[trendshift] initialize: protocol=2026-07-28\n[trendshift] initialize: protocol=2025-06-18\n[trendshift] сбой trending: TrendshiftError('сеть недоступна')\n----------------------------------------------------------------------\nRan 440 tests in 42.666s\n\nOK (skipped=9)\n"
+    },
+    "candidate": {
+      "mode": "candidate",
+      "service": "repo",
+      "command": "\"C:\\Users\\ownag\\.dsh\\dsh-runtimes\\dsh-primary-runtime\\dependencies\\python\\python.exe\" -m unittest discover -s tests -q",
+      "ref": "81aeb67286a067d95d90bb4636d24825ea6fad74",
+      "cwd": ".",
+      "runner": "unittest",
+      "environment": "local",
+      "started_at": 1794909748.4632943,
+      "duration_s": 42.77,
+      "result": "pass",
+      "exit_code": 0,
+      "tests_ran": 440,
+      "failures": [],
+      "stdout_tail": "",
+      "stderr_tail": "[browser] сбой fetch_page: RuntimeError('нежданчик')\n[desktop] initialize: protocol=2025-06-18\n[trendshift] initialize: protocol=2026-07-28\n[trendshift] initialize: protocol=2025-06-18\n[trendshift] сбой trending: TrendshiftError('сеть недоступна')\n----------------------------------------------------------------------\nRan 440 tests in 42.453s\n\nOK (skipped=9)\n"
+    }
+  },
+  "commands": {
+    "baseline": "\"C:\\Users\\ownag\\.dsh\\dsh-runtimes\\dsh-primary-runtime\\dependencies\\python\\python.exe\" -m unittest discover -s tests -q",
+    "candidate": "\"C:\\Users\\ownag\\.dsh\\dsh-runtimes\\dsh-primary-runtime\\dependencies\\python\\python.exe\" -m unittest discover -s tests -q"
+  },
+  "revision": 1,
+  "spec_ref": "81aeb67286a067d95d90bb4636d24825ea6fad74",
+  "environment": "local",
+  "runner": "unittest",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "81aeb67286a067d95d90bb4636d24825ea6fad74"
+    }
+  ],
+  "diffs": {
+    "repo": {
+      "new_failures": [],
+      "fixed": [],
+      "regression": false
+    }
+  },
+  "diff": {
+    "new_failures": [],
+    "fixed": [],
+    "regression": false
+  },
+  "problems": [],
+  "ok": true
+}
