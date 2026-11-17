@@ -7,9 +7,11 @@ CLI берёт `active_role(root)` (guard-scope), затем `HARNESS_ROLE`, з�
 Это тот же источник, что у attach; агент не может повысить роль аргументом.
 
 **2. may_* — в точке действия.**
-Проверка стоит в `cmd_dispatch`, `cmd_commit`, `cmd_verdict`, `cmd_finalize` до
-создания Engine: отказ дешёвый и не меняет состояние. `orchestrator` сохраняет
-dispatch/commit, `verifier` — verify, worker — ничего из этого.
+Проверка стоит в `cmd_dispatch`, `cmd_commit`, `cmd_verdict`, `cmd_finalize` и
+`cmd_run` до создания Engine: отказ дешёвый и не меняет состояние. Отказ
+помечен отдельным правилом `R-CAP-1`, которое исполняется хуком
+`policy.capability` через `_require_capability` (а не только описано в матрице).
+`orchestrator` сохраняет dispatch/commit, `verifier` — verify, worker — ничего.
 
 **3. can_read — в хуке и guard.**
 Python-хук `policy.read_scope` и JS `checkRead` используют один и тот же

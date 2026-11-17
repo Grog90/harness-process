@@ -213,6 +213,7 @@ EVENT_HOOKS: dict[str, list[str]] = {
     "pretooluse": [
         "policy.role_identity",
         "policy.tool_scope",
+        "policy.capability",
         "policy.read_scope",
         "policy.protected_paths",
         "policy.write_scope",

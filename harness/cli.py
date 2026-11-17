@@ -459,15 +459,21 @@ def _require_capability(root: str, capability: str, json_out: bool,
 
     role = _runtime_role(root)
     try:
-        decision = Policy.load(policy_root or root).check_capability(role, capability)
+        from .hooks import HookContext, run as run_hooks
+
+        result = run_hooks("pretooluse", HookContext(
+            event="pretooluse", tool="harness", role=role,
+            policy=Policy.load(policy_root or root), root=root,
+            extra={"capability": capability},
+        ))
     except (OSError, ValueError, PolicyError) as exc:
         print(f"ОТКАЗ [R-CAP-1] не удалось прочитать политику: {exc}", file=sys.stderr)
         return False
-    if not decision.allowed:
+    if result["decision"] == "deny":
         if json_out:
-            print(json.dumps(decision.to_dict(), ensure_ascii=False))
+            print(json.dumps(result, ensure_ascii=False))
         else:
-            print(f"ОТКАЗ [{decision.rule}] {decision.reason}", file=sys.stderr)
+            print(f"ОТКАЗ [{result['rule']}] {result['reason']}", file=sys.stderr)
         return False
     return True
 
