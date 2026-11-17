@@ -54,6 +54,8 @@ def context(root: str) -> dict[str, str] | None:
         key_path = os.path.expanduser(key)
         if not os.path.isfile(key_path):
             raise SigningError("user.signingkey указывает на несуществующий файл", key=key_path)
+    if fmt == "ssh" and not allowed:
+        raise SigningError("gpg.format=ssh, но allowedSignersFile не задан")
     if allowed and not os.path.isfile(allowed):
         raise SigningError("allowedSignersFile не найден", allowed=allowed)
     return {"format": fmt, "key": key, "allowed": allowed}

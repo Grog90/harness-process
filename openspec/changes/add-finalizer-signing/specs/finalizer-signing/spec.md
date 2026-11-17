@@ -24,8 +24,9 @@
 
 ### Requirement: [REQ-FSIGN-2] Проверка после коммита
 
-После коммита main/сервиса/merge ДОЛЖЕН (SHALL) выполняться
-`git verify-commit`; неподписанный или чужой коммит — `R-FINAL-2` с откатом.
+Если подпись требуется (см. REQ-FSIGN-1), после коммита main/сервиса/merge
+ДОЛЖЕН (SHALL) выполняться `git verify-commit`; неподписанный или чужой коммит —
+`R-FINAL-2` с откатом.
 
 #### Scenario: [CASE-FSIGN-2-1] Main
 
