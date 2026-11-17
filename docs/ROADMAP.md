@@ -224,8 +224,8 @@ trace-разрыв блокирует Ready. Подтверждение: `tests/
 `tests/test_parity.py` (JS/Python), `selftest` (57), `plugin_manager` показывает
 `preset-process-*` активными.
 
-**Остаток:** `can_read`/`may_*` теперь исполняются (`add-capability-enforcement`);
-мультирепозиторность (Этап 5); UI-доска (Этап 4); baseline/candidate и приёмка (Этап 3).
+**Остаток:** push/PR сервисных репозиториев; merge order как очередь; e2e.
+`can_read`/`may_*` и откат частичного коммита закрыты.
 
 ## Этап 9. Проверка, приёмка и закрытие ✅ (v1)
 

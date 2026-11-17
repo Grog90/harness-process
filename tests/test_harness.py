@@ -143,6 +143,8 @@ class CapabilityCLITests(unittest.TestCase):
                 ["commit", "--task", "T1"],
                 ["finalize", "--task", "T1"],
                 ["verdict", "--task", "T1", os.path.join(root, "v.json")],
+                ["lane", "push", "--task", "T1"],
+                ["lane", "pr", "--task", "T1"],
             ):
                 proc = subprocess.run(
                     [sys.executable, "-m", "harness", "--root", root,
