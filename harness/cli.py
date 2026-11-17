@@ -923,15 +923,14 @@ def cmd_otel(args: argparse.Namespace) -> int:
         traces = otel.build_traces(events, args.traces_task,
                                    service_name=args.service_name,
                                    service_version=args.service_version or "")
-    if args.out:
-        print(f"OTLP: записано {otel.write(payload, args.out)}")
-    if traces is not None:
-        if args.traces_out:
-            print(f"OTLP traces: записано {otel.write(traces, args.traces_out)}")
-        elif not args.traces_endpoint:
+        if not args.traces_out and not args.traces_endpoint:
             print("ОТКАЗ [OTEL] для spans нужен --traces-out или --traces-endpoint",
                   file=sys.stderr)
             return EXIT_ERROR
+    if args.out:
+        print(f"OTLP: записано {otel.write(payload, args.out)}")
+    if traces is not None and args.traces_out:
+        print(f"OTLP traces: записано {otel.write(traces, args.traces_out)}")
     sent = None
     if args.endpoint:
         try:

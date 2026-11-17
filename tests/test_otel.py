@@ -61,6 +61,29 @@ class OtelTracesTest(unittest.TestCase):
         self.assertEqual(spans[0]["status"]["code"], 0)
         self.assertGreater(int(spans[1]["endTimeUnixNano"]), int(spans[1]["startTimeUnixNano"]))
 
+    def test_cli_separates_metrics_and_traces_files(self) -> None:
+        import subprocess
+        import sys
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            metrics = os.path.join(tmp, "metrics.json")
+            traces = os.path.join(tmp, "traces.json")
+            proc = subprocess.run(
+                [sys.executable, "-m", "harness", "--root", ROOT, "otel",
+                 "--traces-task", "T-X", "--out", metrics, "--traces-out", traces],
+                cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            with open(metrics, encoding="utf-8") as fh:
+                m = json.load(fh)
+            with open(traces, encoding="utf-8") as fh:
+                t = json.load(fh)
+            self.assertIn("resourceMetrics", m)
+            self.assertNotIn("resourceSpans", m)
+            self.assertIn("resourceSpans", t)
+            self.assertNotIn("resourceMetrics", t)
+
     def test_cli_traces_without_sink_is_denied(self) -> None:
         import subprocess
         import sys

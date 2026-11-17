@@ -9,8 +9,9 @@
 
 - `harness/otel.py`: `trace_id`, `build_traces` — OTLP spans из событий задачи;
 - один trace на задачу, span на событие; время — `created_at`, конец — следующий event;
-- статус span: OK/ERROR по `result.ok`;
-- CLI `harness otel --traces-task T` добавляет `resourceSpans` к метрикам.
+- статус span: OK/ERROR по `result.ok`, UNSET без результата;
+- CLI `harness otel --traces-task T --traces-out|--traces-endpoint` отдаёт
+  отдельный OTLP traces-payload; метрики и spans не смешиваются.
 
 ## Impact
 
