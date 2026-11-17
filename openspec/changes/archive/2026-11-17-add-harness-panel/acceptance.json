@@ -1,0 +1,25 @@
+{
+  "change_id": "add-harness-panel",
+  "spec_ref": "f250447dd74cc442432ce991d41d7fb13431fd1d",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "f250447dd74cc442432ce991d41d7fb13431fd1d"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "панель зарегистрирована, читает metrics, offline",
+    "CORS и read-only"
+  ],
+  "residual_risks": [
+    "визуальный GUI 401 не подтверждён; polling 15с"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-17T14:23:01+0300"
+}

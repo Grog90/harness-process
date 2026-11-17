@@ -82,8 +82,7 @@ rule verify: current
   идентичность роли остаётся допущением;
 - evidence подписан cosign и вывозится `evidence export` в доверенный каталог;
   облачного API/шифрования нет (Out of Scope);
-- live-доска — локальный сервер, не панель DSH GUI; OTel — метрики и spans
-  переходов по команде, distributed tracing между задачами нет;
+- панель harness установлена в DSH GUI (composer.dock); HTML-доска остаётся для headless; OTel — метрики и spans переходов по команде;
 - headless в CI требует `DEEPSEEK_API_KEY` в окружении job.
 
 ## Что это значит
