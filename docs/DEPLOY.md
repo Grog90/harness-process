@@ -52,7 +52,8 @@ cosign verify-blob --bundle evidence/ci-download/report.json.bundle \
 ## Ограничения
 
 - **Branch protection** включён после перевода репозитория в public: обязательный
-  check `ci`, подписанные коммиты, запрет force-push/удаления, `enforce_admins`.
+  check `ci`, подписанные коммиты, запрет force-push/удаления; `enforce_admins=false`
+  — владелец может локально подписанным push обойти required check.
   Это защита git-репозитория, а не замена harness-гейтам. Репозиторий публичный:
   история проверена на секреты, но код и переписка видны всем.
 - **DEEPSEEK_API_KEY** в CI не задан: headless smoke не входит в workflow.
