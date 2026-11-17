@@ -1,0 +1,18 @@
+{
+  "change_id": "add-adapter-attach",
+  "spec_ref": "85be196a6e10bbd8c082851cf48d44eddd9999a8",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "85be196a6e10bbd8c082851cf48d44eddd9999a8"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "by": "human",
+  "by_role": "human",
+  "flag": "",
+  "at": "2026-11-17T09:38:59+0300"
+}

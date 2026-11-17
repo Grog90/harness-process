@@ -51,8 +51,11 @@ cosign verify-blob --bundle evidence/ci-download/report.json.bundle \
 
 ## Ограничения
 
-- **Branch protection** требует GitHub Pro или public. Сейчас merge в `main` не
-  блокируется технически; правило «только зелёный `ci`» — дисциплина + PR.
+- **Branch protection** требует GitHub Pro или public. Решение: оставить private
+  и не публиковать код ради защиты; зелёный `ci` обязателен по runbook, а не
+  технически. Branch protection — защита git-репозитория (прямой push/force-push/
+  merge красного PR), а не замена harness-гейтам. Вернуться к вопросу при появлении
+  команды или GitHub Pro.
 - **DEEPSEEK_API_KEY** в CI не задан: headless smoke не входит в workflow.
   Детерминированные тесты ключ не требуют.
 - **Windows checks** работают в copy-only: docker Linux bind-mount на Windows

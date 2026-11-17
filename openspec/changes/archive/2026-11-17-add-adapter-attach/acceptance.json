@@ -1,0 +1,27 @@
+{
+  "change_id": "add-adapter-attach",
+  "spec_ref": "85be196a6e10bbd8c082851cf48d44eddd9999a8",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "85be196a6e10bbd8c082851cf48d44eddd9999a8"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "Привязка сессии и one-shot автодиспетч работают; конфликт чужого scope не перезаписывает права",
+    "Attach ограничен оператором, shell .harness/protected запрещён в Python и JS parity",
+    "Dispatch, READY/REWORK_READY, error-файл и primary-only покрыты тестами/ревью"
+  ],
+  "residual_risks": [
+    "Listener agent/created не исполняется автотестом; проверены чистые helpers",
+    "Branch protection на free-private GitHub недоступен; CI обязателен по runbook"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-17T09:54:46+0300"
+}
