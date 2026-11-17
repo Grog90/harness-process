@@ -93,6 +93,32 @@ class SigningPreflightTests(unittest.TestCase):
         self.assertTrue(os.path.isabs(ctx["allowed"]))
         self.assertEqual(ctx["allowed"], allowed)
 
+    def test_tilde_key_is_expanded(self) -> None:
+        from unittest.mock import patch
+
+        ssh_dir = os.path.join(self.root, ".ssh")
+        os.makedirs(ssh_dir, exist_ok=True)
+        key = os.path.join(ssh_dir, "key")
+        allowed = os.path.join(ssh_dir, "allowed")
+        open(key, "w", encoding="utf-8").write("key\n")
+        open(allowed, "w", encoding="utf-8").write("owner ssh-ed25519 AAAA\n")
+        git(self.root, "config", "--local", "commit.gpgsign", "true")
+        git(self.root, "config", "--local", "gpg.format", "ssh")
+        git(self.root, "config", "--local", "user.signingkey", "~/.ssh/key")
+        git(self.root, "config", "--local", "gpg.ssh.allowedSignersFile", "~/.ssh/allowed")
+        with patch.dict(os.environ, {"HOME": self.root, "USERPROFILE": self.root}):
+            ctx = signing.context(self.root)
+        self.assertEqual(ctx["key"], key)
+        self.assertEqual(ctx["allowed"], allowed)
+
+    def test_gpg_key_id_is_not_treated_as_path(self) -> None:
+        git(self.root, "config", "--local", "commit.gpgsign", "true")
+        git(self.root, "config", "--local", "gpg.format", "openpgp")
+        git(self.root, "config", "--local", "user.signingkey", "3AA5C34371567BD2")
+        ctx = signing.context(self.root)
+        self.assertEqual(ctx["key"], "3AA5C34371567BD2")
+        self.assertEqual(ctx["format"], "openpgp")
+
     def test_env_forces_requirement(self) -> None:
         old = os.environ.get("HARNESS_REQUIRE_SIGNED")
         os.environ["HARNESS_REQUIRE_SIGNED"] = "1"

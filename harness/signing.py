@@ -42,22 +42,27 @@ def context(root: str) -> dict[str, str] | None:
     if not required(root):
         return None
     fmt = _config(root, "gpg.format") or "openpgp"
-    key = _config(root, "user.signingkey")
-    if not key:
+    raw_key = _config(root, "user.signingkey")
+    if not raw_key:
         raise SigningError("commit.gpgsign=true, но user.signingkey не задан")
-    allowed = _config(root, "gpg.ssh.allowedSignersFile")
+    # GPG key id и ssh literal (key::...) — не пути; их нельзя склеивать с root.
+    if fmt == "openpgp" or raw_key.startswith("key::"):
+        key = raw_key
+    else:
+        key = os.path.normpath(os.path.expanduser(raw_key))
+        if not os.path.isabs(key):
+            key = os.path.normpath(os.path.join(root, key))
+    raw_allowed = _config(root, "gpg.ssh.allowedSignersFile")
+    allowed = os.path.normpath(os.path.expanduser(raw_allowed)) if raw_allowed else ""
     if not allowed and fmt == "ssh":
         candidate = os.path.join(root, ".github", "allowed_signers")
         if os.path.isfile(candidate):
             allowed = candidate
-    # git -C <service> разрешает относительный путь от сервиса; фиксируем от root.
-    if key and not os.path.isabs(key):
-        key = os.path.normpath(os.path.join(root, key))
     if allowed and not os.path.isabs(allowed):
         allowed = os.path.normpath(os.path.join(root, allowed))
     if fmt == "ssh" and not allowed:
         raise SigningError("gpg.format=ssh, но allowedSignersFile не задан")
-    if os.path.sep in key and not os.path.isfile(key):
+    if fmt == "ssh" and not key.startswith("key::") and not os.path.isfile(key):
         raise SigningError("user.signingkey указывает на несуществующий файл", key=key)
     if allowed and not os.path.isfile(allowed):
         raise SigningError("allowedSignersFile не найден", allowed=allowed)
