@@ -2,7 +2,7 @@
 
 ## GitHub Actions
 
-Рабочий репозиторий: <https://github.com/Grog90/harness-process> (private).
+Рабочий репозиторий: <https://github.com/Grog90/harness-process> (public).
 Workflow `.github/workflows/ci.yml` на `windows-latest`:
 
 1. проверка SSH-подписи коммитов (`git verify-commit` по диапазону; для PR —

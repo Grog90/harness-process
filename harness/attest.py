@@ -22,17 +22,25 @@ def _git(base: str, *args: str) -> subprocess.CompletedProcess:
                           text=True, encoding="utf-8", errors="replace")
 
 
-def verify(root: str, ref: str = "HEAD") -> dict[str, Any]:
+def verify(root: str, ref: str = "HEAD", allowed_signers: str | None = None) -> dict[str, Any]:
     root = os.path.abspath(root)
     if not os.path.isdir(os.path.join(root, ".git")):
         raise AttestError("R-ATTEST-1", "не git-репозиторий", root=root)
     sha = _git(root, "rev-parse", ref).stdout.strip()
     if not sha:
         raise AttestError("R-ATTEST-1", f"нет такого ref: {ref}")
-    signers = _git(root, "config", "--local", "--get", "gpg.ssh.allowedSignersFile").stdout.strip()
-    if not signers:
-        candidate = os.path.join(root, ".github", "allowed_signers")
-        signers = candidate if os.path.isfile(candidate) else ""
+    if allowed_signers:
+        signers = os.path.expanduser(allowed_signers)
+        if not os.path.isabs(signers):
+            signers = os.path.join(root, signers)
+    else:
+        signers = _git(root, "config", "--local", "--get", "gpg.ssh.allowedSignersFile").stdout.strip()
+        if signers and not os.path.isabs(signers):
+            signers = os.path.join(root, signers)
+        if not signers:
+            candidate = os.path.join(root, ".github", "allowed_signers")
+            signers = candidate if os.path.isfile(candidate) else ""
+    signers = os.path.normpath(signers) if signers else ""
     if not signers or not os.path.isfile(signers):
         raise AttestError("R-ATTEST-1", "allowed_signers не найден", path=signers or None)
     proc = _git(root, "-c", "gpg.format=ssh", "-c",

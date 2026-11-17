@@ -1062,7 +1062,7 @@ def cmd_attest(args: argparse.Namespace) -> int:
 
     root = _root(args)
     try:
-        out = attest.verify(root, args.ref)
+        out = attest.verify(root, args.ref, args.allowed_signers)
     except attest.AttestError as exc:
         _print({"ok": False, "rule": exc.rule, "reason": str(exc), "details": exc.details}, args.json)
         return EXIT_DENIED
@@ -1663,6 +1663,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     at = sub.add_parser("attest", help="независимая проверка подписи коммита")
     at.add_argument("--ref", default="HEAD")
+    at.add_argument("--allowed-signers", default=None)
     at.set_defaults(func=cmd_attest)
 
     sl = sub.add_parser("slo", help="SLO процесса по метрикам")

@@ -487,6 +487,18 @@
       "residual_risk": "Tamper-evident, не tamper-proof: финализатор в том же дереве; включение зависит от локального commit.gpgsign."
     },
     {
+      "id": "R-ATTEST-1",
+      "statement": "Проверка подписи коммита не доверяет состоянию harness и падает на неподписанном коммите.",
+      "event": "precommit",
+      "enforcement": "blocking",
+      "implemented": true,
+      "hook": "attest.verify",
+      "positive_test": "HEAD подписан доверенным ключом — ok=true",
+      "negative_test": "нет подписи/allowed_signers — R-ATTEST-1",
+      "owner": "control",
+      "residual_risk": "Доверие к allowed_signers: при компрометации дерева якорь подменяем; для аудита передать --allowed-signers извне."
+    },
+    {
       "id": "R-CHECK-1",
       "statement": "Проверки из брифа выполняются в изолированной копии дерева; результат подтверждается артефактом, а не пересказом.",
       "event": "postverdict",

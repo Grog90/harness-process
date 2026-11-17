@@ -31,7 +31,6 @@ class PanelPluginTests(unittest.TestCase):
         client = self._read("client.js")
         self.assertIn("conversation.composer.dock", client)
         self.assertIn("harness-panel", client)
-        self.assertIn("harnessBoardUrl", client)
         self.assertIn("/metrics.json", client)
         for forbidden in ("accept", "release", "commit"):
             self.assertNotIn("ctx." + forbidden, client)
@@ -40,6 +39,7 @@ class PanelPluginTests(unittest.TestCase):
         client = self._read("client.js")
         self.assertIn("'/harness-panel/metrics.json'", client)
         self.assertNotIn("DEFAULT_URL = 'http://127.0.0.1:8765", client)
+        self.assertNotIn("harnessBoardUrl", client)
 
     def test_host_proxy_route(self) -> None:
         host = self._read("index.js")
@@ -55,10 +55,10 @@ class PanelPluginTests(unittest.TestCase):
         self.assertIn(".sort(", client)
         self.assertIn("15000", client)
 
-    def test_server_sends_cors(self) -> None:
+    def test_server_does_not_need_cors(self) -> None:
         with open(os.path.join(ROOT, "harness", "metrics.py"), encoding="utf-8") as fh:
             source = fh.read()
-        self.assertIn("Access-Control-Allow-Origin", source)
+        self.assertNotIn("Access-Control-Allow-Origin", source)
 
     def test_offline_state_and_icon(self) -> None:
         client = self._read("client.js")

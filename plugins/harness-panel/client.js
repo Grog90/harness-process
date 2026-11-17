@@ -19,8 +19,7 @@ window.__ModuleLoader__.load({
 
       React.useEffect(() => {
         let alive = true;
-        const url = (typeof localStorage !== 'undefined'
-          && localStorage.getItem('harnessBoardUrl')) || DEFAULT_URL;
+        const url = DEFAULT_URL;
         const load = () => fetch(url, { cache: 'no-store' })
           .then((r) => {
             if (!r.ok) throw new Error('HTTP ' + r.status);
