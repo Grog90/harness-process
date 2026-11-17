@@ -32,6 +32,20 @@ Workflow настраивает `gpg.ssh.allowedSignersFile` и выполняе
 же коммит своим ключом. Checkout — `fetch-depth: 0`; PR-база фетчится без
 `--depth`, иначе диапазон захватывает историю.
 
+## Финализатор и merge
+
+Если в основном репозитории `commit.gpgsign=true` (или выставлен
+`HARNESS_REQUIRE_SIGNED=1`), `harness finalize` и `harness lane merge`:
+
+1. до коммита проверяют `user.signingkey`; без ключа — отказ `R-FINAL-2`;
+2. коммитят main, сервисы и merge с `-S`, используя `gpg.format`,
+   `user.signingkey` и `allowedSignersFile` основного репозитория;
+3. после коммита вызывают `git verify-commit`; неподписанный коммит откатывается.
+
+Сервисные репозитории не нуждаются в собственном конфиге подписи: ключ и
+allowed_signers берутся из основного. Это **tamper-evident**, а не
+tamper-proof: финализатор живёт в том же дереве.
+
 ## GitHub
 
 Пока публичный ключ не загружен в GitHub (`Settings → SSH and GPG keys → New SSH

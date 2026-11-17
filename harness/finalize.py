@@ -22,7 +22,7 @@ from .fsm import Engine
 from .policy import normalize_path, service_base
 from .snapshot import snapshot_for_task
 from .state import Store
-from . import specgate
+from . import signing, specgate
 
 
 class FinalizeError(RuntimeError):
@@ -168,7 +168,8 @@ def _rollback_records(store: Store, records: list[dict[str, Any]]) -> list[dict[
 
 
 def commit_services(store: Store, root: str, task: dict[str, Any], snapshot_id: str,
-                    message: str, author: str = "harness") -> list[dict[str, Any]]:
+                    message: str, author: str = "harness",
+                    signing_ctx: dict[str, str] | None = None) -> list[dict[str, Any]]:
     """Коммитит каждый writable-сервис отдельно, с write-set-проверкой.
 
     Сервисный репозиторий обязан существовать: молча пропустить коммит нельзя,
@@ -209,8 +210,8 @@ def commit_services(store: Store, root: str, task: dict[str, Any], snapshot_id: 
                 raise FinalizeError("R-FINAL-1", f"git add сервиса {name!r} не удался: {add.stderr.strip()[:200]}")
             msg = f"{message} [{name}]"
             commit = _git(
-                base, "-c", f"user.name={author}", "-c", f"user.email={author}@harness.local",
-                "commit", "-m", msg,
+                base, *signing.commit_args(signing_ctx, author),
+                "commit", *(["-S"] if signing_ctx else []), "-m", msg,
             )
             if commit.returncode != 0:
                 raise FinalizeError("R-FINAL-1", f"git commit сервиса {name!r} не удался: {commit.stderr.strip()[:300]}")
@@ -218,6 +219,11 @@ def commit_services(store: Store, root: str, task: dict[str, Any], snapshot_id: 
             rec = {"name": name, "path": base, "commit_sha": sha, "paths": paths,
                    "previous_sha": previous}
             records.append(rec)
+            if signing_ctx:
+                try:
+                    signing.verify(base, signing_ctx)
+                except signing.SigningError as exc:
+                    raise FinalizeError(exc.rule, f"сервис {name!r}: {exc}", **exc.details) from exc
             store.record_commit(commit_sha=sha, task_id=task["task_id"], snapshot_id=snapshot_id,
                                 message=msg, finalizer=author)
             leftover = write_set(base)
@@ -298,9 +304,13 @@ def finalize(
         store.log(task_id, f"обход {gate['rule']}: {allow_no_spec.strip()}")
 
     msg = message or f"{task_id}: {_goal(task)}"
+    try:
+        signing_ctx = signing.context(root)
+    except signing.SigningError as exc:
+        raise FinalizeError(exc.rule, str(exc), **exc.details) from exc
     # 0. Сервисные репозитории коммитятся до главного: главный SHA остаётся
     # последним в tasks.commit_sha, а сервисные уже записаны в commits.
-    service_records = commit_services(store, root, task, current, msg, author)
+    service_records = commit_services(store, root, task, current, msg, author, signing_ctx)
     main_previous = _git(root, "rev-parse", "HEAD").stdout.strip()
     main_sha: str | None = None
 
@@ -321,13 +331,18 @@ def finalize(
             raise FinalizeError("R-FINAL-1", f"git add не удался: {add.stderr.strip()[:200]}")
 
         commit = _git(
-            root, "-c", f"user.name={author}", "-c", f"user.email={author}@harness.local",
-            "commit", "-m", msg,
+            root, *signing.commit_args(signing_ctx, author),
+            "commit", *(["-S"] if signing_ctx else []), "-m", msg,
         )
         if commit.returncode != 0:
             raise FinalizeError("R-FINAL-1", f"git commit не удался: {commit.stderr.strip()[:300]}")
 
         main_sha = _git(root, "rev-parse", "HEAD").stdout.strip()
+        if signing_ctx:
+            try:
+                signing.verify(root, signing_ctx)
+            except signing.SigningError as exc:
+                raise FinalizeError(exc.rule, str(exc), **exc.details) from exc
         for rec in service_records:
             if rec.get("mode") == "main":
                 rec["commit_sha"] = main_sha

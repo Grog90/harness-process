@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from typing import Any, Iterator
 
 from .state import Store, now
+from . import signing
 
 
 class LaneError(RuntimeError):
@@ -255,10 +256,22 @@ def merge(root: str, store: Store, task_id: str, *, message: str | None = None,
         ):
             raise LaneError("R-WAVE-1", "главное дерево грязное: слияние требует чистого состояния")
 
-        proc = _git(
-            root, "-c", "user.name=harness", "-c", "user.email=harness@local",
-            "merge", "--no-ff", "-m", message or f"merge {task_id}", commit,
-        )
+        try:
+            signing_ctx = signing.context(root)
+        except signing.SigningError as exc:
+            raise LaneError(exc.rule, f"слияние без подписи запрещено: {exc}", **exc.details) from exc
+        merge_args = ["-c", "user.name=harness", "-c", "user.email=harness@local"]
+        if signing_ctx:
+            merge_args += [
+                "-c", "commit.gpgsign=true",
+                "-c", "gpg.format=" + signing_ctx["format"],
+                "-c", "user.signingkey=" + signing_ctx["key"],
+            ]
+        merge_args += ["merge", "--no-ff"]
+        if signing_ctx:
+            merge_args.append("-S")
+        merge_args += ["-m", message or f"merge {task_id}", commit]
+        proc = _git(root, *merge_args)
         if proc.returncode != 0:
             conflicts = [
                 line.strip() for line in (proc.stdout + proc.stderr).splitlines()
@@ -275,6 +288,11 @@ def merge(root: str, store: Store, task_id: str, *, message: str | None = None,
 
         head = _git(root, "rev-parse", "HEAD").stdout.strip()
         tree = _git(root, "rev-parse", "HEAD^{tree}").stdout.strip()
+        if signing_ctx:
+            try:
+                signing.verify(root, signing_ctx)
+            except signing.SigningError as exc:
+                raise LaneError(exc.rule, f"merge-коммит не подписан: {exc}", **exc.details) from exc
 
     store.record_commit(commit_sha=head, task_id=task_id, snapshot_id=task.get("accepted_snapshot") or "",
                         verdict_id=task.get("verdict_id"), message=message or f"merge {task_id}",
