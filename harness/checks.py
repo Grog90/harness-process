@@ -71,6 +71,17 @@ def detect_sandbox() -> dict[str, Any]:
     называть прогон изолированным.
     """
     docker = shutil.which("docker")
+    if os.name == "nt":
+        # GitHub windows-latest умеет docker, но это Linux-контейнер: bind-mount
+        # Windows-пути в него не работает. Честнее copy-only, чем ENTRYPOINT 125.
+        return {
+            "platform": os.name,
+            "docker": bool(docker),
+            "docker_ready": False,
+            "image": SANDBOX_IMAGE,
+            "mode": "copy-only",
+            "note": "Windows: docker с Linux bind-mount не используется; copy-only",
+        }
     available = False
     note = "docker не найден: остаётся копия дерева и урезанное окружение"
     if docker:
