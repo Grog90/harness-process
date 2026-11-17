@@ -45,6 +45,27 @@ class AttestTests(unittest.TestCase):
         with self.assertRaises(attest.AttestError):
             attest.verify(root)
 
+    def test_explicit_allowed_signers_relative_to_root(self) -> None:
+        if not os.path.isdir(os.path.join(ROOT, ".git")):
+            self.skipTest("not a git checkout")
+        out = attest.verify(ROOT, "HEAD", ".github/allowed_signers")
+        self.assertTrue(out["ok"], out)
+        self.assertTrue(os.path.isabs(out["signers"]))
+
+    def test_explicit_allowed_signers_empty_denied(self) -> None:
+        root = tempfile.mkdtemp(prefix="attest-")
+        self.addCleanup(shutil.rmtree, root, True)
+        git(root, "init", "-q")
+        git(root, "config", "--local", "user.name", "t")
+        git(root, "config", "--local", "user.email", "t@t")
+        open(os.path.join(root, "a.txt"), "w", encoding="utf-8").write("x\n")
+        git(root, "add", "-A")
+        git(root, "commit", "-q", "-m", "unsigned")
+        allowed = os.path.join(root, "allowed")
+        open(allowed, "w", encoding="utf-8").write("t ssh-ed25519 AAAA\n")
+        out = attest.verify(root, "HEAD", "allowed")
+        self.assertFalse(out["ok"])
+
     def test_current_repo_is_signed(self) -> None:
         if not os.path.isdir(os.path.join(ROOT, ".git")):
             self.skipTest("not a git checkout")

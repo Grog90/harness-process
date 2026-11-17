@@ -19,9 +19,9 @@
 
 ### Requirement: [REQ-PANEL-2] Данные и offline
 
-Панель ДОЛЖНА (SHALL) читать `/metrics.json` доски, обновляться раз в 15 с и при
-недоступности показывать `доска offline` с командой запуска; сервер доски отдаёт
-CORS-заголовок.
+Панель ДОЛЖНА (SHALL) читать same-origin `/harness-panel/metrics.json` (host-route
+проксирует доску), обновляться раз в 15 с и при недоступности показывать
+`доска offline` с командой запуска; CORS не требуется.
 
 #### Scenario: [CASE-PANEL-2-1] Доска доступна
 
@@ -30,7 +30,7 @@ CORS-заголовок.
 
 #### Scenario: [CASE-PANEL-2-2] Доска недоступна
 
-- **WHEN** fetch не удался
+- **WHEN** route вернул 502 или fetch не удался
 - **THEN** виден offline и команда `board --serve`, панель не падает
 
 ### Requirement: [REQ-PANEL-3] Только чтение
