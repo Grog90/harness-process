@@ -1,0 +1,23 @@
+{
+  "review_id": "rev_e460ad39fbdb",
+  "change_id": "add-capability-enforcement",
+  "revision": 1,
+  "artifact": "tasks.md",
+  "artifact_hash": "sha256:3de0e1cfaa14f598c4f18ebce3d7482b5426bf37e19f7a1db764c760d3692176",
+  "reviewer_id": "rev-dev",
+  "reviewer_role": "DEV",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "can_read/may_* исполняются в CLI, hook и guard",
+    "list_dir, pathless и parity; R-CAP-1/R-READ-1"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "позитивные CLI-пути проверены на уровне Policy"
+    }
+  ],
+  "created_at": 1794909595.2027042,
+  "created_at_iso": "2026-11-17T12:59:55+0300"
+}
