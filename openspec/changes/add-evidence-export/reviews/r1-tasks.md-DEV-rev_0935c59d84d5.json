@@ -1,0 +1,23 @@
+{
+  "review_id": "rev_0935c59d84d5",
+  "change_id": "add-evidence-export",
+  "revision": 1,
+  "artifact": "tasks.md",
+  "artifact_hash": "sha256:a686df7bd0a70d6c9b70ff39fd1fafbb65cc32c02a3a1aa9c6a0e1611747fe56",
+  "reviewer_id": "rev-dev",
+  "reviewer_role": "DEV",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "export/verify evidence с sha256-манифестом",
+    "валидация change/dest, role-gate, tamper"
+  ],
+  "findings": [
+    {
+      "severity": "minor",
+      "text": "design/tasks частично отстают от security-деталей"
+    }
+  ],
+  "created_at": 1794912314.3061807,
+  "created_at_iso": "2026-11-17T13:45:14+0300"
+}
