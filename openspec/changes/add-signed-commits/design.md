@@ -10,15 +10,17 @@
 `~/.ssh/harness_signing`; в репозитории только `.github/allowed_signers` с
 публичным ключом. Это позволяет `git verify-commit` локально и в CI.
 
-**3. CI проверяет диапазон, доверие — из base.**
-Для push проверяются коммиты `before..HEAD`, для PR — `base..head`; GitHub
-merge-коммит не подписывается и в диапазон не входит. Для PR allowed_signers
-берётся из base-ветки, иначе автор PR мог бы добавить свой ключ. Checkout —
-`fetch-depth: 0`.
+**3. CI проверяет диапазон, доверие — из before/base.**
+Для push проверяются коммиты `before..HEAD`, allowed_signers берётся из
+`before` (не из проверяемого дерева); для PR — `base..head` и base-файл.
+GitHub merge-коммит, созданный кнопкой Merge, становится HEAD и входит в
+диапазон, поэтому вливать нужно локальным подписанным merge. Ошибка fetch/
+rev-list — отказ, а не fallback. Checkout — `fetch-depth: 0`.
 
-**4. Финализатор коммитит как `harness@harness.local`.**
-Поэтому в allowed_signers два principal с одним ключом: владелец и финализатор.
-Иначе подписанный финализатором коммит не прошёл бы verify по principal.
+**4. Финализатор и principal.**
+`git verify-commit` сверяет ключ из allowed_signers, а не committer-email;
+синтетическая личность `harness@harness.local` не мешает подписи. Отдельная
+строка principal финализатору не нужна.
 
 ## Risks
 

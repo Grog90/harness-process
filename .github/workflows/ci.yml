@@ -24,21 +24,30 @@ jobs:
           git config --global gpg.format ssh
           if ("${{ github.event_name }}" -eq "pull_request") {
             git fetch origin "${{ github.base_ref }}" --depth=1
+            if ($LASTEXITCODE -ne 0) { exit 1 }
             $signers = Join-Path $env:RUNNER_TEMP "allowed_signers"
             git show FETCH_HEAD:.github/allowed_signers | Set-Content -LiteralPath $signers -Encoding utf8
+            if ($LASTEXITCODE -ne 0) { exit 1 }
             $ref = "${{ github.event.pull_request.head.sha }}"
+            $range = "FETCH_HEAD..$ref"
           } else {
-            $signers = "${{ github.workspace }}/.github/allowed_signers"
+            $before = "${{ github.event.before }}"
+            if ($before -match "^0+$") {
+              $signers = "${{ github.workspace }}/.github/allowed_signers"
+            } else {
+              $signers = Join-Path $env:RUNNER_TEMP "allowed_signers"
+              git show "${before}:.github/allowed_signers" | Set-Content -LiteralPath $signers -Encoding utf8
+              if ($LASTEXITCODE -ne 0) { exit 1 }
+            }
             $ref = "HEAD"
+            $range = "$before..HEAD"
           }
           git config --global gpg.ssh.allowedSignersFile $signers
-          if ("${{ github.event_name }}" -eq "pull_request") {
-            $range = "origin/${{ github.base_ref }}..$ref"
-          } else {
-            $range = "${{ github.event.before }}..HEAD"
-          }
           $revs = @()
-          if ($range -notmatch "^0+\.\.") { $revs = git rev-list $range }
+          if ($range -notmatch "^0+\.\.") {
+            $revs = git rev-list $range
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
           if ($revs.Count -eq 0) { $revs = @($ref) }
           foreach ($rev in $revs) { git verify-commit $rev; if ($LASTEXITCODE -ne 0) { exit 1 } }
       - uses: actions/setup-python@v5

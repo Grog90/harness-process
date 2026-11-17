@@ -3,9 +3,9 @@
 ## Ключ
 
 - приватный: `~/.ssh/harness_signing` (ed25519, без пароля, вне репозитория);
-- публичный: `.github/allowed_signers` — две строки с одним ключом:
-  `ownage0512@Mail.ru` (владелец) и `harness@harness.local` (финализатор,
-  `finalize.py` коммитит этой личностью).
+- публичный: `.github/allowed_signers` (в репозитории — это и есть доверие).
+  `git verify-commit` сверяет ключ, а не committer-email, поэтому синтетическая
+  личность финализатора `harness@harness.local` отдельной строки не требует.
 
 Проверка:
 
@@ -27,9 +27,9 @@ git config --local gpg.ssh.allowedSignersFile .github/allowed_signers
 
 Workflow настраивает `gpg.ssh.allowedSignersFile` и выполняет
 `git verify-commit` для каждого коммита диапазона (`before..HEAD` на push,
-`base..head` на PR); неподписанный коммит валит job. Для PR доверенный ключ
-берётся из base-ветки, а не из ветки PR — иначе автор мог бы подписать свой же
-коммит своим ключом. Checkout — `fetch-depth: 0`.
+`base..head` на PR); неподписанный коммит валит job. Доверенный ключ берётся из
+`before`/base, а не из проверяемого дерева — иначе автор мог бы подписать свой
+же коммит своим ключом. Checkout — `fetch-depth: 0`.
 
 ## GitHub
 
@@ -40,14 +40,15 @@ key`, тип **Signing Key**), GitHub UI показывает «Unverified». Э
 ## Ротация
 
 1. `ssh-keygen -t ed25519 -f ~/.ssh/harness_signing_new`.
-2. Заменить **обе** строки в `.github/allowed_signers` (владелец и
-   `harness@harness.local`) на новый публичный ключ.
+2. Заменить строку в `.github/allowed_signers` на новый публичный ключ.
 3. `git config --local user.signingkey <новый>`.
 4. Новые коммиты подписаны новым ключом; старые проверяются старым, пока он в
    allowed_signers (если удалить — старые станут unverified).
 
 ## Ограничения
 
+- merge/squash через GitHub UI создаёт неподписанный коммит на main; вливать
+  нужно локальным подписанным merge, иначе CI покраснеет;
 - ключ без пароля: безопасность машины = безопасность подписи;
 - branch protection на private free недоступна; обязательность — CI/runbook;
 - подпись не заменяет review и evidence.
