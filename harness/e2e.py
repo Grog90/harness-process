@@ -120,20 +120,24 @@ def run(root: str, change_id: str, command: str, services: list[dict[str, str]],
             env[f"HARNESS_E2E_{name.upper()}_DIR"] = copy_to
             env[f"HARNESS_E2E_{name.upper()}_SHA"] = sha
         started = time.monotonic()
+        proc = subprocess.Popen(
+            command, shell=True, cwd=root, env=env, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+        )
         try:
-            proc = subprocess.run(
-                command, shell=True, cwd=root, env=env, capture_output=True,
-                text=True, encoding="utf-8", errors="replace", timeout=timeout,
-            )
+            stdout, stderr = proc.communicate(timeout=timeout)
             exit_code, timed_out = proc.returncode, False
-            stdout, stderr = proc.stdout, proc.stderr
-        except subprocess.TimeoutExpired as exc:
+        except subprocess.TimeoutExpired:
             exit_code, timed_out = -1, True
-            stdout = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
-            stderr = (exc.stderr or "") if isinstance(exc.stderr, str) else ""
-            if os.name == "nt" and getattr(exc, "pid", None):
-                subprocess.run(["taskkill", "/F", "/T", "/PID", str(exc.pid)],
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
                                capture_output=True, timeout=30)
+            else:
+                proc.kill()
+            try:
+                stdout, stderr = proc.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                stdout, stderr = "", ""
         duration = round(time.monotonic() - started, 3)
     finally:
         for work in tmpdirs:

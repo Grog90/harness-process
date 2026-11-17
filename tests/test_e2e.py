@@ -100,6 +100,33 @@ class E2ETests(unittest.TestCase):
         self.assertFalse(out["ok"])
         self.assertTrue(out["timed_out"])
 
+    def test_timeout_kills_child_tree(self) -> None:
+        marker = os.path.join(self.root, "child.txt")
+        child = os.path.join(self.root, "child.py")
+        with open(child, "w", encoding="utf-8") as fh:
+            fh.write("import time,pathlib\n"
+                     "time.sleep(3)\n"
+                     f"pathlib.Path(r'{marker}').write_text('x')\n")
+        slow = os.path.join(self.root, "slow.py")
+        with open(slow, "w", encoding="utf-8") as fh:
+            fh.write("import subprocess,sys,time\n"
+                     f"subprocess.Popen([sys.executable, r'{child}'])\n"
+                     "time.sleep(10)\n")
+        command = f'"{sys.executable}" "{slow}"'
+        out = e2e.run(self.root, "chg-kill", command,
+                      [{"name": "api", "path": self.api, "sha": ""}], timeout=1)
+        self.assertTrue(out["timed_out"], out)
+        import time as _time
+        _time.sleep(4)
+        self.assertFalse(os.path.exists(marker), "дочерний процесс пережил таймаут")
+
+    def test_bad_names_and_duplicates_denied(self) -> None:
+        for bad in ("bad-name=x", "with space=x", "..=x"):
+            with self.assertRaises(e2e.E2EError):
+                e2e.parse_services([bad])
+        with self.assertRaises(e2e.E2EError):
+            e2e.parse_services(["api=x", "api=y"])
+
     def test_worker_role_denied(self) -> None:
         env = dict(os.environ, HARNESS_ROLE="worker")
         proc = subprocess.run(
