@@ -109,6 +109,17 @@ class PiiTests(unittest.TestCase):
                               encoding="utf-8", errors="replace")
         self.assertEqual(proc.returncode, 0, proc.stderr)
 
+    def test_cli_binary_file_clean_denial(self) -> None:
+        import subprocess
+
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        proc = subprocess.run([sys.executable, "-m", "harness", "--root", root, "pii", "scan",
+                               "--file", ".harness/state.db"],
+                              cwd=root, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("[PII]", proc.stderr)
+
     def test_cli_slo_json(self) -> None:
         import json
         import subprocess

@@ -1092,8 +1092,12 @@ def cmd_pii(args: argparse.Namespace) -> int:
             print(f"ОТКАЗ [{decision['rule']}] {decision['reason']}", file=sys.stderr)
             return EXIT_DENIED
     if args.file:
-        with open(args.file, encoding="utf-8") as fh:
-            text = fh.read()
+        try:
+            with open(args.file, encoding="utf-8") as fh:
+                text = fh.read()
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"ОТКАЗ [PII] не удалось прочитать {args.file}: {exc}", file=sys.stderr)
+            return EXIT_DENIED
     elif args.text is not None:
         text = args.text
     else:
