@@ -52,6 +52,26 @@ class OtelTracesTest(unittest.TestCase):
         payload = otel.build_traces([], "T-2")
         self.assertEqual(payload["resourceSpans"][0]["scopeSpans"][0]["spans"], [])
 
+    def test_unset_status_and_equal_times(self) -> None:
+        payload = otel.build_traces([
+            {"event_id": "a", "type": "x", "created_at": 100.0},
+            {"event_id": "b", "type": "y", "created_at": 100.0},
+        ], "T-3")
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        self.assertEqual(spans[0]["status"]["code"], 0)
+        self.assertGreater(int(spans[1]["endTimeUnixNano"]), int(spans[1]["startTimeUnixNano"]))
+
+    def test_cli_traces_without_sink_is_denied(self) -> None:
+        import subprocess
+        import sys
+
+        proc = subprocess.run(
+            [sys.executable, "-m", "harness", "--root", ROOT, "otel", "--traces-task", "T-X"],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("traces-out", proc.stderr)
+
     def test_trace_id_is_stable(self) -> None:
         self.assertEqual(otel.trace_id("T-1"), otel.trace_id("T-1"))
         self.assertNotEqual(otel.trace_id("T-1"), otel.trace_id("T-2"))
