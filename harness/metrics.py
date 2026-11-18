@@ -241,8 +241,6 @@ def render_md(data: dict[str, Any]) -> str:
 _BOARD_CSS = """
 :root{color-scheme:dark;--bg:#0f1218;--panel:#151a22;--panel2:#1b2230;--ink:#e7ebf2;--muted:#94a0b2;
 --line:#28303d;--ok:#3ddc84;--warn:#f5b642;--bad:#ff6b6b;--accent:#6f9bff;--accent-ink:#0b1020}
-@media (prefers-color-scheme:light){:root{color-scheme:light;--bg:#f5f7fb;--panel:#fff;--panel2:#f0f3f8;
---ink:#17202e;--muted:#5f6b7a;--line:#d8dee9;--ok:#18794e;--warn:#a15c00;--bad:#b42318;--accent:#2f5fd0;--accent-ink:#fff}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif}
 main{max-width:1180px;margin:0 auto;padding:28px 26px 56px}

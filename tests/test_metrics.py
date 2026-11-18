@@ -68,6 +68,8 @@ class MetricsTest(unittest.TestCase):
         self.assertIn('data-change="chg-m"', page)
         self.assertIn('data-filter="all"', page)
         self.assertIn('id="q"', page)
+        self.assertIn("color-scheme:dark", page)
+        self.assertNotIn("prefers-color-scheme:light", page)
         data["changes"][0]["status"] = "CANCELLED"
         hidden_page = metrics.render_html(data)
         self.assertIn('data-state="CANCELLED"', hidden_page)
