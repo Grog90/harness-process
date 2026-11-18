@@ -1,0 +1,25 @@
+{
+  "change_id": "add-board-dashboard",
+  "spec_ref": "761f5a7c79e5532fc073b5e711ba4fc5521bd979",
+  "environment": "local",
+  "services": [
+    {
+      "name": "repo",
+      "sha": "761f5a7c79e5532fc073b5e711ba4fc5521bd979"
+    }
+  ],
+  "merge_order": [
+    "repo"
+  ],
+  "accepted_by": "owner",
+  "accepted_by_role": "human",
+  "criteria": [
+    "plugin main board + HTML dashboard",
+    "filters/search tests"
+  ],
+  "residual_risks": [
+    "live plugin требует перезапуска DSH"
+  ],
+  "verification": "verification.json",
+  "at": "2026-11-18T09:14:53+0300"
+}
