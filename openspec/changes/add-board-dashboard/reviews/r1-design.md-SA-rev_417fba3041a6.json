@@ -1,0 +1,17 @@
+{
+  "review_id": "rev_417fba3041a6",
+  "change_id": "add-board-dashboard",
+  "revision": 1,
+  "artifact": "design.md",
+  "artifact_hash": "sha256:58555062b2e2a6c2bc2050182b2a4ebcf55f8ee6ed48210d76fd94a4a30410c8",
+  "reviewer_id": "rev-sa",
+  "reviewer_role": "SA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "plugin main board, HTML filters, tests"
+  ],
+  "findings": [],
+  "created_at": 1794982346.8876376,
+  "created_at_iso": "2026-11-18T09:12:26+0300"
+}

@@ -1,0 +1,17 @@
+{
+  "review_id": "rev_5becaf91a127",
+  "change_id": "add-board-dashboard",
+  "revision": 1,
+  "artifact": "tasks.md",
+  "artifact_hash": "sha256:acccd14cd92d751c1f632e776f2bc81285c4c498d93e3711b7c677ee15b48ebf",
+  "reviewer_id": "rev-sa",
+  "reviewer_role": "SA",
+  "author_id": "lead",
+  "verdict": "approve",
+  "criteria": [
+    "plugin main board, HTML filters, tests"
+  ],
+  "findings": [],
+  "created_at": 1794982346.893247,
+  "created_at_iso": "2026-11-18T09:12:26+0300"
+}
