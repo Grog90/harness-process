@@ -44,6 +44,19 @@ window.__ModuleLoader__.load({
 
     let openBoard = () => {};
 
+    function filterChanges(changes, filter, query) {
+      const needle = String(query || '').toLowerCase();
+      return (changes || []).filter((c) => {
+        const s = String(c.status || '');
+        if (filter === 'active' && (s === 'ACCEPTED' || s === 'ARCHIVED' || s === 'CANCELLED')) return false;
+        if (filter === 'ready' && s !== 'READY') return false;
+        if (filter === 'blocked' && s.indexOf('BLOCK') < 0 && s !== 'ESCALATED') return false;
+        if (filter === 'archive' && s !== 'ACCEPTED' && s !== 'ARCHIVED') return false;
+        if (needle && String(c.change_id || '').toLowerCase().indexOf(needle) < 0) return false;
+        return true;
+      });
+    }
+
     function Stat(props) {
       return h('div', {
         style: {
@@ -120,15 +133,7 @@ window.__ModuleLoader__.load({
       const summary = data && data.summary || {};
       const attempts = data && data.attempts || {};
       const all = data && data.changes || [];
-      const visible = all.filter((c) => {
-        const s = String(c.status || '');
-        if (filter === 'active' && (s === 'ACCEPTED' || s === 'ARCHIVED' || s === 'CANCELLED')) return false;
-        if (filter === 'ready' && s !== 'READY') return false;
-        if (filter === 'blocked' && s.indexOf('BLOCK') < 0 && s !== 'ESCALATED') return false;
-        if (filter === 'archive' && s !== 'ACCEPTED' && s !== 'ARCHIVED') return false;
-        if (query && String(c.change_id || '').toLowerCase().indexOf(query.toLowerCase()) < 0) return false;
-        return true;
-      });
+      const visible = filterChanges(all, filter, query);
       const tabs = [
         ['active', 'Активные'], ['ready', 'READY'], ['blocked', 'Блок'],
         ['archive', 'Архив'], ['all', 'Все'],
@@ -208,6 +213,8 @@ window.__ModuleLoader__.load({
 
     return {
       inject: ['slots'],
+      filterChanges,
+      openBoard: () => openBoard(),
       apply(ctx) {
         openBoard = () => {
           try {

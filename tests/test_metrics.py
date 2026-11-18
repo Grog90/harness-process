@@ -65,6 +65,13 @@ class MetricsTest(unittest.TestCase):
         self.assertIn("chg-m", page)
         self.assertNotIn("<script>alert(1)</script>", page)
         self.assertIn("&lt;script&gt;", page)
+        self.assertIn('data-change="chg-m"', page)
+        self.assertIn('data-filter="all"', page)
+        self.assertIn('id="q"', page)
+        data["changes"][0]["status"] = "CANCELLED"
+        hidden_page = metrics.render_html(data)
+        self.assertIn('data-state="CANCELLED"', hidden_page)
+        self.assertIn(" hidden>", hidden_page)
 
     def test_markdown_has_queue_and_change(self) -> None:
         text = metrics.render_md(metrics.collect(self.store, self.root))
