@@ -239,21 +239,52 @@ def render_md(data: dict[str, Any]) -> str:
 
 
 _BOARD_CSS = """
-:root{color-scheme:light dark;--bg:#f6f7f9;--card:#fff;--ink:#1d2433;--muted:#667085;--line:#d9dee7;
---ok:#1a7f37;--warn:#b54708;--bad:#b42318;--accent:#2f5fd0}
-@media (prefers-color-scheme:dark){:root{--bg:#151922;--card:#1d2430;--ink:#e6e9ef;--muted:#9aa4b2;
---line:#333c4a;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171;--accent:#7aa2ff}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
-font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}main{max-width:1400px;margin:0 auto;padding:24px}
-h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:28px 0 10px}
-.muted{color:var(--muted)}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
-.card b{display:block;font-size:20px}.card span{color:var(--muted);font-size:12px}
-table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);
-border-radius:10px;overflow:hidden;font-size:13px}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
-th{background:rgba(127,127,127,.08);font-weight:600}tr:last-child td{border-bottom:0}
-.badge{display:inline-block;padding:1px 7px;border-radius:999px;border:1px solid var(--line);font-size:12px}
-.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.mono{font-family:ui-monospace,Consolas,monospace}
+:root{color-scheme:dark;--bg:#0f1218;--panel:#151a22;--panel2:#1b2230;--ink:#e7ebf2;--muted:#94a0b2;
+--line:#28303d;--ok:#3ddc84;--warn:#f5b642;--bad:#ff6b6b;--accent:#6f9bff;--accent-ink:#0b1020}
+@media (prefers-color-scheme:light){:root{color-scheme:light;--bg:#f5f7fb;--panel:#fff;--panel2:#f0f3f8;
+--ink:#17202e;--muted:#5f6b7a;--line:#d8dee9;--ok:#18794e;--warn:#a15c00;--bad:#b42318;--accent:#2f5fd0;--accent-ink:#fff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif}
+main{max-width:1180px;margin:0 auto;padding:28px 26px 56px}
+header.top{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+h1{font-size:26px;letter-spacing:-.02em;margin:0 0 4px}
+h2{font-size:15px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:28px 0 10px}
+.sub{color:var(--muted);font-size:12px}
+.status{margin-left:auto;display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(61,220,132,.12)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.kpi b{display:block;font-size:26px;line-height:1.15;font-variant-numeric:tabular-nums}
+.kpi span{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+.kpi.hot b{color:var(--warn)}.kpi.bad b{color:var(--bad)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:18px 0 12px}
+.chip{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;
+padding:6px 12px;font-size:12px;cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.search{margin-left:auto;min-width:230px;padding:8px 12px;border-radius:9px;border:1px solid var(--line);
+background:var(--panel);color:var(--ink);font-size:13px;outline:none}
+.search:focus{border-color:var(--accent)}
+.queue{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 16px}
+.queue div{display:flex;gap:10px;padding:5px 0;font-size:13px}
+.queue b{min-width:130px;color:var(--muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.05em}
+.queue .empty{color:var(--muted)}
+table{width:100%;border-collapse:separate;border-spacing:0;background:var(--panel);border:1px solid var(--line);
+border-radius:12px;overflow:hidden;font-size:13px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{position:sticky;top:0;z-index:1;background:var(--panel2);color:var(--muted);font-size:11px;
+text-transform:uppercase;letter-spacing:.06em}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:rgba(111,155,255,.06)}
+.mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--line);
+font-size:11px;color:var(--muted);white-space:nowrap}
+.badge.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
+.badge.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}
+.badge.bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+.gates{display:flex;gap:5px;flex-wrap:wrap}
+.empty-row{color:var(--muted);text-align:center;padding:28px}
+.foot{margin-top:18px;color:var(--muted);font-size:12px}
 """
 
 
@@ -261,68 +292,125 @@ def _badge(text: str, kind: str = "") -> str:
     return f'<span class="badge {kind}">{html.escape(text)}</span>'
 
 
+def _status_kind(status: str) -> str:
+    if status in ("ACCEPTED", "ARCHIVED"):
+        return "ok"
+    if "BLOCK" in status or status == "ESCALATED":
+        return "bad"
+    if status == "READY" or status == "IN_PROGRESS":
+        return "warn"
+    return ""
+
+
 def render_html(data: dict[str, Any], *, live: bool = False) -> str:
     summary = data["summary"]
+    changes = data["changes"]
+    ready = sum(1 for row in changes if row["status"] == "READY")
+    blocked = sum(1 for row in changes if "BLOCK" in row["status"] or row["status"] == "ESCALATED")
+    active_changes = sum(1 for row in changes
+                         if row["status"] not in ("ACCEPTED", "ARCHIVED", "CANCELLED"))
     cards = [
-        ("change", summary["changes"]),
-        ("принято", summary["changes_accepted"]),
-        ("задачи", summary["tasks"]),
-        ("активных", summary["tasks_active"]),
-        ("эскалировано", summary["tasks_escalated"]),
-        ("review", summary["review_records"]),
-        ("evidence", summary["evidence_manifests"]),
-        ("открытых находок", summary["open_findings"]),
+        ("активных задач", summary["tasks_active"], ""),
+        ("change в работе", active_changes, ""),
+        ("READY", ready, "hot"),
+        ("заблокировано", blocked, "bad"),
+        ("rework rate", data["attempts"]["rework_rate"], ""),
+        ("открытых находок", summary["open_findings"], ""),
     ]
     rows = []
-    for row in data["changes"]:
+    for row in changes:
+        status = str(row["status"])
         ver = row["verification"]
         gates = "".join([
             _badge("trace", "ok" if row.get("trace_ok", True) else "bad"),
-            " ",
             _badge("verify", "ok" if ver["ok"] else ("warn" if ver["present"] else "")),
-            " ",
             _badge("release", "ok" if row["files"]["release.json"] else ""),
-            " ",
             _badge("accept", "ok" if row["files"]["acceptance.json"] else ""),
         ])
+        hidden = "" if status not in ("ACCEPTED", "ARCHIVED", "CANCELLED") else " hidden"
         rows.append(
-            "<tr>"
+            f'<tr data-state="{html.escape(status)}" data-change="{html.escape(row["change_id"])}"{hidden}>'
             f"<td class=mono>{html.escape(row['change_id'])}</td>"
-            f"<td>{_badge(row['status'])}</td>"
-            f"<td>{row['revision']}</td><td>{html.escape(row['risk_class'])}</td>"
+            f"<td>{_badge(status, _status_kind(status))}</td>"
+            f"<td>{html.escape(row['risk_class'])}</td>"
             f"<td>{html.escape(str(row['owner']))}</td>"
-            f"<td class=mono>{html.escape(str(row['spec_ref'] or '—')[:10])}</td>"
-            f"<td>{row['reviews']}</td><td>{gates}</td></tr>"
+            f"<td>{row['reviews']}</td>"
+            f"<td><div class=gates>{gates}</div></td></tr>"
         )
     task_rows = "".join(
         f"<tr><td class=mono>{html.escape(t['task_id'])}</td>"
         f"<td class=mono>{html.escape(str(t['change_id'] or '—'))}</td>"
-        f"<td>{_badge(t['state'])}</td><td>{t['attempts']}</td>"
+        f"<td>{_badge(t['state'], _status_kind(str(t['state'])))}</td><td>{t['attempts']}</td>"
         f"<td>{html.escape(str(t['verdict'] or '—'))}</td>"
         f"<td>{t['open_findings']}</td></tr>"
         for t in data["tasks"]
     )
-    queue_items = "".join(
-        f"<li><b>{html.escape(state)}</b>: {html.escape(', '.join(items) if items else '—')}</li>"
-        for state, items in data["queue"].items()
-    )
+    queue_states = [(state, items) for state, items in data["queue"].items() if items]
+    queue_html = "".join(
+        f'<div><b>{html.escape(state)}</b><span>{html.escape(", ".join(items))}</span></div>'
+        for state, items in queue_states
+    ) or '<div class="empty">Очередь пуста: все change приняты, в архиве или отменены.</div>'
     refresh = '<meta http-equiv="refresh" content="15">' if live else ""
     return f"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">{refresh}
 <title>harness — доска процесса</title><style>{_BOARD_CSS}</style></head>
 <body><main>
-<h1>Доска процесса</h1>
-<div class="muted">Снимок {html.escape(data['generated_at'])} · обновляется командой <span class="mono">harness board</span></div>
-<div class="cards">{''.join(f'<div class="card"><b>{value}</b><span>{html.escape(label)}</span></div>' for label, value in cards)}</div>
-<h2>Очередь</h2><ul>{queue_items}</ul>
+<header class="top">
+  <div><h1>Доска процесса</h1>
+  <div class="sub">Снимок {html.escape(data['generated_at'])} · обновление командой
+  <span class="mono">harness board --serve</span></div></div>
+  <div class="status"><span class="dot"></span>live · только чтение</div>
+</header>
+<section class="kpis">
+{''.join(f'<div class="kpi {cls}"><b>{value}</b><span>{html.escape(label)}</span></div>' for label, value, cls in cards)}
+</section>
+<h2>Очередь</h2>
+<div class="queue">{queue_html}</div>
 <h2>Изменения</h2>
-<table><thead><tr><th>change</th><th>состояние</th><th>ред.</th><th>риск</th><th>владелец</th>
-<th>spec_ref</th><th>review</th><th>гейты</th></tr></thead><tbody>{''.join(rows) or '<tr><td colspan=8>изменений нет</td></tr>'}</tbody></table>
+<div class="toolbar">
+  <button class="chip on" data-filter="active" type="button">Активные</button>
+  <button class="chip" data-filter="ready" type="button">READY</button>
+  <button class="chip" data-filter="blocked" type="button">Блок</button>
+  <button class="chip" data-filter="archive" type="button">Архив</button>
+  <button class="chip" data-filter="all" type="button">Все</button>
+  <input class="search" id="q" type="search" placeholder="поиск по change…">
+</div>
+<table id="changes"><thead><tr><th>change</th><th>состояние</th><th>риск</th><th>владелец</th>
+<th>review</th><th>гейты</th></tr></thead><tbody>
+{''.join(rows) or '<tr><td colspan=6 class=empty-row>изменений нет</td></tr>'}
+</tbody></table>
 <h2>Задачи</h2>
 <table><thead><tr><th>задача</th><th>change</th><th>состояние</th><th>попытки</th><th>вердикт</th><th>находки</th></tr></thead>
-<tbody>{task_rows or '<tr><td colspan=6>задач нет</td></tr>'}</tbody></table>
-<p class="muted">Метрики считаются из SQLite и файлов change; цифры не редактируются отдельно от процесса.</p>
+<tbody>{task_rows or '<tr><td colspan=6 class=empty-row>задач нет</td></tr>'}</tbody></table>
+<div class="foot">Метрики считаются из SQLite и файлов change; цифры не редактируются отдельно от процесса.</div>
+<script>
+(function () {{
+  var rows = Array.prototype.slice.call(document.querySelectorAll('#changes tbody tr[data-state]'));
+  var buttons = Array.prototype.slice.call(document.querySelectorAll('[data-filter]'));
+  var q = document.getElementById('q');
+  var mode = 'active';
+  function match(row) {{
+    var s = row.getAttribute('data-state') || '';
+    if (mode === 'active') return ['ACCEPTED','ARCHIVED','CANCELLED'].indexOf(s) < 0;
+    if (mode === 'ready') return s === 'READY';
+    if (mode === 'blocked') return s.indexOf('BLOCK') >= 0 || s === 'ESCALATED';
+    if (mode === 'archive') return s === 'ACCEPTED' || s === 'ARCHIVED';
+    return true;
+  }}
+  function apply() {{
+    var needle = (q.value || '').toLowerCase();
+    rows.forEach(function (row) {{
+      var text = (row.getAttribute('data-change') || '').toLowerCase();
+      row.hidden = !match(row) || (needle && text.indexOf(needle) < 0);
+    }});
+    buttons.forEach(function (b) {{ b.className = b.getAttribute('data-filter') === mode ? 'chip on' : 'chip'; }});
+  }}
+  buttons.forEach(function (b) {{ b.addEventListener('click', function () {{ mode = b.getAttribute('data-filter'); apply(); }}); }});
+  q.addEventListener('input', apply);
+  apply();
+}})();
+</script>
 </main></body></html>
 """
 

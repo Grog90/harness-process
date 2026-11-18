@@ -48,6 +48,14 @@ class PanelPluginTests(unittest.TestCase):
         self.assertIn("HARNESS_BOARD_URL", host)
         self.assertIn("AbortSignal.timeout", host)
 
+    def test_main_board_and_open_action(self) -> None:
+        client = self._read("client.js")
+        self.assertIn("name: 'main', key: 'harness-board'", client)
+        self.assertIn("selectPanel('harness-board')", client)
+        self.assertIn("открыть доску", client)
+        self.assertIn("useBoard", client)
+        self.assertIn("rework rate", client)
+
     def test_client_reads_attempts_and_active_states(self) -> None:
         client = self._read("client.js")
         self.assertIn("attempts.rework_rate", client)
